@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Button from '../base/Button';
 import DataSection from './DataSection';
 
@@ -7,12 +7,19 @@ type EditableJsonSectionProps = {
   data?: Record<string, unknown> | null;
   emptyMessage?: string;
   description?: string;
+  templateData?: Record<string, unknown>;
   onSave: (value: Record<string, unknown>) => Promise<void> | void;
 };
 
-const prettify = (value: Record<string, unknown> | null | undefined) => {
+const prettify = (
+  value: Record<string, unknown> | null | undefined,
+  template?: Record<string, unknown>
+) => {
   try {
-    return JSON.stringify(value ?? {}, null, 2);
+    const hasValue = value && Object.keys(value).length > 0;
+    const hasTemplate = template && Object.keys(template).length > 0;
+    const base = hasValue ? value : hasTemplate ? template : {};
+    return JSON.stringify(base ?? {}, null, 2);
   } catch (error) {
     return '{}';
   }
@@ -23,16 +30,23 @@ const EditableJsonSection: React.FC<EditableJsonSectionProps> = ({
   data,
   emptyMessage,
   description,
+  templateData,
   onSave
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [jsonValue, setJsonValue] = useState(prettify(data));
+  const [jsonValue, setJsonValue] = useState(prettify(data, templateData));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isEmpty = !data || Object.keys(data).length === 0;
 
+  useEffect(() => {
+    if (!isEditing) {
+      setJsonValue(prettify(data, templateData));
+    }
+  }, [data, templateData, isEditing]);
+
   const beginEdit = () => {
-    setJsonValue(prettify(data));
+    setJsonValue(prettify(data, templateData));
     setErrorMessage(null);
     setIsEditing(true);
   };
@@ -40,7 +54,7 @@ const EditableJsonSection: React.FC<EditableJsonSectionProps> = ({
   const cancelEdit = () => {
     setIsEditing(false);
     setErrorMessage(null);
-    setJsonValue(prettify(data));
+    setJsonValue(prettify(data, templateData));
   };
 
   const handleSave = async () => {

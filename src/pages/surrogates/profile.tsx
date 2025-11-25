@@ -7,6 +7,12 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
 import { db } from '../../lib/firebase';
+import {
+  CORE_PROFILE_TEMPLATE,
+  FORM_CONTACT_TEMPLATE,
+  SURROGATE_FORM2_TEMPLATE,
+  SURROGATE_ADDITIONAL_TEMPLATE
+} from '../../constants/jsonTemplates';
 
 const SURROGATE_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
 
@@ -333,6 +339,7 @@ const SurrogateProfilePage: React.FC = () => {
                     description="Update the surrogate’s headline details such as role and completion flags."
                     data={coreProfileData}
                     emptyMessage="No core profile data available."
+                    templateData={CORE_PROFILE_TEMPLATE}
                     onSave={handleUpdateCore}
                   />
                 </Card>
@@ -342,6 +349,7 @@ const SurrogateProfilePage: React.FC = () => {
                     description="Update the initial intake form shared by the surrogate."
                     data={(surrogate.formData as Record<string, unknown>) ?? null}
                     emptyMessage="No form data available."
+                    templateData={FORM_CONTACT_TEMPLATE}
                     onSave={(value) => handleUpdateField('formData', value)}
                   />
                 </Card>
@@ -351,6 +359,7 @@ const SurrogateProfilePage: React.FC = () => {
                     description="Modify detailed screening information."
                     data={(surrogate.form2 as Record<string, unknown>) ?? null}
                     emptyMessage="Form 2 has not been completed."
+                    templateData={SURROGATE_FORM2_TEMPLATE}
                     onSave={(value) => handleUpdateField('form2', value)}
                   />
                 </Card>
@@ -360,6 +369,7 @@ const SurrogateProfilePage: React.FC = () => {
                     description="Capture any supplementary information stored alongside the surrogate profile."
                     data={(surrogate.form2Data as Record<string, unknown>) ?? null}
                     emptyMessage="No additional data provided."
+                    templateData={SURROGATE_ADDITIONAL_TEMPLATE}
                     onSave={(value) => handleUpdateField('form2Data', value)}
                   />
                 </Card>

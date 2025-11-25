@@ -43,8 +43,42 @@ const formatValue = (value: unknown): React.ReactNode => {
   return String(value);
 };
 
+const PREFERRED_ORDER = [
+  'firstname',
+  'lastname',
+  'name',
+  'email',
+  'phone',
+  'phonenumber',
+  'city',
+  'state',
+  'country',
+  'address',
+  'zipcode',
+  'zip',
+  'dob',
+  'dateofbirth'
+] as const;
+
+const normalizeKey = (key: string) => key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+const sortEntries = (entries: [string, unknown][]) => {
+  return [...entries].sort(([keyA], [keyB]) => {
+    const normalizedA = normalizeKey(keyA);
+    const normalizedB = normalizeKey(keyB);
+    const priorityA = PREFERRED_ORDER.indexOf(normalizedA);
+    const priorityB = PREFERRED_ORDER.indexOf(normalizedB);
+    const safePriorityA = priorityA === -1 ? PREFERRED_ORDER.length : priorityA;
+    const safePriorityB = priorityB === -1 ? PREFERRED_ORDER.length : priorityB;
+    if (safePriorityA !== safePriorityB) {
+      return safePriorityA - safePriorityB;
+    }
+    return keyA.localeCompare(keyB, undefined, { sensitivity: 'base' });
+  });
+};
+
 const renderEntries = (data: Record<string, unknown>, depth = 0): React.ReactNode => {
-  const entries = Object.entries(data);
+  const entries = sortEntries(Object.entries(data));
   if (entries.length === 0) {
     return <p className="text-sm text-gray-500 dark:text-gray-400">No data available.</p>;
   }

@@ -7,6 +7,14 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
 import { db } from '../../lib/firebase';
+import {
+  CORE_PROFILE_TEMPLATE,
+  FORM_CONTACT_TEMPLATE,
+  PARENT_FORM2_TEMPLATE,
+  FERTILITY_TEMPLATE,
+  PARENT_PROFILE_TEMPLATE,
+  SURROGATE_PREFERENCES_TEMPLATE
+} from '../../constants/jsonTemplates';
 
 const PARENT_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
 
@@ -323,6 +331,7 @@ const ParentProfilePage: React.FC = () => {
                     description="Update top-level information such as role and completion status. For contact details, edit the form responses below."
                     data={coreProfileData}
                     emptyMessage="No core profile data available."
+                    templateData={CORE_PROFILE_TEMPLATE}
                     onSave={handleUpdateCore}
                   />
                 </Card>
@@ -332,6 +341,7 @@ const ParentProfilePage: React.FC = () => {
                     description="Update the intake details shared by the intended parents."
                     data={(parent.formData as Record<string, unknown>) ?? null}
                     emptyMessage="No form data available."
+                    templateData={FORM_CONTACT_TEMPLATE}
                     onSave={(value) => handleUpdateField('formData', value)}
                   />
                 </Card>
@@ -341,6 +351,7 @@ const ParentProfilePage: React.FC = () => {
                     description="Modify the extended questionnaire answers for this family."
                     data={(parent.form2Data as Record<string, unknown>) ?? null}
                     emptyMessage="Form 2 has not been completed."
+                    templateData={PARENT_FORM2_TEMPLATE}
                     onSave={(value) => handleUpdateField('form2Data', value)}
                   />
                 </Card>
@@ -350,6 +361,7 @@ const ParentProfilePage: React.FC = () => {
                     description="Capture fertility clinic, embryo and related details."
                     data={((parent.form2Data as Record<string, unknown>)?.fertility as Record<string, unknown>) ?? null}
                     emptyMessage="No fertility information provided."
+                    templateData={FERTILITY_TEMPLATE}
                     onSave={(value) => handleUpdateField('form2Data.fertility', value)}
                   />
                 </Card>
@@ -359,6 +371,7 @@ const ParentProfilePage: React.FC = () => {
                     description="Edit details for Parent 1."
                     data={(parent.parent1 as Record<string, unknown>) ?? null}
                     emptyMessage="Parent 1 details not provided."
+                    templateData={PARENT_PROFILE_TEMPLATE}
                     onSave={(value) => handleUpdateField('parent1', value)}
                   />
                 </Card>
@@ -368,6 +381,7 @@ const ParentProfilePage: React.FC = () => {
                     description="Edit details for Parent 2."
                     data={(parent.parent2 as Record<string, unknown>) ?? null}
                     emptyMessage="Parent 2 details not provided."
+                    templateData={PARENT_PROFILE_TEMPLATE}
                     onSave={(value) => handleUpdateField('parent2', value)}
                   />
                 </Card>
@@ -377,6 +391,7 @@ const ParentProfilePage: React.FC = () => {
                     description="Fine-tune the family's preferences for potential surrogates."
                     data={(parent.surrogateRelated as Record<string, unknown>) ?? null}
                     emptyMessage="No surrogate preferences captured."
+                    templateData={SURROGATE_PREFERENCES_TEMPLATE}
                     onSave={(value) => handleUpdateField('surrogateRelated', value)}
                   />
                 </Card>
