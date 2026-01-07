@@ -32,14 +32,39 @@ const statusDefinitions = [
     filter: (_surrogate: FirestoreUser) => true
   },
   {
-    id: 'profileComplete',
-    label: 'Profile Complete',
-    filter: (surrogate: FirestoreUser) => Boolean(surrogate.profileCompleted)
+    id: 'available',
+    label: 'Available',
+    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Available' || (!surrogate.form2Completed && !surrogate.profileCompleted)
   },
   {
-    id: 'form2Complete',
-    label: 'Form 2 Complete',
-    filter: (surrogate: FirestoreUser) => Boolean(surrogate.form2Completed)
+    id: 'potential',
+    label: 'Potential',
+    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Potential'
+  },
+  {
+    id: 'records_review',
+    label: 'Records Review',
+    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Records Review'
+  },
+  {
+    id: 'screening',
+    label: 'Screening',
+    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Screening'
+  },
+  {
+    id: 'legal',
+    label: 'Legal',
+    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Legal'
+  },
+  {
+    id: 'cycling',
+    label: 'Cycling',
+    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Cycling'
+  },
+  {
+    id: 'pregnant',
+    label: 'Pregnant',
+    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Pregnant'
   }
 ];
 
@@ -89,13 +114,28 @@ const SurrogatesPage: React.FC = () => {
   }, [activeTab, surrogates]);
 
   const getStatusBadge = (surrogate: FirestoreUser) => {
-    if (surrogate.form2Completed) {
-      return <Badge color="green">Form 2 Complete</Badge>;
+    const status = (surrogate as any).status;
+    switch (status) {
+      case 'Available':
+        return <Badge color="green">Available</Badge>;
+      case 'Potential':
+        return <Badge color="blue">Potential</Badge>;
+      case 'Records Review':
+        return <Badge color="yellow">Records Review</Badge>;
+      case 'Screening':
+        return <Badge color="purple">Screening</Badge>;
+      case 'Legal':
+        return <Badge color="indigo">Legal</Badge>;
+      case 'Cycling':
+        return <Badge color="pink">Cycling</Badge>;
+      case 'Pregnant':
+        return <Badge color="red">Pregnant</Badge>;
+      default:
+        // Fallback for existing boolean flags if no status is set
+        if (surrogate.form2Completed) return <Badge color="green">Form 2 Complete</Badge>;
+        if (surrogate.profileCompleted) return <Badge color="blue">Profile Complete</Badge>;
+        return <Badge color="gray">Unknown</Badge>;
     }
-    if (surrogate.profileCompleted) {
-      return <Badge color="blue">Profile Complete</Badge>;
-    }
-    return <Badge color="yellow">In Progress</Badge>;
   };
 
   const getDisplayName = (surrogate: FirestoreUser) => {
@@ -227,7 +267,7 @@ const SurrogatesPage: React.FC = () => {
                         <Button
                           size="sm"
                           className="flex-1"
-                          onClick={(event) => {
+                          onClick={(event: React.MouseEvent) => {
                             event.stopPropagation();
                             navigate(`/surrogates/${surrogate.id}`);
                           }}

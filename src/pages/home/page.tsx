@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
@@ -14,6 +14,7 @@ const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const [parents, setParents] = useState<Array<{ id: string; data: Record<string, unknown> }>>([]);
   const [surrogates, setSurrogates] = useState<Array<{ id: string; data: Record<string, unknown> }>>([]);
+  const [inquiries, setInquiries] = useState<Array<{ id: string; data: Record<string, unknown> }>>([]);
   const [isParentsLoading, setIsParentsLoading] = useState(true);
   const [isSurrogatesLoading, setIsSurrogatesLoading] = useState(true);
   const [parentsError, setParentsError] = useState<string | null>(null);
@@ -86,6 +87,36 @@ const HomePage: React.FC = () => {
       }
     );
 
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    // Fetch users as inquiries for dashboard stats (aligning with RequestsPage logic)
+    const inquiriesQuery = query(
+      collection(db, 'users'),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(
+      inquiriesQuery,
+      (snapshot) => {
+         const data = snapshot.docs.map((doc) => {
+          const docData = doc.data();
+          return {
+            id: doc.id,
+            data: {
+              ...docData,
+              // Default to 'online' if source is missing, matching RequestsPage logic
+              source: docData.source || 'online'
+            }
+          };
+        });
+        setInquiries(data);
+      },
+      (error) => {
+        console.error('Failed to load inquiries for dashboard', error);
+      }
+    );
     return () => unsubscribe();
   }, []);
 
@@ -187,13 +218,31 @@ const HomePage: React.FC = () => {
     const totalSurrogates = surrogates.length;
     const parentProfilesComplete = parents.filter((parent) => parent.data.profileCompleted).length;
     const surrogateProfilesComplete = surrogates.filter((surrogate) => surrogate.data.profileCompleted).length;
-    const parentFormsComplete = parents.filter((parent) => parent.data.form2Completed).length;
-    const surrogateFormsComplete = surrogates.filter((surrogate) => surrogate.data.form2Completed).length;
+
 
     const ratioText = (complete: number, total: number) =>
       total === 0 ? '0 of 0' : `${complete} of ${total} • ${Math.round((complete / total) * 100)}%`;
 
+    const onlineInquiries = inquiries.filter(i => i.data.source === 'online').length;
+    const phoneInquiries = inquiries.filter(i => i.data.source === 'phone').length;
+
     return [
+      {
+        id: 'online-inquiries',
+        label: 'Online Inquiries',
+        value: onlineInquiries,
+        subText: 'Real-time',
+        icon: 'ri-global-line',
+        colorClass: 'bg-indigo-100 text-indigo-600'
+      },
+      {
+        id: 'phone-inquiries',
+        label: 'Phone Inquiries',
+        value: phoneInquiries,
+        subText: 'Real-time',
+        icon: 'ri-phone-line',
+        colorClass: 'bg-pink-100 text-pink-600'
+      },
       {
         id: 'parents-total',
         label: 'Intended Parents',
@@ -203,31 +252,15 @@ const HomePage: React.FC = () => {
         colorClass: 'bg-blue-100 text-blue-600'
       },
       {
-        id: 'parents-form2',
-        label: 'Parent Form 2',
-        value: parentFormsComplete,
-        subText: ratioText(parentFormsComplete, totalParents),
-        icon: 'ri-checkbox-circle-line',
-        colorClass: 'bg-emerald-100 text-emerald-600'
-      },
-      {
         id: 'surrogates-total',
         label: 'Surrogates',
         value: totalSurrogates,
         subText: ratioText(surrogateProfilesComplete, totalSurrogates) + ' profiles ready',
         icon: 'ri-user-heart-line',
         colorClass: 'bg-rose-100 text-rose-600'
-      },
-      {
-        id: 'surrogates-form2',
-        label: 'Surrogate Screening',
-        value: surrogateFormsComplete,
-        subText: ratioText(surrogateFormsComplete, totalSurrogates),
-        icon: 'ri-stethoscope-line',
-        colorClass: 'bg-indigo-100 text-indigo-600'
       }
     ];
-  }, [parents, surrogates]);
+  }, [parents, surrogates, inquiries]);
 
   const handleViewRequestDetails = (requestId: string) => {
     navigate(`/parents/${requestId}`);

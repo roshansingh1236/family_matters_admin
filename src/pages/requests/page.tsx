@@ -1,20 +1,121 @@
 
-import React, { useState } from 'react';
-import { allRequests, requestStatuses } from '../../mocks/requestsData';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { collection, onSnapshot, orderBy, query, Timestamp, updateDoc, doc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
+import RecordInquiryDialog from '../../components/feature/RecordInquiryDialog';
 
 const RequestsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
+  const [inquiryType, setInquiryType] = useState<'online' | 'phone'>('online');
+  const [isRecordDialogOpen, setIsRecordDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Fetch users as requests (assuming new users are requests)
+    const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedRequests = snapshot.docs.map(doc => {
+        const data = doc.data();
+        // Determine source, trusting existing field or defaulting to 'online'
+        const source = data.source || 'online';
+        
+        return {
+          id: doc.id,
+          ...data,
+          applicantName: data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.email,
+          type: data.role === 'Surrogate' ? 'Surrogate Application' : 'Intended Parents',
+          status: data.status || 'pending', // Default status
+          source: source,
+          submittedDate: data.createdAt instanceof Timestamp 
+            ? data.createdAt.toDate().toLocaleDateString() 
+            : (data.submittedDate || 'N/A')
+        };
+      });
+      setRequests(fetchedRequests);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching requests:", error);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  /* New state for action loading */
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
+  const handleStatusUpdate = async (status: 'approved' | 'rejected') => {
+    if (!selectedRequest) return;
+    setIsActionLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', selectedRequest.id), {
+        status: status,
+        updatedAt: Timestamp.now()
+      });
+      setSelectedRequest(null);
+    } catch (error) {
+      console.error("Error updating status:", error);
+      alert("Failed to update status. Please try again.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleContact = () => {
+    if (!selectedRequest?.email) {
+      alert("No email address available for this request.");
+      return;
+    }
+    window.open(`mailto:${selectedRequest.email}?subject=Regarding your application`, '_blank');
+  };
+
+  const handleConvertToInquiry = async () => {
+    if (!selectedRequest) return;
+    setIsActionLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', selectedRequest.id), {
+        role: 'inquiry',
+        status: 'new', // Reset status as it's a new inquiry now
+        updatedAt: Timestamp.now()
+      });
+      navigate('/inquiries');
+    } catch (error) {
+       console.error("Error converting to inquiry:", error);
+       alert("Failed to convert to inquiry.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const requestsByType = requests.filter(req => req.source === inquiryType);
 
   const filteredRequests = activeTab === 'all' 
-    ? allRequests 
-    : allRequests.filter(request => request.status === activeTab);
+    ? requestsByType 
+    : requestsByType.filter(request => request.status === activeTab);
+
+  const getCounts = (status: string) => {
+    if (status === 'all') return requestsByType.length;
+    return requestsByType.filter(r => r.status === status).length;
+  };
+
+  const statusRetreived = [
+    { value: 'all', label: 'All Requests' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'under-review', label: 'Under Review' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' }
+  ];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -39,15 +140,69 @@ const RequestsPage: React.FC = () => {
         <Header onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Requests Management</h1>
-            <p className="text-gray-600 dark:text-gray-400">Manage all incoming surrogacy applications and requests.</p>
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Requests Management</h1>
+              <p className="text-gray-600 dark:text-gray-400">Manage all incoming surrogacy applications and requests.</p>
+            </div>
+            <button
+              onClick={() => setIsRecordDialogOpen(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 w-fit shadow-sm"
+            >
+              <i className="ri-phone-line"></i>
+              Record Phone Request
+            </button>
+          </div>
+
+          <RecordInquiryDialog 
+            isOpen={isRecordDialogOpen} 
+            onClose={() => setIsRecordDialogOpen(false)} 
+            onSuccess={() => setInquiryType('phone')}
+            variant="detailed"
+          />
+
+          {/* Top Level Tabs */}
+          <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex space-x-8">
+              <button
+                onClick={() => {
+                   setInquiryType('online');
+                   setActiveTab('all');
+                }}
+                className={`pb-4 px-2 text-sm font-medium transition-colors cursor-pointer relative ${
+                  inquiryType === 'online'
+                    ? 'text-blue-600 dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Online Inquiries
+                {inquiryType === 'online' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
+                )}
+              </button>
+              <button
+                 onClick={() => {
+                  setInquiryType('phone');
+                  setActiveTab('all');
+               }}
+                className={`pb-4 px-2 text-sm font-medium transition-colors cursor-pointer relative ${
+                  inquiryType === 'phone'
+                    ? 'text-blue-600 dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Phone Inquiries
+                 {inquiryType === 'phone' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Status Tabs */}
           <div className="mb-6">
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
-              {requestStatuses.map((status) => (
+              {statusRetreived.map((status) => (
                 <button
                   key={status.value}
                   onClick={() => setActiveTab(status.value)}
@@ -57,62 +212,75 @@ const RequestsPage: React.FC = () => {
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
-                  {status.label} ({status.count})
+                  {status.label} ({getCounts(status.value)})
                 </button>
               ))}
             </div>
           </div>
 
           {/* Requests Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredRequests.map((request) => (
-              <Card key={request.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedRequest(request)}>
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                      <i className="ri-user-line text-blue-600 dark:text-blue-400 text-lg"></i>
+          {isLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-64 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredRequests.map((request) => (
+                <Card key={request.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedRequest(request)}>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                        <i className="ri-user-line text-blue-600 dark:text-blue-400 text-lg"></i>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">{request.applicantName}</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{request.type}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{request.applicantName}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{request.type}</p>
+                    {getStatusBadge(request.status)}
+                  </div>
+  
+                  <div className="space-y-2 mb-4">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Age:</span>
+                      <span className="text-gray-900 dark:text-white">{request.age}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                      <span className="text-gray-900 dark:text-white">{request.location}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Experience:</span>
+                      <span className="text-gray-900 dark:text-white">{request.experience}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Submitted:</span>
+                      <span className="text-gray-900 dark:text-white">{request.submittedDate}</span>
                     </div>
                   </div>
-                  {getStatusBadge(request.status)}
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Age:</span>
-                    <span className="text-gray-900 dark:text-white">{request.age}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Location:</span>
-                    <span className="text-gray-900 dark:text-white">{request.location}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Experience:</span>
-                    <span className="text-gray-900 dark:text-white">{request.experience}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Submitted:</span>
-                    <span className="text-gray-900 dark:text-white">{request.submittedDate}</span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button size="sm" className="flex-1">
-                    <i className="ri-eye-line mr-1"></i>
-                    View Details
-                  </Button>
-                  {request.status === 'pending' && (
-                    <Button size="sm" color="green">
-                      <i className="ri-check-line"></i>
+  
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1">
+                      <i className="ri-eye-line mr-1"></i>
+                      View Details
                     </Button>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
+                    {request.status === 'pending' && (
+                      <Button size="sm" color="green" onClick={(e) => {
+                        e.stopPropagation();
+                        // Optimistically or quickly approve without opening modal if desired, but for now just let it open modal or handle here. 
+                        // The user request was about the modal actions, but let's leave this button as is or hook it up if needed.
+                        // For safety, let's just let it open the modal via the card click found on the parent.
+                      }}>
+                        <i className="ri-check-line"></i>
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
 
           {/* Request Detail Modal */}
           {selectedRequest && (
@@ -144,15 +312,15 @@ const RequestsPage: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Age</label>
-                        <p className="text-gray-900 dark:text-white">{selectedRequest.age}</p>
+                        <p className="text-gray-900 dark:text-white">{selectedRequest.age || 'N/A'}</p>
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Location</label>
-                        <p className="text-gray-900 dark:text-white">{selectedRequest.location}</p>
+                        <p className="text-gray-900 dark:text-white">{selectedRequest.location || 'N/A'}</p>
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Experience</label>
-                        <p className="text-gray-900 dark:text-white">{selectedRequest.experience}</p>
+                        <p className="text-gray-900 dark:text-white">{selectedRequest.experience || 'N/A'}</p>
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Submitted Date</label>
@@ -167,19 +335,46 @@ const RequestsPage: React.FC = () => {
                         <p className="text-gray-900 dark:text-white">Phone: {selectedRequest.phone}</p>
                       </div>
                     </div>
+                    
+                    {/* Render message/notes if available */}
+                    {selectedRequest.message && (
+                        <div>
+                        <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Notes / Message</label>
+                        <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-3 rounded mt-2">{selectedRequest.message}</p>
+                        </div>
+                    )}
 
                     <div className="flex gap-3">
-                      <Button color="green" className="flex-1">
-                        <i className="ri-check-line mr-2"></i>
+                         <Button 
+                            color="green" 
+                            className="flex-1"
+                            onClick={() => handleStatusUpdate('approved')}
+                            disabled={isActionLoading || selectedRequest.status === 'approved'}
+                         >
+                        {isActionLoading ? <i className="ri-loader-4-line animate-spin mr-2"></i> : <i className="ri-check-line mr-2"></i>}
                         Approve
                       </Button>
-                      <Button color="red" className="flex-1">
-                        <i className="ri-close-line mr-2"></i>
+                      <Button 
+                        color="red" 
+                        className="flex-1"
+                        onClick={() => handleStatusUpdate('rejected')}
+                        disabled={isActionLoading || selectedRequest.status === 'rejected'}
+                      >
+                         {isActionLoading ? <i className="ri-loader-4-line animate-spin mr-2"></i> : <i className="ri-close-line mr-2"></i>}
                         Reject
                       </Button>
-                      <Button variant="outline" className="flex-1">
+                      <Button variant="outline" className="flex-1" onClick={handleContact}>
                         <i className="ri-message-line mr-2"></i>
                         Contact
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="flex-1" 
+                        onClick={handleConvertToInquiry}
+                        disabled={isActionLoading}
+                      >
+                         {isActionLoading ? <i className="ri-loader-4-line animate-spin mr-2"></i> : <i className="ri-share-forward-line mr-2"></i>}
+                        Convert to Inquiry
                       </Button>
                     </div>
                   </div>

@@ -5,6 +5,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import Button from '../base/Button';
 import { useAuth } from '../../contexts/AuthContext';
 
+import NotificationDropdown from './NotificationDropdown';
+
 interface HeaderProps {
   onToggleSidebar?: () => void;
 }
@@ -14,6 +16,22 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const navigate = useNavigate();
   const { user, logout, initializing, profile, profileLoading } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Notification State
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = React.useRef<HTMLDivElement>(null);
+
+  // Close notifications when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const displayName = useMemo(() => {
     if (profile && typeof profile === 'object') {
@@ -47,7 +65,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
     }
 
     return 'Administrator';
-  }, [user]);
+  }, [user, profile]);
 
   const roleLabel = useMemo(() => {
     if (profile && typeof profile === 'object') {
@@ -139,10 +157,23 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           </button>
 
           {/* Notifications */}
-          <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative">
-            <i className="ri-notification-line text-xl text-gray-600 dark:text-gray-300"></i>
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
-          </button>
+          <div className="relative" ref={notificationRef}>
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className={`p-2 rounded-lg transition-colors relative ${
+                showNotifications 
+                  ? 'bg-gray-100 dark:bg-gray-700 text-blue-600' 
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
+              }`}
+            >
+              <i className={`text-xl ${showNotifications ? 'ri-notification-fill' : 'ri-notification-line'}`}></i>
+              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>
+            </button>
+
+            {showNotifications && (
+              <NotificationDropdown onClose={() => setShowNotifications(false)} />
+            )}
+          </div>
 
           {/* User Menu */}
           <div className="flex items-center gap-3">

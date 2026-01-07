@@ -4,7 +4,7 @@ import React from 'react';
 interface BadgeProps {
   children: React.ReactNode;
   variant?: 'success' | 'warning' | 'danger' | 'info' | 'neutral';
-  color?: 'yellow' | 'blue' | 'green' | 'red' | 'gray';
+  color?: 'yellow' | 'blue' | 'green' | 'red' | 'gray' | 'purple' | 'indigo' | 'pink';
   size?: 'sm' | 'md';
   className?: string;
 }
@@ -31,6 +31,12 @@ export const Badge: React.FC<BadgeProps> = ({
           return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
         case 'gray':
           return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+        case 'purple':
+          return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+        case 'indigo':
+          return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
+        case 'pink':
+          return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
         default:
           return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
       }

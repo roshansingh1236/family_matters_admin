@@ -6,6 +6,7 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
+import Toast from '../../components/base/Toast';
 import { db } from '../../lib/firebase';
 import {
   CORE_PROFILE_TEMPLATE,
@@ -34,7 +35,14 @@ type FirestoreUser = {
   createdAt?: unknown;
   updatedAt?: unknown;
   [key: string]: unknown;
+  status?: string;
 } | null;
+
+const PARENT_STATUSES = [
+  'To be Matched',
+  'Matched',
+  'Rematch'
+] as const;
 
 const ParentProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -42,6 +50,8 @@ const ParentProfilePage: React.FC = () => {
   const [parent, setParent] = useState<FirestoreUser>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const parentDocRef = useMemo(() => (id ? doc(db, 'users', id) : null), [id]);
 
@@ -233,6 +243,20 @@ const ParentProfilePage: React.FC = () => {
     },
     [parentDocRef]
   );
+  
+  const handleStatusChange = async (newStatus: string) => {
+    if (!parentDocRef) return;
+    setIsUpdatingStatus(true);
+    try {
+      await updateDoc(parentDocRef, { status: newStatus });
+      setToast({ message: 'Status updated successfully', type: 'success' });
+    } catch (error) {
+      console.error('Failed to update status', error);
+      setToast({ message: 'Failed to update status', type: 'error' });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
@@ -240,6 +264,14 @@ const ParentProfilePage: React.FC = () => {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
+        
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
 
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
           <div className="flex items-center justify-between">
@@ -296,6 +328,22 @@ const ParentProfilePage: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex flex-col gap-3 text-sm text-white/80">
+                     <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
+                        <i className="ri-donut-chart-line text-base text-white/90"></i>
+                         <span className="font-medium mr-1">Status:</span>
+                        <select
+                          value={parent.status || 'To be Matched'}
+                          onChange={(e) => handleStatusChange(e.target.value)}
+                          disabled={isUpdatingStatus}
+                          className="bg-transparent border-none text-white focus:ring-0 cursor-pointer py-0 pl-0 pr-8 font-semibold [&>option]:text-gray-900 [&>option]:bg-white"
+                        >
+                          {PARENT_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                     </div>
                     <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
                       <i className="ri-hashtag text-base text-white/90"></i>
                       ID: {parent.id}

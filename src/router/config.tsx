@@ -1,7 +1,8 @@
 
-import { RouteObject } from 'react-router-dom';
+import type { RouteObject } from 'react-router-dom';
 import HomePage from '../pages/home/page';
 import RequestsPage from '../pages/requests/page';
+import InquiriesPage from '../pages/inquiries/page';
 import SurrogatesPage from '../pages/surrogates/page';
 import SurrogateProfilePage from '../pages/surrogates/profile';
 import ParentsPage from '../pages/parents/page';
@@ -18,7 +19,13 @@ import LoginPage from '../pages/auth/login/page';
 import SignupPage from '../pages/auth/signup/page';
 import NotFound from '../pages/NotFound';
 
+import LandingPage from '../pages/landing/page';
+
 const routes: RouteObject[] = [
+  {
+    path: '/landing',
+    element: <LandingPage />,
+  },
   {
     path: '/',
     element: <HomePage />,
@@ -34,6 +41,10 @@ const routes: RouteObject[] = [
   {
     path: '/requests',
     element: <RequestsPage />,
+  },
+  {
+    path: '/inquiries',
+    element: <InquiriesPage />,
   },
   {
     path: '/surrogates',

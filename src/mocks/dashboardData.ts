@@ -201,6 +201,24 @@ export const recentMedicalRecords = [
 export const dashboardData = {
   stats: [
     {
+      id: 'online-inquiries',
+      label: 'Online Inquiries',
+      value: '12',
+      change: '+3%',
+      trend: 'up',
+      icon: 'ri-global-line',
+      color: 'bg-indigo-100 text-indigo-600'
+    },
+    {
+      id: 'phone-inquiries',
+      label: 'Phone Inquiries',
+      value: '5',
+      change: '+1%',
+      trend: 'up',
+      icon: 'ri-phone-line',
+      color: 'bg-pink-100 text-pink-600'
+    },
+    {
       id: 'total-requests',
       label: 'Total Requests',
       value: '247',

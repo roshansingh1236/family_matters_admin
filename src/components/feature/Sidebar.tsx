@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -11,15 +11,35 @@ interface SidebarItem {
   badge?: number;
 }
 
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isDark } = useTheme();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [newRequestsCount, setNewRequestsCount] = useState(0);
+
+  useEffect(() => {
+    // Count users with 'pending' status as new requests
+    const q = query(
+      collection(db, 'users'),
+      where('status', '==', 'pending')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setNewRequestsCount(snapshot.size);
+    }, (error) => {
+      console.error("Error fetching request count:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const sidebarItems: SidebarItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: 'ri-dashboard-line', path: '/' },
-    { id: 'requests', label: 'New Requests', icon: 'ri-file-list-3-line', path: '/requests', badge: 12 },
+    { id: 'requests', label: 'New Requests', icon: 'ri-file-list-3-line', path: '/requests', badge: newRequestsCount > 0 ? newRequestsCount : undefined },
+    { id: 'inquiries', label: 'Inquiries', icon: 'ri-question-answer-line', path: '/inquiries' },
     { id: 'surrogates', label: 'Surrogates', icon: 'ri-user-heart-line', path: '/surrogates' },
     { id: 'parents', label: 'Intended Parents', icon: 'ri-parent-line', path: '/parents' },
     { id: 'matches', label: 'Matches', icon: 'ri-links-line', path: '/matches' },

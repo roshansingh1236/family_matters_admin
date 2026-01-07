@@ -35,14 +35,19 @@ const statusDefinitions = [
     filter: (_parent: FirestoreUser) => true
   },
   {
-    id: 'profileComplete',
-    label: 'Profile Complete',
-    filter: (parent: FirestoreUser) => Boolean(parent.profileCompleted)
+    id: 'to_be_matched',
+    label: 'To be Matched',
+    filter: (parent: FirestoreUser) => (parent as any).status === 'To be Matched' || (!parent.form2Completed && !parent.profileCompleted)
   },
   {
-    id: 'form2Complete',
-    label: 'Form 2 Complete',
-    filter: (parent: FirestoreUser) => Boolean(parent.form2Completed)
+    id: 'matched',
+    label: 'Matched',
+    filter: (parent: FirestoreUser) => (parent as any).status === 'Matched'
+  },
+  {
+    id: 'rematch',
+    label: 'Rematch',
+    filter: (parent: FirestoreUser) => (parent as any).status === 'Rematch'
   }
 ];
 
@@ -92,13 +97,19 @@ const ParentsPage: React.FC = () => {
   }, [activeTab, parents]);
 
   const getStatusBadge = (parent: FirestoreUser) => {
-    if (parent.form2Completed) {
-      return <Badge color="green">Form 2 Complete</Badge>;
+    const status = (parent as any).status;
+    switch (status) {
+      case 'To be Matched':
+        return <Badge color="yellow">To be Matched</Badge>;
+      case 'Matched':
+        return <Badge color="green">Matched</Badge>;
+      case 'Rematch':
+        return <Badge color="red">Rematch</Badge>;
+      default:
+         if (parent.form2Completed) return <Badge color="green">Form 2 Complete</Badge>;
+         if (parent.profileCompleted) return <Badge color="blue">Profile Complete</Badge>;
+         return <Badge color="gray">Unknown</Badge>;
     }
-    if (parent.profileCompleted) {
-      return <Badge color="blue">Profile Complete</Badge>;
-    }
-    return <Badge color="yellow">In Progress</Badge>;
   };
 
   const getDisplayName = (parent: FirestoreUser) => {
@@ -229,7 +240,7 @@ const ParentsPage: React.FC = () => {
                         <Button
                           size="sm"
                           className="flex-1"
-                          onClick={(event) => {
+                          onClick={(event: React.MouseEvent) => {
                             event.stopPropagation();
                             navigate(`/parents/${parent.id}`);
                           }}
