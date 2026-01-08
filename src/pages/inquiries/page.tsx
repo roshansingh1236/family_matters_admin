@@ -120,13 +120,14 @@ const InquiriesPage: React.FC = () => {
             </button>
           </div>
 
-          <RecordInquiryDialog 
-            isOpen={isRecordDialogOpen} 
-            onClose={() => setIsRecordDialogOpen(false)} 
-            onSuccess={() => setActiveTab('phone')}
-          />
-
-          {/* Type Tabs */}
+          <RecordInquiryDialog
+        isOpen={isRecordDialogOpen}
+        onClose={() => setIsRecordDialogOpen(false)}
+        onSuccess={() => {
+           // Maybe refetch or show success toast
+        }}
+        variant="detailed"
+      />     {/* Type Tabs */}
           <div className="mb-6">
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
               <button
