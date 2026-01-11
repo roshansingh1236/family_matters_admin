@@ -7,6 +7,8 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
 import Toast from '../../components/base/Toast';
+import MediaGallery from '../../components/feature/MediaGallery';
+import type { MediaItem } from '../../components/feature/MediaGallery';
 import { db } from '../../lib/firebase';
 import {
   CORE_PROFILE_TEMPLATE,
@@ -351,6 +353,25 @@ const ParentProfilePage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Media Gallery Section */}
+              {(((parent.parent2 as Record<string, unknown>)?.mediaUrls as MediaItem[]) && ((parent.parent2 as Record<string, unknown>)?.mediaUrls as MediaItem[]).length > 0) && (
+                <Card>
+                  <div className="mb-4">
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                      <i className="ri-gallery-line text-indigo-600"></i>
+                      Photos & Videos
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      Media uploaded from the intended parent's profile
+                    </p>
+                  </div>
+                  <MediaGallery 
+                    media={((parent.parent2 as Record<string, unknown>)?.mediaUrls as MediaItem[]) || []} 
+                    isLoading={false}
+                  />
+                </Card>
+              )}
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {summaryCards.map((card) => (
