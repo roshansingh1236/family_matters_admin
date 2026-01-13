@@ -7,14 +7,15 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
 import Toast from '../../components/base/Toast';
-import MediaGallery from '../../components/feature/MediaGallery';
-import type { MediaItem } from '../../components/feature/MediaGallery';
 import { db } from '../../lib/firebase';
 import {
   CORE_PROFILE_TEMPLATE,
   FORM_CONTACT_TEMPLATE,
   SURROGATE_FORM2_TEMPLATE,
-  SURROGATE_ADDITIONAL_TEMPLATE
+  SURROGATE_ADDITIONAL_TEMPLATE,
+  SURROGATE_MEDICAL_FITNESS_TEMPLATE,
+  SURROGATE_INFECTIOUS_DISEASE_TEMPLATE,
+  SURROGATE_PSYCH_CLEARANCE_TEMPLATE
 } from '../../constants/jsonTemplates';
 
 const SURROGATE_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
@@ -366,25 +367,6 @@ const SurrogateProfilePage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Media Gallery Section */}
-              {((surrogate.mediaUrls as MediaItem[]) && (surrogate.mediaUrls as MediaItem[]).length > 0) && (
-                <Card>
-                  <div className="mb-4">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                      <i className="ri-gallery-line text-indigo-600"></i>
-                      Photos & Videos
-                    </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Media uploaded from the surrogate's profile
-                    </p>
-                  </div>
-                  <MediaGallery 
-                    media={(surrogate.mediaUrls as MediaItem[]) || []} 
-                    isLoading={false}
-                  />
-                </Card>
-              )}
-
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {summaryCards.map((card) => (
                   <Card
@@ -444,6 +426,38 @@ const SurrogateProfilePage: React.FC = () => {
                     emptyMessage="No additional data provided."
                     templateData={SURROGATE_ADDITIONAL_TEMPLATE}
                     onSave={(value) => handleUpdateField('form2Data', value)}
+                  />
+                </Card>
+
+                {/* New Medical Report Sections */}
+                <Card className="xl:col-span-2">
+                  <EditableJsonSection
+                    title="Comprehensive Medical Fitness Certificate"
+                    description="Gynecological exam, obstetric history, BMI, BP, and general health clearance."
+                    data={((surrogate.form2 as Record<string, unknown>)?.medicalFitness as Record<string, unknown>) ?? null}
+                    emptyMessage="No medical fitness report available."
+                    templateData={SURROGATE_MEDICAL_FITNESS_TEMPLATE}
+                    onSave={(value) => handleUpdateField('form2.medicalFitness', value)}
+                  />
+                </Card>
+                <Card>
+                  <EditableJsonSection
+                    title="Infectious Disease Screening Report"
+                    description="Screening results for HIV, HBsAg, HCV, VDRL, TORCH."
+                    data={((surrogate.form2 as Record<string, unknown>)?.infectiousDisease as Record<string, unknown>) ?? null}
+                    emptyMessage="No screening report available."
+                    templateData={SURROGATE_INFECTIOUS_DISEASE_TEMPLATE}
+                    onSave={(value) => handleUpdateField('form2.infectiousDisease', value)}
+                  />
+                </Card>
+                <Card>
+                  <EditableJsonSection
+                    title="Psychological / Mental Health Clearance"
+                    description="Upload evaluation by certified psychologist/psychiatrist."
+                    data={((surrogate.form2 as Record<string, unknown>)?.psychClearance as Record<string, unknown>) ?? null}
+                    emptyMessage="No psychological clearance available."
+                    templateData={SURROGATE_PSYCH_CLEARANCE_TEMPLATE}
+                    onSave={(value) => handleUpdateField('form2.psychClearance', value)}
                   />
                 </Card>
               </div>

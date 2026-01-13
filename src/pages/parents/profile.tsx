@@ -7,8 +7,6 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
 import Toast from '../../components/base/Toast';
-import MediaGallery from '../../components/feature/MediaGallery';
-import type { MediaItem } from '../../components/feature/MediaGallery';
 import { db } from '../../lib/firebase';
 import {
   CORE_PROFILE_TEMPLATE,
@@ -16,7 +14,10 @@ import {
   PARENT_FORM2_TEMPLATE,
   FERTILITY_TEMPLATE,
   PARENT_PROFILE_TEMPLATE,
-  SURROGATE_PREFERENCES_TEMPLATE
+  SURROGATE_PREFERENCES_TEMPLATE,
+  IP_FERTILITY_REPORT_TEMPLATE,
+  IP_INFECTIOUS_DISEASE_TEMPLATE,
+  IP_EMBRYO_RECORDS_TEMPLATE
 } from '../../constants/jsonTemplates';
 
 const PARENT_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
@@ -354,25 +355,6 @@ const ParentProfilePage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Media Gallery Section */}
-              {(((parent.parent2 as Record<string, unknown>)?.mediaUrls as MediaItem[]) && ((parent.parent2 as Record<string, unknown>)?.mediaUrls as MediaItem[]).length > 0) && (
-                <Card>
-                  <div className="mb-4">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                      <i className="ri-gallery-line text-indigo-600"></i>
-                      Photos & Videos
-                    </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Media uploaded from the intended parent's profile
-                    </p>
-                  </div>
-                  <MediaGallery 
-                    media={((parent.parent2 as Record<string, unknown>)?.mediaUrls as MediaItem[]) || []} 
-                    isLoading={false}
-                  />
-                </Card>
-              )}
-
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {summaryCards.map((card) => (
                   <Card
@@ -462,6 +444,38 @@ const ParentProfilePage: React.FC = () => {
                     emptyMessage="No surrogate preferences captured."
                     templateData={SURROGATE_PREFERENCES_TEMPLATE}
                     onSave={(value) => handleUpdateField('surrogateRelated', value)}
+                  />
+                </Card>
+
+                {/* New Medical Report Sections */}
+                <Card className="xl:col-span-2">
+                  <EditableJsonSection
+                    title="Fertility & Reproductive Health Report"
+                    description="IVF evaluation, ovarian reserve, and diagnosis."
+                    data={((parent.form2Data as Record<string, unknown>)?.fertilityReport as Record<string, unknown>) ?? null}
+                    emptyMessage="No fertility report available."
+                    templateData={IP_FERTILITY_REPORT_TEMPLATE}
+                    onSave={(value) => handleUpdateField('form2Data.fertilityReport', value)}
+                  />
+                </Card>
+                <Card>
+                  <EditableJsonSection
+                    title="Infectious Disease Screening Report"
+                    description="Screening results for HIV, HBsAg, HCV, VDRL, CMV."
+                    data={((parent.form2Data as Record<string, unknown>)?.infectiousDisease as Record<string, unknown>) ?? null}
+                    emptyMessage="No screening report available."
+                    templateData={IP_INFECTIOUS_DISEASE_TEMPLATE}
+                    onSave={(value) => handleUpdateField('form2Data.infectiousDisease', value)}
+                  />
+                </Card>
+                <Card>
+                  <EditableJsonSection
+                    title="Embryo / Gamete Medical Records"
+                    description="Embryo freezing and donor screening reports."
+                    data={((parent.form2Data as Record<string, unknown>)?.embryoRecords as Record<string, unknown>) ?? null}
+                    emptyMessage="No embryo records available."
+                    templateData={IP_EMBRYO_RECORDS_TEMPLATE}
+                    onSave={(value) => handleUpdateField('form2Data.embryoRecords', value)}
                   />
                 </Card>
               </div>

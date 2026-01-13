@@ -80,3 +80,43 @@ export const SURROGATE_PREFERENCES_TEMPLATE = {
 };
 
 
+
+export const IP_FERTILITY_REPORT_TEMPLATE = {
+  ivfEvaluationSummary: '',
+  ovarianReserveAMH: '',
+  semenAnalysis: '',
+  diagnosis: ''
+};
+
+export const IP_INFECTIOUS_DISEASE_TEMPLATE = {
+  hiv: '',
+  hbsag: '',
+  hcv: '',
+  vdrl: '',
+  cmv: ''
+};
+
+export const IP_EMBRYO_RECORDS_TEMPLATE = {
+  embryoFreezingReport: '',
+  donorScreeningReport: ''
+};
+
+export const SURROGATE_MEDICAL_FITNESS_TEMPLATE = {
+  gynecologicalExam: '',
+  obstetricHistory: '',
+  bmi: '',
+  bp: '',
+  generalHealthClearance: ''
+};
+
+export const SURROGATE_INFECTIOUS_DISEASE_TEMPLATE = {
+  hiv: '',
+  hbsag: '',
+  hcv: '',
+  vdrl: '',
+  torch: ''
+};
+
+export const SURROGATE_PSYCH_CLEARANCE_TEMPLATE = {
+  mentalHealthClearanceDoc: ''
+};
