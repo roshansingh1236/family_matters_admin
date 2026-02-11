@@ -22,6 +22,12 @@ export const FORM_CONTACT_TEMPLATE = {
   preferredContactMethod: ''
 };
 
+export const SURROGATE_ABOUT_FORM1_TEMPLATE = {
+  city: '',
+  state: '',
+  whenToStart: ''
+};
+
 export const SURROGATE_FORM2_TEMPLATE = {
   availability: '',
   pregnancyHistory: {
@@ -41,6 +47,33 @@ export const SURROGATE_ADDITIONAL_TEMPLATE = {
   notes: '',
   availabilityWindow: '',
   languages: []
+};
+
+export const ABOUT_SURROGATE_TEMPLATE = {
+  bioMotherHeritage: '',
+  bioFatherHeritage: '',
+  education: '',
+  occupation: '',
+  age: '',
+  height: '',
+  relationshipPreference: '',
+  amhStatus: '',
+  opennessToSecondCycle: '',
+  bio: '',
+  caption: ''
+};
+
+export const ABOUT_PARENT_TEMPLATE = {
+  bio: '',
+  aboutUs: '',
+  relationshipPreference: '',
+  familyLifestyle: '',
+  occupation: '',
+  education: '',
+  heritage: '',
+  religion: '',
+  hobbies: '',
+  caption: ''
 };
 
 export const PARENT_FORM2_TEMPLATE = {

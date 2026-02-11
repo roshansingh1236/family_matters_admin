@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
+import FileUploadSection, { type FileRecord } from '../../components/data/FileUploadSection';
 import Toast from '../../components/base/Toast';
-import { db } from '../../lib/firebase';
+import { db, storage } from '../../lib/firebase';
 import {
   CORE_PROFILE_TEMPLATE,
   FORM_CONTACT_TEMPLATE,
@@ -15,7 +17,8 @@ import {
   SURROGATE_ADDITIONAL_TEMPLATE,
   SURROGATE_MEDICAL_FITNESS_TEMPLATE,
   SURROGATE_INFECTIOUS_DISEASE_TEMPLATE,
-  SURROGATE_PSYCH_CLEARANCE_TEMPLATE
+  SURROGATE_PSYCH_CLEARANCE_TEMPLATE,
+  ABOUT_SURROGATE_TEMPLATE
 } from '../../constants/jsonTemplates';
 
 const SURROGATE_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
@@ -34,6 +37,9 @@ type FirestoreUser = {
   createdAt?: unknown;
   updatedAt?: unknown;
   status?: string;
+  documents?: FileRecord[];
+  profileImageUrl?: string;
+  about?: Record<string, unknown>;
   [key: string]: unknown;
 } | null;
 
@@ -47,6 +53,14 @@ const SURROGATE_STATUSES = [
   'Pregnant'
 ] as const;
 
+const TABS = [
+    { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line' },
+    { id: 'about', label: 'About', icon: 'ri-information-line' },
+    { id: 'personal', label: 'Personal & Intake', icon: 'ri-user-line' },
+    { id: 'medical', label: 'Medical Checks', icon: 'ri-stethoscope-line' },
+    { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
+] as const;
+
 const SurrogateProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -55,6 +69,9 @@ const SurrogateProfilePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('overview');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const surrogateDocRef = useMemo(() => (id ? doc(db, 'users', id) : null), [id]);
 
@@ -269,6 +286,108 @@ const SurrogateProfilePage: React.FC = () => {
     }
   };
 
+  const aboutData = useMemo(() => {
+    if (!surrogate) return null;
+    const about = (surrogate.about as Record<string, unknown>) ?? {};
+    const formData = (surrogate.formData as Record<string, unknown>) ?? {};
+    // Based on user dump, formData contains a nested form2 object with rich data
+    const nestedForm2 = (formData.form2 as Record<string, unknown>) ?? {};
+
+    let age = about.age || formData.age || nestedForm2.age;
+    if (!age && formData.dateOfBirth) {
+        try {
+            const dob = new Date(formData.dateOfBirth as string);
+            if (!isNaN(dob.getTime())) {
+                const diff = Date.now() - dob.getTime();
+                const ageDate = new Date(diff);
+                age = String(Math.abs(ageDate.getUTCFullYear() - 1970));
+            }
+        } catch (e) {
+            console.error("Error calculating age", e);
+        }
+    }
+
+    let height = about.height;
+    if (!height) {
+        height = formData.height || nestedForm2.height;
+    }
+
+    // Map additional fields with nested form2 fallbacks
+    // Priority: About (Manual) -> FormData (Direct) -> Nested Form2 (Deep)
+    const education = about.education || formData.educationLevel || nestedForm2.educationLevel || formData['Education Level'];
+    const occupation = about.occupation || formData.occupation || nestedForm2.occupation || formData['Occupation'];
+    const bioMotherHeritage = about.bioMotherHeritage || formData.ethnicity || nestedForm2.ethnicity || formData['Ethnicity'];
+    const relationshipPreference = about.relationshipPreference || formData.relationshipStatus || nestedForm2.relationshipStatus || formData['Relationship Status'];
+    
+    // Message to parents / About Me
+    const bio = about.bio || 
+                    formData.messageToParents || nestedForm2.messageToParents || 
+                    formData['Message To Parents'] || 
+                    formData.surrogacyReasons || nestedForm2.surrogacyReasons ||
+                    formData['Surrogacy Reasons'];
+
+    return {
+        ...ABOUT_SURROGATE_TEMPLATE,
+        ...about,
+        age: age ? String(age) : '',
+        height: height ? String(height) : '',
+        education: education || '',
+        occupation: occupation || '',
+        bioMotherHeritage: bioMotherHeritage || '', 
+        relationshipPreference: relationshipPreference || '',
+        bio: bio || ''
+    };
+  }, [surrogate]);
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !surrogateDocRef) return;
+
+    if (!file.type.startsWith('image/')) {
+        setToast({ message: 'Please upload an image file', type: 'error' });
+        return;
+    }
+
+    // Limit file size to 5MB
+    if (file.size > 5 * 1024 * 1024) {
+        setToast({ message: 'File size must be less than 5MB', type: 'error' });
+        return;
+    }
+
+    try {
+      setIsUploadingImage(true);
+      const storageRef = ref(storage, `users/${id}/profile/avatar_${Date.now()}_${file.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          null,
+          (error) => reject(error),
+          async () => {
+            try {
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              await updateDoc(surrogateDocRef, { profileImageUrl: downloadURL });
+              setToast({ message: 'Profile picture updated successfully', type: 'success' });
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          }
+        );
+      });
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setToast({ message: 'Failed to upload profile picture', type: 'error' });
+    } finally {
+      setIsUploadingImage(false);
+      // Reset input value to allow re-uploading the same file if needed
+      if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+      }
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar />
@@ -311,8 +430,37 @@ const SurrogateProfilePage: React.FC = () => {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.3),_transparent_65%)] opacity-80" />
                 <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-start gap-6">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/40 bg-white/10 text-3xl font-semibold backdrop-blur-xl">
-                      {initials}
+                    <div className="relative group">
+                        <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/40 bg-white/10 text-3xl font-semibold backdrop-blur-xl overflow-hidden">
+                        {surrogate.profileImageUrl ? (
+                            <img 
+                                src={surrogate.profileImageUrl} 
+                                alt={displayName} 
+                                className="h-full w-full object-cover"
+                            />
+                        ) : (
+                            initials
+                        )}
+                        </div>
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploadingImage}
+                            className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                            title="Change profile picture"
+                        >
+                            {isUploadingImage ? (
+                                <i className="ri-loader-4-line animate-spin text-white text-xl"></i>
+                            ) : (
+                                <i className="ri-camera-line text-white text-xl"></i>
+                            )}
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleImageUpload}
+                            accept="image/*"
+                            className="hidden"
+                        />
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-3">
@@ -367,99 +515,206 @@ const SurrogateProfilePage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {summaryCards.map((card) => (
-                  <Card
-                    key={card.label}
-                    padding="sm"
-                    className={`${card.className} border-none shadow-sm backdrop-blur`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{card.label}</p>
-                        <p className="mt-2 text-lg font-semibold">{card.value}</p>
-                      </div>
-                      <span className="text-xl opacity-70">
-                        <i className={card.icon}></i>
-                      </span>
-                    </div>
-                  </Card>
-                ))}
+              {/* Tab Navigation */}
+              <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-700 no-scrollbar">
+                  {TABS.map((tab) => (
+                      <button
+                          key={tab.id}
+                          onClick={() => setActiveTab(tab.id)}
+                          className={`
+                            flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap
+                            ${activeTab === tab.id 
+                                ? 'border-primary-500 text-primary-600 dark:border-primary-400 dark:text-primary-400' 
+                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                            }
+                        `}
+                      >
+                          <i className={tab.icon}></i>
+                          {tab.label}
+                      </button>
+                  ))}
               </div>
 
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <Card className="xl:col-span-2">
-                  <EditableJsonSection
-                    title="Core Profile"
-                    description="Update the surrogate’s headline details such as role and completion flags."
-                    data={coreProfileData}
-                    emptyMessage="No core profile data available."
-                    templateData={CORE_PROFILE_TEMPLATE}
-                    onSave={handleUpdateCore}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Form 1 Responses"
-                    description="Update the initial intake form shared by the surrogate."
-                    data={(surrogate.formData as Record<string, unknown>) ?? null}
-                    emptyMessage="No form data available."
-                    templateData={FORM_CONTACT_TEMPLATE}
-                    onSave={(value) => handleUpdateField('formData', value)}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Form 2 Responses"
-                    description="Modify detailed screening information."
-                    data={(surrogate.form2 as Record<string, unknown>) ?? null}
-                    emptyMessage="Form 2 has not been completed."
-                    templateData={SURROGATE_FORM2_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2', value)}
-                  />
-                </Card>
-                <Card className="xl:col-span-2">
-                  <EditableJsonSection
-                    title="Additional Profile Data"
-                    description="Capture any supplementary information stored alongside the surrogate profile."
-                    data={(surrogate.form2Data as Record<string, unknown>) ?? null}
-                    emptyMessage="No additional data provided."
-                    templateData={SURROGATE_ADDITIONAL_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2Data', value)}
-                  />
-                </Card>
+              {/* Tab Content */}
+              <div className="space-y-6">
+                {activeTab === 'overview' && (
+                    <>
+                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                            {summaryCards.map((card) => (
+                            <Card
+                                key={card.label}
+                                padding="sm"
+                                className={`${card.className} border-none shadow-sm backdrop-blur`}
+                            >
+                                <div className="flex items-start justify-between">
+                                <div>
+                                    <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{card.label}</p>
+                                    <p className="mt-2 text-lg font-semibold">{card.value}</p>
+                                </div>
+                                <span className="text-xl opacity-70">
+                                    <i className={card.icon}></i>
+                                </span>
+                                </div>
+                            </Card>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                             <Card className="xl:col-span-2">
+                                <EditableJsonSection
+                                    title="Core Profile"
+                                    description="Update the surrogate’s headline details such as role and completion flags."
+                                    data={coreProfileData}
+                                    emptyMessage="No core profile data available."
+                                    templateData={CORE_PROFILE_TEMPLATE}
+                                    onSave={handleUpdateCore}
+                                />
+                            </Card>
+                            <Card className="xl:col-span-2">
+                                <EditableJsonSection
+                                    title="Additional Profile Data"
+                                    description="Capture any supplementary information stored alongside the surrogate profile."
+                                    data={(surrogate.form2Data as Record<string, unknown>) ?? null}
+                                    emptyMessage="No additional data provided."
+                                    templateData={SURROGATE_ADDITIONAL_TEMPLATE}
+                                    onSave={(value) => handleUpdateField('form2Data', value)}
+                                />
+                            </Card>
+                        </div>
+                    </>
+                )}
 
-                {/* New Medical Report Sections */}
-                <Card className="xl:col-span-2">
-                  <EditableJsonSection
-                    title="Comprehensive Medical Fitness Certificate"
-                    description="Gynecological exam, obstetric history, BMI, BP, and general health clearance."
-                    data={((surrogate.form2 as Record<string, unknown>)?.medicalFitness as Record<string, unknown>) ?? null}
-                    emptyMessage="No medical fitness report available."
-                    templateData={SURROGATE_MEDICAL_FITNESS_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2.medicalFitness', value)}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Infectious Disease Screening Report"
-                    description="Screening results for HIV, HBsAg, HCV, VDRL, TORCH."
-                    data={((surrogate.form2 as Record<string, unknown>)?.infectiousDisease as Record<string, unknown>) ?? null}
-                    emptyMessage="No screening report available."
-                    templateData={SURROGATE_INFECTIOUS_DISEASE_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2.infectiousDisease', value)}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Psychological / Mental Health Clearance"
-                    description="Upload evaluation by certified psychologist/psychiatrist."
-                    data={((surrogate.form2 as Record<string, unknown>)?.psychClearance as Record<string, unknown>) ?? null}
-                    emptyMessage="No psychological clearance available."
-                    templateData={SURROGATE_PSYCH_CLEARANCE_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2.psychClearance', value)}
-                  />
-                </Card>
+                {activeTab === 'about' && (
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                        {/* Left Column - Staggered Photo Grid */}
+                        <div className="xl:col-span-5 space-y-4">
+                            <div className="columns-1 gap-4 sm:columns-2 space-y-4">
+                                {/* Profile Image */}
+                                {surrogate.profileImageUrl && (
+                                    <div className="break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 shadow-md">
+                                        <img
+                                            src={surrogate.profileImageUrl}
+                                            alt={displayName}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    </div>
+                                )}
+                                
+                                {/* Additional Images from Documents */}
+                                {surrogate.documents
+                                    ?.filter(doc => doc.type?.startsWith('image/') || !doc.type)
+                                    .map((doc, index) => (
+                                        <div key={`${doc.url}-${index}`} className="break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 shadow-md group relative">
+                                            <img
+                                                src={doc.url}
+                                                alt={doc.name}
+                                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10" />
+                                        </div>
+                                    ))
+                                }
+
+                                {!surrogate.profileImageUrl && (!surrogate.documents || !surrogate.documents.some(d => d.type?.startsWith('image/') || !d.type)) && (
+                                     <div className="break-inside-avoid flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 text-4xl text-gray-300 dark:text-gray-600">
+                                        <i className="ri-image-line"></i>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Right Column - About Info */}
+                        <div className="xl:col-span-7 space-y-6">
+                            <Card>
+                                <div className="mb-4">
+                                    <h2 className="text-xl font-semibold">About {surrogate.firstName || 'Surrogate'}</h2>
+                                </div>
+                                
+                                <EditableJsonSection
+                                    title="" 
+                                    description="Personal details, heritage, and background information."
+                                    data={aboutData}
+                                    emptyMessage="No about information provided."
+                                    templateData={ABOUT_SURROGATE_TEMPLATE}
+                                    onSave={(value) => handleUpdateField('about', value)}
+                                />
+                            </Card>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'personal' && (
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                        <Card>
+                            <EditableJsonSection
+                                title="Form 1 Responses"
+                                description="Update the initial intake form shared by the surrogate."
+                                data={(surrogate.formData as Record<string, unknown>) ?? null}
+                                emptyMessage="No form data available."
+                                templateData={FORM_CONTACT_TEMPLATE}
+                                onSave={(value) => handleUpdateField('formData', value)}
+                            />
+                        </Card>
+                        <Card>
+                            <EditableJsonSection
+                                title="Form 2 Responses"
+                                description="Modify detailed screening information."
+                                data={(surrogate.form2 as Record<string, unknown>) ?? null}
+                                emptyMessage="Form 2 has not been completed."
+                                templateData={SURROGATE_FORM2_TEMPLATE}
+                                onSave={(value) => handleUpdateField('form2', value)}
+                            />
+                        </Card>
+                    </div>
+                )}
+
+                {activeTab === 'medical' && (
+                     <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                        <Card className="xl:col-span-2">
+                            <EditableJsonSection
+                                title="Comprehensive Medical Fitness Certificate"
+                                description="Gynecological exam, obstetric history, BMI, BP, and general health clearance."
+                                data={((surrogate.form2 as Record<string, unknown>)?.medicalFitness as Record<string, unknown>) ?? null}
+                                emptyMessage="No medical fitness report available."
+                                templateData={SURROGATE_MEDICAL_FITNESS_TEMPLATE}
+                                onSave={(value) => handleUpdateField('form2.medicalFitness', value)}
+                            />
+                        </Card>
+                        <Card>
+                            <EditableJsonSection
+                                title="Infectious Disease Screening Report"
+                                description="Screening results for HIV, HBsAg, HCV, VDRL, TORCH."
+                                data={((surrogate.form2 as Record<string, unknown>)?.infectiousDisease as Record<string, unknown>) ?? null}
+                                emptyMessage="No screening report available."
+                                templateData={SURROGATE_INFECTIOUS_DISEASE_TEMPLATE}
+                                onSave={(value) => handleUpdateField('form2.infectiousDisease', value)}
+                            />
+                        </Card>
+                        <Card>
+                            <EditableJsonSection
+                                title="Psychological / Mental Health Clearance"
+                                description="Upload evaluation by certified psychologist/psychiatrist."
+                                data={((surrogate.form2 as Record<string, unknown>)?.psychClearance as Record<string, unknown>) ?? null}
+                                emptyMessage="No psychological clearance available."
+                                templateData={SURROGATE_PSYCH_CLEARANCE_TEMPLATE}
+                                onSave={(value) => handleUpdateField('form2.psychClearance', value)}
+                            />
+                        </Card>
+                    </div>
+                )}
+
+                {activeTab === 'documents' && (
+                     <div className="grid grid-cols-1 gap-6">
+                        <Card>
+                            <FileUploadSection
+                                title="Documents & Media"
+                                description="Upload legal contracts, receipts, medical reports, and other documents."
+                                userId={surrogate.id}
+                                files={surrogate.documents ?? []}
+                                onFilesChange={(files) => handleUpdateField('documents', files as unknown as Record<string, unknown>)}
+                            />
+                        </Card>
+                    </div>
+                )}
               </div>
             </>
           )}

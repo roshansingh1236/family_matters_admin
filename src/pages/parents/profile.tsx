@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
+import FileUploadSection, { type FileRecord } from '../../components/data/FileUploadSection';
 import Toast from '../../components/base/Toast';
-import { db } from '../../lib/firebase';
+import { db, storage } from '../../lib/firebase';
 import {
   CORE_PROFILE_TEMPLATE,
   FORM_CONTACT_TEMPLATE,
@@ -17,7 +19,8 @@ import {
   SURROGATE_PREFERENCES_TEMPLATE,
   IP_FERTILITY_REPORT_TEMPLATE,
   IP_INFECTIOUS_DISEASE_TEMPLATE,
-  IP_EMBRYO_RECORDS_TEMPLATE
+  IP_EMBRYO_RECORDS_TEMPLATE,
+  ABOUT_PARENT_TEMPLATE
 } from '../../constants/jsonTemplates';
 
 const PARENT_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
@@ -39,12 +42,24 @@ type FirestoreUser = {
   updatedAt?: unknown;
   [key: string]: unknown;
   status?: string;
+  documents?: FileRecord[];
+  profileImageUrl?: string;
+  about?: Record<string, unknown>;
 } | null;
 
 const PARENT_STATUSES = [
   'To be Matched',
   'Matched',
   'Rematch'
+] as const;
+
+const TABS = [
+    { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line' },
+    { id: 'about', label: 'About', icon: 'ri-information-line' },
+    { id: 'personal', label: 'Personal', icon: 'ri-user-line' },
+    { id: 'medical', label: 'Medical & Fertility', icon: 'ri-stethoscope-line' },
+    { id: 'intake', label: 'Intake & Preferences', icon: 'ri-file-list-3-line' },
+    { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
 ] as const;
 
 const ParentProfilePage: React.FC = () => {
@@ -55,6 +70,9 @@ const ParentProfilePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('overview');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const parentDocRef = useMemo(() => (id ? doc(db, 'users', id) : null), [id]);
 
@@ -261,6 +279,81 @@ const ParentProfilePage: React.FC = () => {
     }
   };
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !parentDocRef) return;
+
+    if (!file.type.startsWith('image/')) {
+        setToast({ message: 'Please upload an image file', type: 'error' });
+        return;
+    }
+
+    // Limit file size to 5MB
+    if (file.size > 5 * 1024 * 1024) {
+        setToast({ message: 'File size must be less than 5MB', type: 'error' });
+        return;
+    }
+
+    try {
+      setIsUploadingImage(true);
+      const storageRef = ref(storage, `users/${id}/profile/avatar_${Date.now()}_${file.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          null,
+          (error) => reject(error),
+          async () => {
+            try {
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              await updateDoc(parentDocRef, { profileImageUrl: downloadURL });
+              setToast({ message: 'Profile picture updated successfully', type: 'success' });
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          }
+        );
+      });
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setToast({ message: 'Failed to upload profile picture', type: 'error' });
+    } finally {
+      setIsUploadingImage(false);
+      // Reset input value to allow re-uploading the same file if needed
+      if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const aboutData = useMemo(() => {
+    if (!parent) return null;
+    const about = (parent.about as Record<string, unknown>) ?? {};
+    const formData = (parent.formData as Record<string, unknown>) ?? {};
+    const form2Data = (parent.form2Data as Record<string, unknown>) ?? {};
+    const parent1 = (parent.parent1 as Record<string, unknown>) ?? {};
+    const parent2 = (parent.parent2 as Record<string, unknown>) ?? {};
+
+    // Map fields
+    const bio = about.bio || '';
+    const aboutUs = about.aboutUs || formData.messageToSurrogate || form2Data.familyDescription || '';
+    const relationshipPreference = about.relationshipPreference || formData.relationshipType || '';
+    const occupation = about.occupation || [parent1.occupation, parent2.occupation].filter(Boolean).join(' & ') || '';
+    const education = about.education || [parent1.education, parent2.education].filter(Boolean).join(' & ') || '';
+
+    return {
+        ...ABOUT_PARENT_TEMPLATE,
+        ...about,
+        bio,
+        aboutUs,
+        relationshipPreference,
+        occupation,
+        education
+    };
+  }, [parent]);
+
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar />
@@ -303,8 +396,37 @@ const ParentProfilePage: React.FC = () => {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.28),_transparent_60%)] opacity-70" />
                 <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-start gap-6">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/30 bg-white/10 text-3xl font-semibold backdrop-blur-xl">
-                      {initials}
+                    <div className="relative group">
+                        <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/30 bg-white/10 text-3xl font-semibold backdrop-blur-xl overflow-hidden">
+                        {parent.profileImageUrl ? (
+                            <img 
+                                src={parent.profileImageUrl} 
+                                alt={displayName} 
+                                className="h-full w-full object-cover"
+                            />
+                        ) : (
+                            initials
+                        )}
+                        </div>
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploadingImage}
+                            className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                            title="Change profile picture"
+                        >
+                            {isUploadingImage ? (
+                                <i className="ri-loader-4-line animate-spin text-white text-xl"></i>
+                            ) : (
+                                <i className="ri-camera-line text-white text-xl"></i>
+                            )}
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleImageUpload}
+                            accept="image/*"
+                            className="hidden"
+                        />
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-3">
@@ -355,129 +477,241 @@ const ParentProfilePage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {summaryCards.map((card) => (
-                  <Card
-                    key={card.label}
-                    padding="sm"
-                    className={`${card.className} border-none shadow-sm backdrop-blur`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{card.label}</p>
-                        <p className="mt-2 text-lg font-semibold">{card.value}</p>
-                      </div>
-                      <span className="text-xl opacity-70">
-                        <i className={card.icon}></i>
-                      </span>
-                    </div>
-                  </Card>
-                ))}
+              {/* Tab Navigation */}
+              <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-700 no-scrollbar">
+                  {TABS.map((tab) => (
+                      <button
+                          key={tab.id}
+                          onClick={() => setActiveTab(tab.id)}
+                          className={`
+                            flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap
+                            ${activeTab === tab.id 
+                                ? 'border-primary-500 text-primary-600 dark:border-primary-400 dark:text-primary-400' 
+                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                            }
+                        `}
+                      >
+                          <i className={tab.icon}></i>
+                          {tab.label}
+                      </button>
+                  ))}
               </div>
 
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <Card className="xl:col-span-2">
-                  <EditableJsonSection
-                    title="Core Profile"
-                    description="Update top-level information such as role and completion status. For contact details, edit the form responses below."
-                    data={coreProfileData}
-                    emptyMessage="No core profile data available."
-                    templateData={CORE_PROFILE_TEMPLATE}
-                    onSave={handleUpdateCore}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Form 1 Responses"
-                    description="Update the intake details shared by the intended parents."
-                    data={(parent.formData as Record<string, unknown>) ?? null}
-                    emptyMessage="No form data available."
-                    templateData={FORM_CONTACT_TEMPLATE}
-                    onSave={(value) => handleUpdateField('formData', value)}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Form 2 Responses"
-                    description="Modify the extended questionnaire answers for this family."
-                    data={(parent.form2Data as Record<string, unknown>) ?? null}
-                    emptyMessage="Form 2 has not been completed."
-                    templateData={PARENT_FORM2_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2Data', value)}
-                  />
-                </Card>
-                <Card className="xl:col-span-2">
-                  <EditableJsonSection
-                    title="Fertility Information"
-                    description="Capture fertility clinic, embryo and related details."
-                    data={((parent.form2Data as Record<string, unknown>)?.fertility as Record<string, unknown>) ?? null}
-                    emptyMessage="No fertility information provided."
-                    templateData={FERTILITY_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2Data.fertility', value)}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Parent 1"
-                    description="Edit details for Parent 1."
-                    data={(parent.parent1 as Record<string, unknown>) ?? null}
-                    emptyMessage="Parent 1 details not provided."
-                    templateData={PARENT_PROFILE_TEMPLATE}
-                    onSave={(value) => handleUpdateField('parent1', value)}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Parent 2"
-                    description="Edit details for Parent 2."
-                    data={(parent.parent2 as Record<string, unknown>) ?? null}
-                    emptyMessage="Parent 2 details not provided."
-                    templateData={PARENT_PROFILE_TEMPLATE}
-                    onSave={(value) => handleUpdateField('parent2', value)}
-                  />
-                </Card>
-                <Card className="xl:col-span-2">
-                  <EditableJsonSection
-                    title="Surrogate Preferences"
-                    description="Fine-tune the family's preferences for potential surrogates."
-                    data={(parent.surrogateRelated as Record<string, unknown>) ?? null}
-                    emptyMessage="No surrogate preferences captured."
-                    templateData={SURROGATE_PREFERENCES_TEMPLATE}
-                    onSave={(value) => handleUpdateField('surrogateRelated', value)}
-                  />
-                </Card>
+              {/* Tab Content */}
+              <div className="space-y-6">
+                {activeTab === 'overview' && (
+                    <>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                            {summaryCards.map((card) => (
+                            <Card
+                                key={card.label}
+                                padding="sm"
+                                className={`${card.className} border-none shadow-sm backdrop-blur`}
+                            >
+                                <div className="flex items-start justify-between">
+                                <div>
+                                    <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{card.label}</p>
+                                    <p className="mt-2 text-lg font-semibold">{card.value}</p>
+                                </div>
+                                <span className="text-xl opacity-70">
+                                    <i className={card.icon}></i>
+                                </span>
+                                </div>
+                            </Card>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-1 gap-6">
+                             <Card className="xl:col-span-2">
+                                <EditableJsonSection
+                                    title="Core Profile"
+                                    description="Update top-level information such as role and completion status."
+                                    data={coreProfileData}
+                                    emptyMessage="No core profile data available."
+                                    templateData={CORE_PROFILE_TEMPLATE}
+                                    onSave={handleUpdateCore}
+                                />
+                            </Card>
+                        </div>
+                    </>
+                )}
 
-                {/* New Medical Report Sections */}
-                <Card className="xl:col-span-2">
-                  <EditableJsonSection
-                    title="Fertility & Reproductive Health Report"
-                    description="IVF evaluation, ovarian reserve, and diagnosis."
-                    data={((parent.form2Data as Record<string, unknown>)?.fertilityReport as Record<string, unknown>) ?? null}
-                    emptyMessage="No fertility report available."
-                    templateData={IP_FERTILITY_REPORT_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2Data.fertilityReport', value)}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Infectious Disease Screening Report"
-                    description="Screening results for HIV, HBsAg, HCV, VDRL, CMV."
-                    data={((parent.form2Data as Record<string, unknown>)?.infectiousDisease as Record<string, unknown>) ?? null}
-                    emptyMessage="No screening report available."
-                    templateData={IP_INFECTIOUS_DISEASE_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2Data.infectiousDisease', value)}
-                  />
-                </Card>
-                <Card>
-                  <EditableJsonSection
-                    title="Embryo / Gamete Medical Records"
-                    description="Embryo freezing and donor screening reports."
-                    data={((parent.form2Data as Record<string, unknown>)?.embryoRecords as Record<string, unknown>) ?? null}
-                    emptyMessage="No embryo records available."
-                    templateData={IP_EMBRYO_RECORDS_TEMPLATE}
-                    onSave={(value) => handleUpdateField('form2Data.embryoRecords', value)}
-                  />
-                </Card>
+                {activeTab === 'about' && (
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                        {/* Left Column - Staggered Photo Grid */}
+                        <div className="xl:col-span-5 space-y-4">
+                            <div className="columns-1 gap-4 sm:columns-2 space-y-4">
+                                {/* Profile Image */}
+                                {parent.profileImageUrl && (
+                                    <div className="break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 shadow-md">
+                                        <img
+                                            src={parent.profileImageUrl}
+                                            alt={displayName}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    </div>
+                                )}
+                                
+                                {/* Additional Images from Documents */}
+                                {parent.documents
+                                    ?.filter(doc => doc.type?.startsWith('image/') || !doc.type)
+                                    .map((doc, index) => (
+                                        <div key={`${doc.url}-${index}`} className="break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 shadow-md group relative">
+                                            <img
+                                                src={doc.url}
+                                                alt={doc.name}
+                                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10" />
+                                        </div>
+                                    ))
+                                }
+
+                                {!parent.profileImageUrl && (!parent.documents || !parent.documents.some(d => d.type?.startsWith('image/') || !d.type)) && (
+                                     <div className="break-inside-avoid flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 text-4xl text-gray-300 dark:text-gray-600">
+                                        <i className="ri-image-line"></i>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Right Column - About Info */}
+                        <div className="xl:col-span-7 space-y-6">
+                            <Card>
+                                <div className="mb-4">
+                                    <h2 className="text-xl font-semibold">About {displayName}</h2>
+                                </div>
+                                
+                                <EditableJsonSection
+                                    title="" 
+                                    description="Family details, lifestyle, and preferences."
+                                    data={aboutData}
+                                    emptyMessage="No about information provided."
+                                    templateData={ABOUT_PARENT_TEMPLATE}
+                                    onSave={(value) => handleUpdateField('about', value)}
+                                />
+                            </Card>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'personal' && (
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                        <Card>
+                            <EditableJsonSection
+                                title="Parent 1"
+                                description="Edit details for Parent 1."
+                                data={(parent.parent1 as Record<string, unknown>) ?? null}
+                                emptyMessage="Parent 1 details not provided."
+                                templateData={PARENT_PROFILE_TEMPLATE}
+                                onSave={(value) => handleUpdateField('parent1', value)}
+                            />
+                        </Card>
+                        <Card>
+                            <EditableJsonSection
+                                title="Parent 2"
+                                description="Edit details for Parent 2."
+                                data={(parent.parent2 as Record<string, unknown>) ?? null}
+                                emptyMessage="Parent 2 details not provided."
+                                templateData={PARENT_PROFILE_TEMPLATE}
+                                onSave={(value) => handleUpdateField('parent2', value)}
+                            />
+                        </Card>
+                    </div>
+                )}
+
+                {activeTab === 'medical' && (
+                     <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                        <Card className="xl:col-span-2">
+                            <EditableJsonSection
+                                title="Fertility Information"
+                                description="Capture fertility clinic, embryo and related details."
+                                data={((parent.form2Data as Record<string, unknown>)?.fertility as Record<string, unknown>) ?? null}
+                                emptyMessage="No fertility information provided."
+                                templateData={FERTILITY_TEMPLATE}
+                                onSave={(value) => handleUpdateField('form2Data.fertility', value)}
+                            />
+                        </Card>
+                         <Card className="xl:col-span-2">
+                            <EditableJsonSection
+                                title="Fertility & Reproductive Health Report"
+                                description="IVF evaluation, ovarian reserve, and diagnosis."
+                                data={((parent.form2Data as Record<string, unknown>)?.fertilityReport as Record<string, unknown>) ?? null}
+                                emptyMessage="No fertility report available."
+                                templateData={IP_FERTILITY_REPORT_TEMPLATE}
+                                onSave={(value) => handleUpdateField('form2Data.fertilityReport', value)}
+                            />
+                        </Card>
+                        <Card>
+                            <EditableJsonSection
+                                title="Infectious Disease Screening Report"
+                                description="Screening results for HIV, HBsAg, HCV, VDRL, CMV."
+                                data={((parent.form2Data as Record<string, unknown>)?.infectiousDisease as Record<string, unknown>) ?? null}
+                                emptyMessage="No screening report available."
+                                templateData={IP_INFECTIOUS_DISEASE_TEMPLATE}
+                                onSave={(value) => handleUpdateField('form2Data.infectiousDisease', value)}
+                            />
+                        </Card>
+                        <Card>
+                            <EditableJsonSection
+                                title="Embryo / Gamete Medical Records"
+                                description="Embryo freezing and donor screening reports."
+                                data={((parent.form2Data as Record<string, unknown>)?.embryoRecords as Record<string, unknown>) ?? null}
+                                emptyMessage="No embryo records available."
+                                templateData={IP_EMBRYO_RECORDS_TEMPLATE}
+                                onSave={(value) => handleUpdateField('form2Data.embryoRecords', value)}
+                            />
+                        </Card>
+                    </div>
+                )}
+
+                {activeTab === 'intake' && (
+                     <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                         <Card>
+                            <EditableJsonSection
+                                title="Form 1 Responses"
+                                description="Update the intake details shared by the intended parents."
+                                data={(parent.formData as Record<string, unknown>) ?? null}
+                                emptyMessage="No form data available."
+                                templateData={FORM_CONTACT_TEMPLATE}
+                                onSave={(value) => handleUpdateField('formData', value)}
+                            />
+                        </Card>
+                        <Card>
+                            <EditableJsonSection
+                                title="Form 2 Responses"
+                                description="Modify the extended questionnaire answers for this family."
+                                data={(parent.form2Data as Record<string, unknown>) ?? null}
+                                emptyMessage="Form 2 has not been completed."
+                                templateData={PARENT_FORM2_TEMPLATE}
+                                onSave={(value) => handleUpdateField('form2Data', value)}
+                            />
+                        </Card>
+                        <Card className="xl:col-span-2">
+                            <EditableJsonSection
+                                title="Surrogate Preferences"
+                                description="Fine-tune the family's preferences for potential surrogates."
+                                data={(parent.surrogateRelated as Record<string, unknown>) ?? null}
+                                emptyMessage="No surrogate preferences captured."
+                                templateData={SURROGATE_PREFERENCES_TEMPLATE}
+                                onSave={(value) => handleUpdateField('surrogateRelated', value)}
+                            />
+                        </Card>
+                     </div>
+                )}
+                
+                {activeTab === 'documents' && (
+                    <div className="grid grid-cols-1 gap-6">
+                         <Card>
+                            <FileUploadSection
+                                title="Documents & Media"
+                                description="Upload legal contracts, receipts, medical reports, and other documents."
+                                userId={parent.id}
+                                files={parent.documents ?? []}
+                                onFilesChange={(files) => handleUpdateField('documents', files as unknown as Record<string, unknown>)}
+                            />
+                        </Card>
+                    </div>
+                )}
               </div>
             </>
           )}
