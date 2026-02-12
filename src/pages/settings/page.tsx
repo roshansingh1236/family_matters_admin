@@ -1,14 +1,17 @@
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
+import Toast from '../../components/base/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import DataSection from '../../components/data/DataSection';
 
 const SettingsPage: React.FC = () => {
   const { user, profile, profileLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('general');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [settings, setSettings] = useState({
     siteName: 'Family Matters',
     adminEmail: 'admin@familymatters.com',
@@ -439,6 +442,10 @@ const SettingsPage: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         
+        {toast && (
+          <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+        )}
+
         <main className="flex-1 overflow-y-auto p-6">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Settings</h1>

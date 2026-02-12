@@ -1,118 +1,86 @@
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
-
-interface SidebarItem {
-  id: string;
-  label: string;
-  icon: string;
-  path: string;
-  badge?: number;
-}
-
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import React from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../lib/firebase';
 
 export const Sidebar: React.FC = () => {
-  const navigate = useNavigate();
   const location = useLocation();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [newRequestsCount, setNewRequestsCount] = useState(0);
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    // Count users with 'pending' status as new requests
-    const q = query(
-      collection(db, 'users'),
-      where('status', '==', 'pending')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setNewRequestsCount(snapshot.size);
-    }, (error) => {
-      console.error("Error fetching request count:", error);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const sidebarItems: SidebarItem[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: 'ri-dashboard-line', path: '/' },
-    { id: 'requests', label: 'New Requests', icon: 'ri-file-list-3-line', path: '/requests', badge: newRequestsCount > 0 ? newRequestsCount : undefined },
-    { id: 'inquiries', label: 'Inquiries', icon: 'ri-question-answer-line', path: '/inquiries' },
-    { id: 'surrogates', label: 'Surrogates', icon: 'ri-user-heart-line', path: '/surrogates' },
-    { id: 'parents', label: 'Intended Parents', icon: 'ri-parent-line', path: '/parents' },
-    { id: 'matches', label: 'Matches', icon: 'ri-links-line', path: '/matches' },
-    { id: 'contracts', label: 'Contracts', icon: 'ri-file-text-line', path: '/contracts' },
-    { id: 'medical', label: 'Medical Records', icon: 'ri-health-book-line', path: '/medical' },
-    { id: 'payments', label: 'Payments', icon: 'ri-money-dollar-circle-line', path: '/payments' },
-    { id: 'calendar', label: 'Calendar', icon: 'ri-calendar-line', path: '/calendar' },
-    { id: 'reports', label: 'Reports', icon: 'ri-bar-chart-line', path: '/reports' },
-    { id: 'settings', label: 'Settings', icon: 'ri-settings-3-line', path: '/settings' },
-  ];
-
-  const handleNavigation = (path: string) => {
-    navigate(path);
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      navigate('/auth/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
+  const menuItems = [
+    { icon: 'ri-dashboard-line', label: 'Dashboard', path: '/' },
+    { icon: 'ri-parent-line', label: 'Parents', path: '/parents' },
+    { icon: 'ri-user-heart-line', label: 'Surrogates', path: '/surrogates' },
+    { icon: 'ri-links-line', label: 'Matches', path: '/matches' },
+    { icon: 'ri-chat-1-line', label: 'Inquiries', path: '/inquiries' },
+    { icon: 'ri-file-text-line', label: 'Contracts', path: '/contracts' },
+    { type: 'divider' },
+    { icon: 'ri-calendar-line', label: 'Calendar', path: '/calendar' },
+    { icon: 'ri-time-line', label: 'Appointments', path: '/appointments' },
+    { icon: 'ri-hospital-line', label: 'Medical', path: '/medical' },
+    { icon: 'ri-money-dollar-circle-line', label: 'Compensation', path: '/payments' },
+    { type: 'divider' },
+    { icon: 'ri-file-chart-line', label: 'Reports', path: '/reports' },
+    { icon: 'ri-settings-4-line', label: 'Settings', path: '/settings' },
+  ];
+
   return (
-    <div className={`bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-screen transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-64'}`}>
-      {/* Header */}
-      <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between">
-          {!isCollapsed && (
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <i className="ri-heart-3-fill text-white text-lg"></i>
-              </div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white" style={{ fontFamily: '"Pacifico", serif' }}>
-                Family Matters
-              </h1>
-            </div>
-          )}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <i className={`ri-menu-${isCollapsed ? 'unfold' : 'fold'}-line text-gray-600 dark:text-gray-300`}></i>
-          </button>
+    <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full flex-shrink-0">
+      <div className="p-6 flex items-center gap-3">
+        <div className="w-8 h-8 bg-gradient-to-br from-rose-500 to-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
+          FM
         </div>
+        <span className="font-bold text-xl text-gray-900 dark:text-white tracking-tight">Family Matters</span>
       </div>
 
-      {/* Navigation */}
-      <nav className="p-4">
-        <ul className="space-y-2">
-          {sidebarItems.map((item) => {
-            const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
-            return (
-              <li key={item.id}>
-                <button
-                  onClick={() => handleNavigation(item.path)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 cursor-pointer ${
-                    isActive
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-r-2 border-blue-600'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  <div className="w-5 h-5 flex items-center justify-center">
-                    <i className={`${item.icon} text-lg`}></i>
-                  </div>
-                  {!isCollapsed && (
-                    <>
-                      <span className="font-medium flex-1 text-left">{item.label}</span>
-                      {item.badge && (
-                        <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                          {item.badge}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+      <nav className="flex-1 overflow-y-auto px-4 py-2 space-y-1 custom-scrollbar">
+        {menuItems.map((item, index) => {
+          if (item.type === 'divider') {
+            return <div key={index} className="my-4 border-t border-gray-100 dark:border-gray-700" />;
+          }
+
+          const isActive = item.path === '/' 
+            ? location.pathname === '/' 
+            : location.pathname.startsWith(item.path || '');
+
+          return (
+            <NavLink
+              key={item.path}
+              to={item.path!}
+              className={({ isActive: linkActive }) => `
+                flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group
+                ${isActive || linkActive
+                  ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 font-medium'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200'
+                }
+              `}
+            >
+              <i className={`${item.icon} text-lg ${isActive ? 'text-rose-500 dark:text-rose-400' : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'}`}></i>
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
       </nav>
-    </div>
+
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        <button
+          onClick={handleSignOut}
+          className="flex items-center gap-3 w-full px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors"
+        >
+          <i className="ri-logout-box-line text-lg"></i>
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </aside>
   );
 };

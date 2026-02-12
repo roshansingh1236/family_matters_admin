@@ -1,74 +1,49 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-
-// Mock calendar data
-const calendarEvents = [
-  {
-    id: 'CAL001',
-    title: 'Initial Consultation',
-    type: 'consultation',
-    date: '2024-01-15',
-    time: '10:00 AM',
-    duration: 60,
-    participants: ['Dr. Sarah Wilson', 'Emma Thompson', 'John & Mary Davis'],
-    location: 'Clinic Room 1',
-    status: 'confirmed'
-  },
-  {
-    id: 'CAL002',
-    title: 'Medical Screening',
-    type: 'medical',
-    date: '2024-01-16',
-    time: '2:00 PM',
-    duration: 90,
-    participants: ['Dr. Michael Chen', 'Lisa Rodriguez'],
-    location: 'Medical Center',
-    status: 'pending'
-  },
-  {
-    id: 'CAL003',
-    title: 'Legal Review',
-    type: 'legal',
-    date: '2024-01-17',
-    time: '11:00 AM',
-    duration: 45,
-    participants: ['Attorney Johnson', 'Robert & Susan Miller'],
-    location: 'Law Office',
-    status: 'confirmed'
-  },
-  {
-    id: 'CAL004',
-    title: 'Psychological Evaluation',
-    type: 'psychological',
-    date: '2024-01-18',
-    time: '9:00 AM',
-    duration: 120,
-    participants: ['Dr. Patricia Lee', 'Amanda Wilson'],
-    location: 'Psychology Clinic',
-    status: 'completed'
-  },
-  {
-    id: 'CAL005',
-    title: 'IVF Transfer',
-    type: 'medical',
-    date: '2024-01-20',
-    time: '8:00 AM',
-    duration: 180,
-    participants: ['Dr. Michael Chen', 'Emma Thompson'],
-    location: 'IVF Center',
-    status: 'scheduled'
-  }
-];
+import { appointmentService, Appointment } from '../../services/appointmentService';
 
 const CalendarPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Appointment | null>(null);
   const [showNewEventModal, setShowNewEventModal] = useState(false);
+  const [events, setEvents] = useState<Appointment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // New Event Form State
+  const [formData, setFormData] = useState<Partial<Appointment>>({
+    title: '',
+    type: 'consultation',
+    date: new Date().toISOString().split('T')[0],
+    time: '09:00',
+    duration: '60 min',
+    participants: [],
+    location: 'Clinic',
+    status: 'scheduled',
+    notes: ''
+  });
+
+  const fetchEvents = async () => {
+    setIsLoading(true);
+    try {
+      const data = await appointmentService.getAllAppointments();
+      setEvents(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load events', err);
+      setEvents([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -101,22 +76,20 @@ const CalendarPage: React.FC = () => {
   };
 
   const getEventsForDate = (day: number) => {
-    const dateStr = `2024-01-${day.toString().padStart(2, '0')}`;
-    return calendarEvents.filter(event => event.date === dateStr);
+    const year = currentDate.getFullYear();
+    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(day).padStart(2, '0');
+    const dateStr = `${year}-${month}-${dayStr}`;
+    return events.filter(event => event.date === dateStr);
   };
 
   const getEventTypeColor = (type: string) => {
     switch (type) {
-      case 'consultation':
-        return 'bg-blue-500';
-      case 'medical':
-        return 'bg-green-500';
-      case 'legal':
-        return 'bg-purple-500';
-      case 'psychological':
-        return 'bg-orange-500';
-      default:
-        return 'bg-gray-500';
+      case 'consultation': return 'bg-blue-500';
+      case 'medical': return 'bg-green-500';
+      case 'legal': return 'bg-purple-500';
+      case 'psychological': return 'bg-orange-500';
+      default: return 'bg-gray-500';
     }
   };
 
@@ -147,6 +120,27 @@ const CalendarPage: React.FC = () => {
     });
   };
 
+  const handleCreateEvent = async () => {
+    try {
+        await appointmentService.createAppointment(formData as any);
+        await fetchEvents();
+        setShowNewEventModal(false);
+    } catch (error) {
+        console.error("Failed to create event", error);
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+      if(!confirm("Are you sure you want to delete this event?")) return;
+      try {
+          await appointmentService.deleteAppointment(id);
+          await fetchEvents();
+          setSelectedEvent(null);
+      } catch (error) {
+          console.error("Failed to delete event", error);
+      }
+  }
+
   const renderMonthView = () => {
     const days = getDaysInMonth(currentDate);
     
@@ -166,20 +160,26 @@ const CalendarPage: React.FC = () => {
           {days.map((day, index) => (
             <div
               key={index}
-              className="min-h-[120px] p-2 border-r border-b border-gray-200 dark:border-gray-700 last:border-r-0"
+              className="min-h-[120px] p-2 border-r border-b border-gray-200 dark:border-gray-700 last:border-r-0 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               {day && (
                 <>
-                  <div className="font-semibold text-gray-900 dark:text-white mb-2">{day}</div>
+                  <div className={`font-semibold mb-2 ${
+                      day === new Date().getDate() && 
+                      currentDate.getMonth() === new Date().getMonth() && 
+                      currentDate.getFullYear() === new Date().getFullYear() 
+                      ? 'bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center' 
+                      : 'text-gray-900 dark:text-white'
+                  }`}>{day}</div>
                   <div className="space-y-1">
                     {getEventsForDate(day).map(event => (
                       <div
                         key={event.id}
                         onClick={() => setSelectedEvent(event)}
-                        className={`text-xs p-1 rounded cursor-pointer text-white ${getEventTypeColor(event.type)} hover:opacity-80`}
+                        className={`text-xs p-1 rounded cursor-pointer text-white ${getEventTypeColor(event.type)} hover:opacity-80 shadow-sm truncate`}
                       >
-                        <div className="font-medium truncate">{event.title}</div>
-                        <div className="truncate">{event.time}</div>
+                        <span className="font-bold mr-1">{event.time}</span>
+                        {event.title}
                       </div>
                     ))}
                   </div>
@@ -196,7 +196,7 @@ const CalendarPage: React.FC = () => {
     <Card>
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Upcoming Events</h3>
       <div className="space-y-3">
-        {calendarEvents.slice(0, 5).map(event => (
+        {events.slice(0, 5).map(event => (
           <div
             key={event.id}
             onClick={() => setSelectedEvent(event)}
@@ -204,7 +204,7 @@ const CalendarPage: React.FC = () => {
           >
             <div className={`w-3 h-3 rounded-full ${getEventTypeColor(event.type)}`}></div>
             <div className="flex-1">
-              <div className="font-medium text-gray-900 dark:text-white">{event.title}</div>
+              <div className="font-medium text-gray-900 dark:text-white line-clamp-1">{event.title}</div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 {event.date} at {event.time}
               </div>
@@ -212,6 +212,9 @@ const CalendarPage: React.FC = () => {
             {getStatusBadge(event.status)}
           </div>
         ))}
+        {events.length === 0 && (
+            <p className="text-gray-500 text-center py-4">No upcoming events</p>
+        )}
       </div>
     </Card>
   );
@@ -330,8 +333,8 @@ const CalendarPage: React.FC = () => {
 
           {/* Event Detail Modal */}
           {selectedEvent && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full shadow-2xl">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">Event Details</h2>
@@ -346,10 +349,10 @@ const CalendarPage: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <h3 className="font-semibold text-gray-900 dark:text-white text-lg">{selectedEvent.title}</h3>
-                      {getStatusBadge(selectedEvent.status)}
+                      <div className="mt-2">{getStatusBadge(selectedEvent.status)}</div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-2 gap-4 text-sm bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                       <div>
                         <span className="text-gray-600 dark:text-gray-400">Date:</span>
                         <div className="font-medium text-gray-900 dark:text-white">{selectedEvent.date}</div>
@@ -360,7 +363,7 @@ const CalendarPage: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-gray-600 dark:text-gray-400">Duration:</span>
-                        <div className="font-medium text-gray-900 dark:text-white">{selectedEvent.duration} min</div>
+                        <div className="font-medium text-gray-900 dark:text-white">{selectedEvent.duration}</div>
                       </div>
                       <div>
                         <span className="text-gray-600 dark:text-gray-400">Location:</span>
@@ -369,14 +372,16 @@ const CalendarPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <span className="text-gray-600 dark:text-gray-400">Participants:</span>
-                      <div className="mt-1 space-y-1">
-                        {selectedEvent.participants.map((participant: string, index: number) => (
-                          <div key={index} className="flex items-center gap-2">
+                      <span className="text-gray-600 dark:text-gray-400 font-medium">Participants:</span>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(selectedEvent.participants && Array.isArray(selectedEvent.participants) && selectedEvent.participants.length > 0) ? selectedEvent.participants.map((participant, index) => (
+                          <div key={index} className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full text-xs">
                             <i className="ri-user-line text-gray-400"></i>
-                            <span className="text-gray-900 dark:text-white text-sm">{participant}</span>
+                            <span className="text-gray-900 dark:text-white">{participant}</span>
                           </div>
-                        ))}
+                        )) : (
+                            <span className="text-gray-500 italic text-sm">No participants</span>
+                        )}
                       </div>
                     </div>
 
@@ -385,7 +390,7 @@ const CalendarPage: React.FC = () => {
                         <i className="ri-edit-line mr-2"></i>
                         Edit
                       </Button>
-                      <Button variant="outline" className="flex-1">
+                      <Button variant="outline" className="flex-1" color="red" onClick={() => selectedEvent.id && handleDeleteEvent(selectedEvent.id)}>
                         <i className="ri-delete-bin-line mr-2"></i>
                         Delete
                       </Button>
@@ -398,8 +403,8 @@ const CalendarPage: React.FC = () => {
 
           {/* New Event Modal */}
           {showNewEventModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full shadow-2xl">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">New Event</h2>
@@ -418,7 +423,9 @@ const CalendarPage: React.FC = () => {
                       </label>
                       <input
                         type="text"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                        value={formData.title}
+                        onChange={e => setFormData({...formData, title: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none"
                         placeholder="Enter event title"
                       />
                     </div>
@@ -430,7 +437,9 @@ const CalendarPage: React.FC = () => {
                         </label>
                         <input
                           type="date"
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                          value={formData.date}
+                          onChange={e => setFormData({...formData, date: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none"
                         />
                       </div>
                       <div>
@@ -439,7 +448,9 @@ const CalendarPage: React.FC = () => {
                         </label>
                         <input
                           type="time"
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                          value={formData.time}
+                          onChange={e => setFormData({...formData, time: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none"
                         />
                       </div>
                     </div>
@@ -448,7 +459,11 @@ const CalendarPage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Event Type
                       </label>
-                      <select className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
+                      <select 
+                         value={formData.type}
+                         onChange={e => setFormData({...formData, type: e.target.value as any})}
+                         className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none"
+                      >
                         <option value="consultation">Consultation</option>
                         <option value="medical">Medical</option>
                         <option value="legal">Legal</option>
@@ -457,7 +472,7 @@ const CalendarPage: React.FC = () => {
                     </div>
 
                     <div className="flex gap-3 pt-4">
-                      <Button color="blue" className="flex-1">
+                      <Button color="blue" className="flex-1" onClick={handleCreateEvent}>
                         <i className="ri-save-line mr-2"></i>
                         Create Event
                       </Button>

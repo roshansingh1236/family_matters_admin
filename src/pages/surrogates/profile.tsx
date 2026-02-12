@@ -10,7 +10,10 @@ import EditableJsonSection from '../../components/data/EditableJsonSection';
 import AboutSection from '../../components/feature/AboutSection';
 import FileUploadSection, { type FileRecord } from '../../components/data/FileUploadSection';
 import Toast from '../../components/base/Toast';
+import Badge from '../../components/base/Badge';
 import { db, storage } from '../../lib/firebase';
+import { medicalService, MedicalRecord, Medication } from '../../services/medicalService';
+import { paymentService, Payment } from '../../services/paymentService';
 import {
   CORE_PROFILE_TEMPLATE,
   FORM_CONTACT_TEMPLATE,
@@ -58,7 +61,9 @@ const TABS = [
     { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line' },
     { id: 'about', label: 'About', icon: 'ri-information-line' },
     { id: 'personal', label: 'Personal & Intake', icon: 'ri-user-line' },
-    { id: 'medical', label: 'Medical Checks', icon: 'ri-stethoscope-line' },
+    { id: 'medical_intake', label: 'Medical Intake', icon: 'ri-file-shield-line' },
+    { id: 'clinical', label: 'Clinical Care', icon: 'ri-stethoscope-line' },
+    { id: 'compensation', label: 'Compensation', icon: 'ri-money-dollar-circle-line' },
     { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
 ] as const;
 
@@ -73,6 +78,11 @@ const SurrogateProfilePage: React.FC = () => {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('overview');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Clinical & Finance State
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
 
   const surrogateDocRef = useMemo(() => (id ? doc(db, 'users', id) : null), [id]);
 
@@ -112,6 +122,23 @@ const SurrogateProfilePage: React.FC = () => {
         setIsLoading(false);
       }
     );
+    
+    // Fetch Clinical & Payment Data
+    const loadAdditionalData = async () => {
+        try {
+            const [recs, meds, pays] = await Promise.all([
+                medicalService.getRecordsBySurrogateId(id),
+                medicalService.getMedicationsBySurrogateId(id),
+                paymentService.getPaymentsBySurrogateId(id)
+            ]);
+            setMedicalRecords(recs);
+            setMedications(meds);
+            setPayments(pays);
+        } catch (e) {
+            console.error("Failed to load clinical/financial data", e);
+        }
+    };
+    loadAdditionalData();
 
     return () => unsubscribe();
   }, [id, surrogateDocRef]);
@@ -399,10 +426,18 @@ const SurrogateProfilePage: React.FC = () => {
       setToast({ message: 'Failed to upload profile picture', type: 'error' });
     } finally {
       setIsUploadingImage(false);
-      // Reset input value to allow re-uploading the same file if needed
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
       }
+    }
+  };
+  
+  const getPaymentStatusColor = (status: string) => {
+    switch(status) {
+        case 'Paid': return 'green';
+        case 'Pending': return 'yellow';
+        case 'Overdue': return 'red';
+        default: return 'gray';
     }
   };
 
@@ -431,9 +466,6 @@ const SurrogateProfilePage: React.FC = () => {
 
           {isLoading ? (
             <div className="grid gap-6">
-              <Card className="animate-pulse h-48">
-                <div className="h-full w-full rounded-xl bg-gray-100 dark:bg-gray-800" />
-              </Card>
               <Card className="animate-pulse h-48">
                 <div className="h-full w-full rounded-xl bg-gray-100 dark:bg-gray-800" />
               </Card>
@@ -606,7 +638,6 @@ const SurrogateProfilePage: React.FC = () => {
                         {/* Left Column - Staggered Photo Grid */}
                         <div className="xl:col-span-5 space-y-4">
                             <div className="columns-1 gap-4 sm:columns-2 space-y-4">
-                                {/* Profile Image */}
                                 {surrogate.profileImageUrl && (
                                     <div className="break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 shadow-md">
                                         <img
@@ -617,7 +648,6 @@ const SurrogateProfilePage: React.FC = () => {
                                     </div>
                                 )}
                                 
-                                {/* Additional Images from Documents */}
                                 {surrogate.documents
                                     ?.filter(doc => {
                                         const isImage = doc.type?.startsWith('image/');
@@ -685,7 +715,7 @@ const SurrogateProfilePage: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'medical' && (
+                {activeTab === 'medical_intake' && (
                      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                         <Card className="xl:col-span-2">
                             <EditableJsonSection
@@ -719,6 +749,152 @@ const SurrogateProfilePage: React.FC = () => {
                         </Card>
                     </div>
                 )}
+                
+                {activeTab === 'clinical' && (
+                    <div className="grid grid-cols-1 gap-6">
+                        <Card>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Active Medications</h3>
+                                <Button size="sm" onClick={() => navigate('/medical')}>Manage Meds</Button>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                        <tr>
+                                            <th className="px-4 py-3 rounded-l-lg">Name</th>
+                                            <th className="px-4 py-3">Dosage</th>
+                                            <th className="px-4 py-3">Frequency</th>
+                                            <th className="px-4 py-3">Start Date</th>
+                                            <th className="px-4 py-3 rounded-r-lg">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                        {medications.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                                                    No medications found.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            medications.map((med) => (
+                                                <tr key={med.id}>
+                                                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{med.name}</td>
+                                                    <td className="px-4 py-3 dark:text-gray-300">{med.dosage}</td>
+                                                    <td className="px-4 py-3 dark:text-gray-300">{med.frequency}</td>
+                                                    <td className="px-4 py-3 dark:text-gray-300">{med.startDate}</td>
+                                                    <td className="px-4 py-3">
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                            med.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                                        }`}>
+                                                            {med.status}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+
+                        <Card>
+                             <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Medical Records</h3>
+                                <Button size="sm" onClick={() => navigate('/medical')}>View All Records</Button>
+                            </div>
+                            <div className="space-y-4">
+                                {medicalRecords.length === 0 ? (
+                                    <div className="text-center text-gray-500 py-8">No medical records found.</div>
+                                ) : (
+                                    medicalRecords.map((rec) => (
+                                        <div key={rec.id} className="flex items-start justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700">
+                                            <div className="flex gap-3">
+                                                <div className="mt-1">
+                                                    <i className="ri-file-list-3-line text-xl text-blue-500"></i>
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-medium text-gray-900 dark:text-white">{rec.title}</h4>
+                                                    <p className="text-xs text-gray-500 mt-1">{rec.date} • {rec.type}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">{rec.summary}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-2">
+                                                 <Badge color={rec.status === 'Verified' ? 'green' : 'yellow'}>{rec.status}</Badge>
+                                                 {rec.sharedWithParents && <span className="text-xs text-green-600 flex items-center gap-1"><i className="ri-eye-line"></i> Shared</span>}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </Card>
+                    </div>
+                )}
+
+                {activeTab === 'compensation' && (
+                    <div className="grid grid-cols-1 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white border-none">
+                                <div className="text-green-100 mb-1">Total Paid</div>
+                                <div className="text-2xl font-bold">
+                                    ${payments.filter(p => p.status === 'Paid').reduce((acc, curr) => acc + Number(curr.amount), 0).toLocaleString()}
+                                </div>
+                            </Card>
+                             <Card className="bg-white dark:bg-gray-800">
+                                <div className="text-gray-500 dark:text-gray-400 mb-1">Pending Approval</div>
+                                <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">
+                                    ${payments.filter(p => p.status === 'Pending').reduce((acc, curr) => acc + Number(curr.amount), 0).toLocaleString()}
+                                </div>
+                            </Card>
+                             <Card className="bg-white dark:bg-gray-800">
+                                <div className="text-gray-500 dark:text-gray-400 mb-1">Next Payment</div>
+                                <div className="text-2xl font-bold text-blue-600 dark:text-blue-500">
+                                    {payments.filter(p => p.status === 'Scheduled').sort((a,b) => a.dueDate.localeCompare(b.dueDate))[0]?.dueDate || '—'}
+                                </div>
+                            </Card>
+                        </div>
+
+                        <Card>
+                             <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Payment History</h3>
+                                <Button size="sm" onClick={() => navigate('/payments')}>Manage Payments</Button>
+                            </div>
+                             <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                        <tr>
+                                            <th className="px-4 py-3 rounded-l-lg">Type</th>
+                                            <th className="px-4 py-3">Amount</th>
+                                            <th className="px-4 py-3">Due Date</th>
+                                            <th className="px-4 py-3">Status</th>
+                                            <th className="px-4 py-3 rounded-r-lg">Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                        {payments.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                                                    No payments found.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            payments.map((p) => (
+                                                <tr key={p.id}>
+                                                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{p.type}</td>
+                                                    <td className="px-4 py-3 font-mono font-medium">${Number(p.amount).toLocaleString()}</td>
+                                                    <td className="px-4 py-3 dark:text-gray-300">{p.dueDate}</td>
+                                                    <td className="px-4 py-3">
+                                                        <Badge color={getPaymentStatusColor(p.status)}>{p.status}</Badge>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-gray-500 truncate max-w-xs">{p.notes}</td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+                    </div>
+                )}
 
                 {activeTab === 'documents' && (
                      <div className="grid grid-cols-1 gap-6">
@@ -743,4 +919,3 @@ const SurrogateProfilePage: React.FC = () => {
 };
 
 export default SurrogateProfilePage;
-

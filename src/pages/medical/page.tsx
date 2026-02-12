@@ -1,485 +1,342 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-
-// Mock medical records data
-const medicalRecords = [
-  {
-    id: 'MED001',
-    patientName: 'Emma Thompson',
-    patientType: 'surrogate',
-    recordType: 'screening',
-    title: 'Initial Medical Screening',
-    date: '2024-01-10',
-    doctor: 'Dr. Michael Chen',
-    facility: 'Reproductive Health Center',
-    status: 'completed',
-    results: 'All tests normal',
-    attachments: ['blood_work.pdf', 'ultrasound.pdf'],
-    notes: 'Patient cleared for surrogacy program. All screening tests within normal limits.'
-  },
-  {
-    id: 'MED002',
-    patientName: 'Lisa Rodriguez',
-    patientType: 'surrogate',
-    recordType: 'monitoring',
-    title: 'Pregnancy Monitoring - Week 12',
-    date: '2024-01-15',
-    doctor: 'Dr. Sarah Wilson',
-    facility: 'Women\'s Health Clinic',
-    status: 'reviewed',
-    results: 'Healthy pregnancy progression',
-    attachments: ['ultrasound_12w.pdf', 'lab_results.pdf'],
-    notes: 'Fetal development on track. Mother and baby healthy.'
-  },
-  {
-    id: 'MED003',
-    patientName: 'Jennifer Adams',
-    patientType: 'surrogate',
-    recordType: 'procedure',
-    title: 'Embryo Transfer Procedure',
-    date: '2024-01-08',
-    doctor: 'Dr. Patricia Lee',
-    facility: 'IVF Center',
-    status: 'completed',
-    results: 'Successful transfer',
-    attachments: ['procedure_notes.pdf', 'post_op.pdf'],
-    notes: 'Two high-quality embryos transferred successfully. Patient recovering well.'
-  },
-  {
-    id: 'MED004',
-    patientName: 'Amanda Wilson',
-    patientType: 'surrogate',
-    recordType: 'consultation',
-    title: 'Psychological Evaluation',
-    date: '2024-01-12',
-    doctor: 'Dr. Robert Martinez',
-    facility: 'Mental Health Associates',
-    status: 'pending_review',
-    results: 'Assessment complete',
-    attachments: ['psych_eval.pdf'],
-    notes: 'Comprehensive psychological assessment completed. Awaiting final review.'
-  },
-  {
-    id: 'MED005',
-    patientName: 'Rachel Green',
-    patientType: 'intended_parent',
-    recordType: 'screening',
-    title: 'Genetic Screening',
-    date: '2024-01-14',
-    doctor: 'Dr. Emily Brown',
-    facility: 'Genetics Laboratory',
-    status: 'in_progress',
-    results: 'Pending',
-    attachments: ['genetic_consent.pdf'],
-    notes: 'Genetic testing in progress. Results expected within 7-10 days.'
-  }
-];
-
-const recordStats = [
-  { label: 'Total Records', value: '248', change: '+15%', icon: 'ri-file-list-3-line', color: 'blue' },
-  { label: 'Pending Review', value: '12', change: '-8%', icon: 'ri-time-line', color: 'yellow' },
-  { label: 'Completed', value: '198', change: '+22%', icon: 'ri-check-line', color: 'green' },
-  { label: 'In Progress', value: '38', change: '+5%', icon: 'ri-loader-line', color: 'purple' }
-];
-
-const recordTypes = [
-  { id: 'all', label: 'All Records', count: medicalRecords.length },
-  { id: 'screening', label: 'Screening', count: medicalRecords.filter(r => r.recordType === 'screening').length },
-  { id: 'monitoring', label: 'Monitoring', count: medicalRecords.filter(r => r.recordType === 'monitoring').length },
-  { id: 'procedure', label: 'Procedures', count: medicalRecords.filter(r => r.recordType === 'procedure').length },
-  { id: 'consultation', label: 'Consultations', count: medicalRecords.filter(r => r.recordType === 'consultation').length }
-];
+import { medicalService, MedicalRecord, Medication } from '../../services/medicalService';
 
 const MedicalPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('all');
-  const [selectedRecord, setSelectedRecord] = useState<any>(null);
-  const [showNewRecordModal, setShowNewRecordModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'records' | 'medications'>('records');
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Records State
+  const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
+  const [showRecordModal, setShowRecordModal] = useState(false);
+  const [recordForm, setRecordForm] = useState<Partial<MedicalRecord>>({
+    title: '', type: 'Screening', date: '', doctor: '', facility: '', summary: '', status: 'Pending', sharedWithParents: false
+  });
 
-  const filteredRecords = activeTab === 'all' 
-    ? medicalRecords 
-    : medicalRecords.filter(record => record.recordType === activeTab);
+  // Medications State
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [showMedModal, setShowMedModal] = useState(false);
+  const [medForm, setMedForm] = useState<Partial<Medication>>({
+    name: '', dosage: '', frequency: '', startDate: '', status: 'Active'
+  });
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [fetchedRecords, fetchedMeds] = await Promise.all([
+        medicalService.getAllRecords(),
+        medicalService.getAllMedications()
+      ]);
+      setRecords(fetchedRecords);
+      setMedications(fetchedMeds);
+    } catch (error) {
+      console.error("Error loading medical data", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // --- Handlers for Records ---
+  const handleSaveRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (recordForm.id) {
+         await medicalService.updateRecord(recordForm.id, recordForm);
+      } else {
+         await medicalService.createRecord(recordForm as any);
+      }
+      await fetchData();
+      setShowRecordModal(false);
+      setRecordForm({ title: '', type: 'Screening', date: '', doctor: '', facility: '', summary: '', status: 'Pending', sharedWithParents: false });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  
+  const handleDeleteRecord = async (id: string) => {
+      if(!confirm("Delete this record?")) return;
+      await medicalService.deleteRecord(id);
+      await fetchData();
+      setSelectedRecord(null);
+  };
+
+  // --- Handlers for Medications ---
+  const handleSaveMedication = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+        if (medForm.id) {
+            await medicalService.updateMedication(medForm.id, medForm);
+        } else {
+            await medicalService.addMedication(medForm as any);
+        }
+        await fetchData();
+        setShowMedModal(false);
+        setMedForm({ name: '', dosage: '', frequency: '', startDate: '', status: 'Active' });
+    } catch (error) {
+        console.error(error);
+    }
+  };
+
+   const handleDeleteMedication = async (id: string) => {
+      if(!confirm("Delete this medication?")) return;
+      await medicalService.deleteMedication(id);
+      await fetchData();
+  };
+
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'completed':
-        return <Badge color="green">Completed</Badge>;
-      case 'pending_review':
-        return <Badge color="yellow">Pending Review</Badge>;
-      case 'in_progress':
-        return <Badge color="blue">In Progress</Badge>;
-      case 'reviewed':
-        return <Badge color="gray">Reviewed</Badge>;
-      case 'cancelled':
-        return <Badge color="red">Cancelled</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
+      case 'Verified': return <Badge color="green">Verified</Badge>;
+      case 'Review Required': return <Badge color="yellow">Review Required</Badge>;
+      case 'Active': return <Badge color="green">Active</Badge>;
+      case 'Completed': return <Badge color="gray">Completed</Badge>;
+      case 'Discontinued': return <Badge color="red">Discontinued</Badge>;
+      default: return <Badge color="gray">{status}</Badge>;
     }
-  };
-
-  const getRecordTypeIcon = (type: string) => {
-    switch (type) {
-      case 'screening':
-        return 'ri-search-line';
-      case 'monitoring':
-        return 'ri-heart-pulse-line';
-      case 'procedure':
-        return 'ri-surgical-mask-line';
-      case 'consultation':
-        return 'ri-discuss-line';
-      default:
-        return 'ri-file-text-line';
-    }
-  };
-
-  const getRecordTypeColor = (type: string) => {
-    switch (type) {
-      case 'screening':
-        return 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400';
-      case 'monitoring':
-        return 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400';
-      case 'procedure':
-        return 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400';
-      case 'consultation':
-        return 'bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400';
-      default:
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
-    }
-  };
-
-  const getPatientTypeIcon = (type: string) => {
-    return type === 'surrogate' ? 'ri-user-heart-line' : 'ri-parent-line';
   };
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar />
-      
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Medical Records</h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage medical documentation and health records.</p>
-              </div>
-              <div className="flex gap-3">
-                <Button variant="outline">
-                  <i className="ri-download-line mr-2"></i>
-                  Export Records
-                </Button>
-                <Button color="blue" onClick={() => setShowNewRecordModal(true)}>
-                  <i className="ri-add-line mr-2"></i>
-                  New Record
-                </Button>
-              </div>
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Medical</h1>
+              <p className="text-gray-600 dark:text-gray-400">Manage health records and medications.</p>
             </div>
-          </div>
-
-          {/* Medical Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {recordStats.map((stat, index) => (
-              <Card key={index}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{stat.label}</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
-                    <p className={`text-sm ${stat.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                      {stat.change} from last month
-                    </p>
-                  </div>
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center bg-${stat.color}-100 dark:bg-${stat.color}-900`}>
-                    <i className={`${stat.icon} text-xl text-${stat.color}-600 dark:text-${stat.color}-400`}></i>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {/* Record Type Tabs */}
-          <div className="mb-6">
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
-              {recordTypes.map((type) => (
-                <button
-                  key={type.id}
-                  onClick={() => setActiveTab(type.id)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                    activeTab === type.id
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
+            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                <button 
+                    onClick={() => setActiveTab('records')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'records' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600' : 'text-gray-600'}`}
                 >
-                  {type.label} ({type.count})
+                    Records
                 </button>
-              ))}
+                <button 
+                     onClick={() => setActiveTab('medications')}
+                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'medications' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600' : 'text-gray-600'}`}
+                >
+                    Medications
+                </button>
             </div>
           </div>
 
-          {/* Medical Records List */}
-          <div className="space-y-4">
-            {filteredRecords.map((record) => (
-              <Card key={record.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedRecord(record)}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${getRecordTypeColor(record.recordType)}`}>
-                      <i className={`${getRecordTypeIcon(record.recordType)} text-lg`}></i>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{record.title}</h3>
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <i className={`${getPatientTypeIcon(record.patientType)} text-xs`}></i>
-                        <span>{record.patientName}</span>
-                        <span>•</span>
-                        <span>{record.date}</span>
-                      </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Dr. {record.doctor} • {record.facility}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    {getStatusBadge(record.status)}
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {record.attachments.length} attachment{record.attachments.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {/* Medical Record Detail Modal */}
-          {selectedRecord && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Medical Record Details</h2>
-                    <button
-                      onClick={() => setSelectedRecord(null)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
-                    >
-                      <i className="ri-close-line text-gray-600 dark:text-gray-400"></i>
-                    </button>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-16 h-16 rounded-lg flex items-center justify-center ${getRecordTypeColor(selectedRecord.recordType)}`}>
-                        <i className={`${getRecordTypeIcon(selectedRecord.recordType)} text-2xl`}></i>
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{selectedRecord.title}</h3>
-                        <p className="text-gray-600 dark:text-gray-400">Record ID: {selectedRecord.id}</p>
-                        {getStatusBadge(selectedRecord.status)}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Patient Information</h4>
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Name:</span>
-                            <span className="text-gray-900 dark:text-white">{selectedRecord.patientName}</span>
+          {!isLoading && activeTab === 'records' && (
+            <>
+               <div className="flex justify-end mb-4">
+                  <Button color="blue" onClick={() => { setRecordForm({}); setShowRecordModal(true); }}>
+                      <i className="ri-add-line mr-2"></i> New Record
+                  </Button>
+               </div>
+               
+               <div className="space-y-4">
+                  {records.map(record => (
+                      <Card key={record.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedRecord(record)}>
+                          <div className="flex justify-between items-start">
+                              <div className="flex gap-4">
+                                  <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                      <i className="ri-file-list-3-line text-xl"></i>
+                                  </div>
+                                  <div>
+                                      <h3 className="font-semibold text-gray-900 dark:text-white">{record.title}</h3>
+                                      <p className="text-sm text-gray-500">{record.type} • {record.date}</p>
+                                      <p className="text-sm text-gray-500 mt-1">Dr. {record.doctor} @ {record.facility}</p>
+                                  </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                  {getStatusBadge(record.status)}
+                                  {record.sharedWithParents && (
+                                     <span className="text-xs flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                                         <i className="ri-eye-line"></i> Shared
+                                     </span>
+                                  )}
+                              </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Type:</span>
-                            <span className="text-gray-900 dark:text-white capitalize">
-                              {selectedRecord.patientType.replace('_', ' ')}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Record Type:</span>
-                            <span className="text-gray-900 dark:text-white capitalize">{selectedRecord.recordType}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Medical Details</h4>
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Date:</span>
-                            <span className="text-gray-900 dark:text-white">{selectedRecord.date}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Doctor:</span>
-                            <span className="text-gray-900 dark:text-white">{selectedRecord.doctor}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Facility:</span>
-                            <span className="text-gray-900 dark:text-white">{selectedRecord.facility}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Results & Notes</h4>
-                      <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg space-y-3">
-                        <div>
-                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Results:</span>
-                          <p className="text-gray-900 dark:text-white">{selectedRecord.results}</p>
-                        </div>
-                        <div>
-                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Notes:</span>
-                          <p className="text-gray-900 dark:text-white">{selectedRecord.notes}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Attachments</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {selectedRecord.attachments.map((attachment: string, index: number) => (
-                          <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <i className="ri-file-pdf-line text-red-500 text-xl"></i>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">{attachment}</p>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">PDF Document</p>
-                            </div>
-                            <Button variant="outline" className="text-xs">
-                              <i className="ri-download-line mr-1"></i>
-                              Download
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <Button color="blue" className="flex-1">
-                        <i className="ri-edit-line mr-2"></i>
-                        Edit Record
-                      </Button>
-                      <Button variant="outline" className="flex-1">
-                        <i className="ri-share-line mr-2"></i>
-                        Share Record
-                      </Button>
-                      <Button variant="outline" className="flex-1">
-                        <i className="ri-printer-line mr-2"></i>
-                        Print
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+                      </Card>
+                  ))}
+                  {records.length === 0 && <p className="text-center text-gray-500 py-8">No medical records found.</p>}
+               </div>
+            </>
           )}
 
-          {/* New Record Modal */}
-          {showNewRecordModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">New Medical Record</h2>
-                    <button
-                      onClick={() => setShowNewRecordModal(false)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
-                    >
-                      <i className="ri-close-line text-gray-600 dark:text-gray-400"></i>
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Patient Name
-                      </label>
-                      <input
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                        placeholder="Enter patient name"
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Patient Type
-                        </label>
-                        <select className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
-                          <option value="surrogate">Surrogate</option>
-                          <option value="intended_parent">Intended Parent</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Record Type
-                        </label>
-                        <select className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
-                          <option value="screening">Screening</option>
-                          <option value="monitoring">Monitoring</option>
-                          <option value="procedure">Procedure</option>
-                          <option value="consultation">Consultation</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Title
-                      </label>
-                      <input
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                        placeholder="Record title"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Date
-                        </label>
-                        <input
-                          type="date"
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Doctor
-                        </label>
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                          placeholder="Doctor name"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Notes
-                      </label>
-                      <textarea
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                        placeholder="Medical notes and observations"
-                      ></textarea>
-                    </div>
-
-                    <div className="flex gap-3 pt-4">
-                      <Button color="blue" className="flex-1">
-                        <i className="ri-save-line mr-2"></i>
-                        Create Record
-                      </Button>
-                      <Button variant="outline" className="flex-1" onClick={() => setShowNewRecordModal(false)}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
+          {!isLoading && activeTab === 'medications' && (
+             <>
+                <div className="flex justify-end mb-4">
+                   <Button color="blue" onClick={() => { setMedForm({}); setShowMedModal(true); }}>
+                       <i className="ri-add-line mr-2"></i> Add Medication
+                   </Button>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {medications.map(med => (
+                        <Card key={med.id}>
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600">
+                                    <i className="ri-capsule-line text-lg"></i>
+                                </div>
+                                {getStatusBadge(med.status)}
+                            </div>
+                            <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1">{med.name}</h3>
+                            <p className="text-sm text-gray-500 mb-4">{med.dosage} • {med.frequency}</p>
+                            
+                            <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg mb-4">
+                                <div className="flex justify-between mb-1">
+                                    <span>Start:</span>
+                                    <span className="font-medium">{med.startDate}</span>
+                                </div>
+                                {med.endDate && (
+                                    <div className="flex justify-between">
+                                        <span>End:</span>
+                                        <span className="font-medium">{med.endDate}</span>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="flex justify-end gap-2">
+                                 <button onClick={() => { setMedForm(med); setShowMedModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                     <i className="ri-edit-line"></i>
+                                 </button>
+                                 <button onClick={() => med.id && handleDeleteMedication(med.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                                     <i className="ri-delete-bin-line"></i>
+                                 </button>
+                            </div>
+                        </Card>
+                    ))}
+                    {medications.length === 0 && (
+                        <div className="col-span-full text-center py-12 text-gray-500">
+                            No medications assigned.
+                        </div>
+                    )}
+                </div>
+             </>
+          )}
+          
+          {/* Record Modal */}
+          {showRecordModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-xl">
+                      <h2 className="text-xl font-bold mb-4 dark:text-white">{recordForm.id ? 'Edit Record' : 'New Medical Record'}</h2>
+                      <form onSubmit={handleSaveRecord} className="space-y-4">
+                          <input type="text" placeholder="Title" required className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                 value={recordForm.title} onChange={e => setRecordForm({...recordForm, title: e.target.value})} />
+                          <div className="grid grid-cols-2 gap-4">
+                              <select className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                      value={recordForm.type} onChange={e => setRecordForm({...recordForm, type: e.target.value as any})}>
+                                  <option>Screening</option><option>Lab Result</option><option>Ultrasound</option><option>Vaccination</option><option>Other</option>
+                              </select>
+                              <input type="date" required className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                     value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})} />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                              <input type="text" placeholder="Doctor" className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                     value={recordForm.doctor} onChange={e => setRecordForm({...recordForm, doctor: e.target.value})} />
+                              <input type="text" placeholder="Facility" className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                     value={recordForm.facility} onChange={e => setRecordForm({...recordForm, facility: e.target.value})} />
+                          </div>
+                          <textarea placeholder="Summary/Notes" className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" rows={3}
+                                    value={recordForm.summary} onChange={e => setRecordForm({...recordForm, summary: e.target.value})}></textarea>
+                          
+                          <div className="flex items-center gap-2">
+                              <input type="checkbox" id="share" checked={recordForm.sharedWithParents} onChange={e => setRecordForm({...recordForm, sharedWithParents: e.target.checked})} />
+                              <label htmlFor="share" className="dark:text-gray-300">Share with Parents</label>
+                          </div>
+
+                          <div className="flex justify-end gap-2 mt-4">
+                              <Button type="button" variant="outline" onClick={() => setShowRecordModal(false)}>Cancel</Button>
+                              <Button type="submit" color="blue">Save</Button>
+                          </div>
+                      </form>
+                  </div>
               </div>
-            </div>
+          )}
+
+           {/* Record Detail View Modal */}
+           {selectedRecord && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-xl">
+                      <div className="flex justify-between items-start mb-6">
+                           <div>
+                               <h2 className="text-2xl font-bold dark:text-white">{selectedRecord.title}</h2>
+                               <p className="text-gray-500">{selectedRecord.date}</p>
+                           </div>
+                           <button onClick={() => setSelectedRecord(null)} className="text-gray-500 hover:text-gray-700"><i className="ri-close-line text-2xl"></i></button>
+                      </div>
+                      
+                      <div className="space-y-4 mb-8">
+                          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                              <h4 className="font-semibold mb-2 dark:text-white">Details</h4>
+                              <p className="dark:text-gray-300"><span className="font-medium">Type:</span> {selectedRecord.type}</p>
+                              <p className="dark:text-gray-300"><span className="font-medium">Doctor:</span> {selectedRecord.doctor}</p>
+                              <p className="dark:text-gray-300"><span className="font-medium">Facility:</span> {selectedRecord.facility}</p>
+                              <p className="dark:text-gray-300"><span className="font-medium">Status:</span> {selectedRecord.status}</p>
+                          </div>
+                          <div>
+                              <h4 className="font-semibold mb-2 dark:text-white">Summary</h4>
+                              <p className="text-gray-600 dark:text-gray-300">{selectedRecord.summary}</p>
+                          </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                          <Button className="flex-1" onClick={() => { setRecordForm(selectedRecord); setSelectedRecord(null); setShowRecordModal(true); }}>Edit</Button>
+                          <Button variant="outline" color="red" className="flex-1" onClick={() => selectedRecord.id && handleDeleteRecord(selectedRecord.id)}>Delete</Button>
+                      </div>
+                  </div>
+              </div>
+          )}
+
+          {/* Medication Modal */}
+          {showMedModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+                   <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-xl">
+                      <h2 className="text-xl font-bold mb-4 dark:text-white">{medForm.id ? 'Edit Medication' : 'Add Medication'}</h2>
+                      <form onSubmit={handleSaveMedication} className="space-y-4">
+                          <input type="text" placeholder="Medication Name" required className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                 value={medForm.name} onChange={e => setMedForm({...medForm, name: e.target.value})} />
+                          <div className="grid grid-cols-2 gap-4">
+                              <input type="text" placeholder="Dosage (e.g. 10mg)" required className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                     value={medForm.dosage} onChange={e => setMedForm({...medForm, dosage: e.target.value})} />
+                              <input type="text" placeholder="Frequency (e.g. Daily)" required className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                     value={medForm.frequency} onChange={e => setMedForm({...medForm, frequency: e.target.value})} />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                  <label className="text-xs text-gray-500">Start Date</label>
+                                  <input type="date" required className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                         value={medForm.startDate} onChange={e => setMedForm({...medForm, startDate: e.target.value})} />
+                              </div>
+                              <div>
+                                  <label className="text-xs text-gray-500">End Date (Optional)</label>
+                                  <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                         value={medForm.endDate || ''} onChange={e => setMedForm({...medForm, endDate: e.target.value})} />
+                              </div>
+                          </div>
+                          <div>
+                              <label className="text-xs text-gray-500">Status</label>
+                              <select className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                      value={medForm.status} onChange={e => setMedForm({...medForm, status: e.target.value as any})}>
+                                  <option>Active</option><option>Completed</option><option>Discontinued</option>
+                              </select>
+                          </div>
+
+                          <div className="flex justify-end gap-2 mt-4">
+                              <Button type="button" variant="outline" onClick={() => setShowMedModal(false)}>Cancel</Button>
+                              <Button type="submit" color="blue">Save</Button>
+                          </div>
+                      </form>
+                   </div>
+              </div>
           )}
         </main>
       </div>
