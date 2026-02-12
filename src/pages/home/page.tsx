@@ -6,7 +6,6 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { dashboardData } from '../../mocks/dashboardData';
 import { db } from '../../lib/firebase';
 import DataSection from '../../components/data/DataSection';
 
@@ -397,7 +396,7 @@ const HomePage: React.FC = () => {
                   </Button>
                 </div>
                 <div className="space-y-3">
-                  {dashboardData.upcomingAppointments.map((appointment) => (
+                  {[].map((appointment: any) => (
                     <div 
                       key={appointment.id} 
                       className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
@@ -426,7 +425,7 @@ const HomePage: React.FC = () => {
                 </Button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {dashboardData.recentMedicalRecords.map((record) => (
+                {[].map((record: any) => (
                   <div 
                     key={record.id} 
                     className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow cursor-pointer"

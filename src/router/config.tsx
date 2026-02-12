@@ -1,4 +1,5 @@
 
+
 import type { RouteObject } from 'react-router-dom';
 import HomePage from '../pages/home/page';
 import RequestsPage from '../pages/requests/page';
@@ -18,6 +19,10 @@ import ContractsPage from '../pages/contracts/page';
 import LoginPage from '../pages/auth/login/page';
 import SignupPage from '../pages/auth/signup/page';
 import NotFound from '../pages/NotFound';
+import TasksPage from '../pages/tasks/page';
+import BabyWatchPage from '../pages/baby-watch/page';
+import MessagesPage from '../pages/messages/page';
+import MilestonesPage from '../pages/milestones/page';
 
 import LandingPage from '../pages/landing/page';
 
@@ -93,6 +98,22 @@ const routes: RouteObject[] = [
   {
     path: '/settings',
     element: <SettingsPage />,
+  },
+  {
+    path: '/tasks',
+    element: <TasksPage />,
+  },
+  {
+    path: '/baby-watch',
+    element: <BabyWatchPage />,
+  },
+  {
+    path: '/messages',
+    element: <MessagesPage />,
+  },
+  {
+    path: '/milestones',
+    element: <MilestonesPage />,
   },
   {
     path: '*',

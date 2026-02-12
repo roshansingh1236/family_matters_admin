@@ -1,69 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
-import Badge from '../../components/base/Badge';
-
-// Mock data for reports
-const reportStats = [
-  {
-    id: 'total-matches',
-    title: 'Total Matches',
-    value: '156',
-    change: '+12%',
-    changeType: 'increase',
-    icon: 'ri-links-line',
-    color: 'blue'
-  },
-  {
-    id: 'active-journeys',
-    title: 'Active Journeys',
-    value: '43',
-    change: '+8%',
-    changeType: 'increase',
-    icon: 'ri-road-map-line',
-    color: 'green'
-  },
-  {
-    id: 'successful-births',
-    title: 'Successful Births',
-    value: '89',
-    change: '+15%',
-    changeType: 'increase',
-    icon: 'ri-heart-3-line',
-    color: 'pink'
-  },
-  {
-    id: 'total-revenue',
-    title: 'Total Revenue',
-    value: '$2.4M',
-    change: '+22%',
-    changeType: 'increase',
-    icon: 'ri-money-dollar-circle-line',
-    color: 'purple'
-  }
-];
-
-const monthlyData = [
-  { month: 'Jan', matches: 12, births: 8, revenue: 180000 },
-  { month: 'Feb', matches: 15, births: 10, revenue: 220000 },
-  { month: 'Mar', matches: 18, births: 12, revenue: 280000 },
-  { month: 'Apr', matches: 14, births: 9, revenue: 195000 },
-  { month: 'May', matches: 20, births: 15, revenue: 320000 },
-  { month: 'Jun', matches: 16, births: 11, revenue: 240000 }
-];
-
-const topPerformers = [
-  { name: 'Dr. Sarah Wilson', role: 'Lead Coordinator', matches: 45, rating: 4.9 },
-  { name: 'Dr. Michael Chen', role: 'Medical Director', procedures: 38, rating: 4.8 },
-  { name: 'Jennifer Adams', role: 'Surrogate Coordinator', matches: 32, rating: 4.7 },
-  { name: 'Attorney Johnson', role: 'Legal Advisor', contracts: 28, rating: 4.9 }
-];
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 const ReportsPage: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('6months');
   const [selectedReport, setSelectedReport] = useState('overview');
+  const [stats, setStats] = useState({
+    totalMatches: 0,
+    activeJourneys: 0,
+    successfulBirths: 0,
+    totalRevenue: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
 
   const reportTypes = [
     { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line' },
@@ -77,6 +29,74 @@ const ReportsPage: React.FC = () => {
     { id: '3months', label: 'Last 3 Months' },
     { id: '6months', label: 'Last 6 Months' },
     { id: '1year', label: 'Last Year' }
+  ];
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    setIsLoading(true);
+    try {
+      const [casesSnapshot, paymentsSnapshot] = await Promise.all([
+        getDocs(collection(db, 'cases')),
+        getDocs(collection(db, 'invoices'))
+      ]);
+
+      const totalMatches = casesSnapshot.size;
+      const activeJourneys = casesSnapshot.docs.filter((doc: any) => 
+        doc.data().currentStage !== 'Completed'
+      ).length;
+      const successfulBirths = casesSnapshot.docs.filter((doc: any) => 
+        doc.data().currentStage === 'Completed'
+      ).length;
+      
+      const totalRevenue = paymentsSnapshot.docs.reduce((sum: number, doc: any) => {
+        return sum + (doc.data().amount || 0);
+      }, 0);
+
+      setStats({
+        totalMatches,
+        activeJourneys,
+        successfulBirths,
+        totalRevenue
+      });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const reportStats = [
+    {
+      id: 'total-matches',
+      title: 'Total Matches',
+      value: stats.totalMatches.toString(),
+      icon: 'ri-links-line',
+      color: 'blue'
+    },
+    {
+      id: 'active-journeys',
+      title: 'Active Journeys',
+      value: stats.activeJourneys.toString(),
+      icon: 'ri-road-map-line',
+      color: 'green'
+    },
+    {
+      id: 'successful-births',
+      title: 'Successful Births',
+      value: stats.successfulBirths.toString(),
+      icon: 'ri-heart-3-line',
+      color: 'pink'
+    },
+    {
+      id: 'total-revenue',
+      title: 'Total Revenue',
+      value: `$${(stats.totalRevenue / 1000).toFixed(1)}K`,
+      icon: 'ri-money-dollar-circle-line',
+      color: 'purple'
+    }
   ];
 
   return (
@@ -134,99 +154,37 @@ const ReportsPage: React.FC = () => {
           {selectedReport === 'overview' && (
             <div className="space-y-6">
               {/* Key Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {reportStats.map((stat) => (
-                  <Card key={stat.id} className="hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">{stat.title}</p>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
-                        <div className="flex items-center mt-2">
-                          <span className={`text-sm font-medium ${
-                            stat.changeType === 'increase' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                          }`}>
-                            {stat.change}
-                          </span>
-                          <span className="text-sm text-gray-500 dark:text-gray-400 ml-1">from last period</span>
+              {isLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <i className="ri-loader-4-line text-4xl animate-spin text-blue-600"></i>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {reportStats.map((stat) => (
+                    <Card key={stat.id} className="hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">{stat.title}</p>
+                          <p className="text-3xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
+                        </div>
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                          stat.color === 'blue' ? 'bg-blue-100 dark:bg-blue-900' :
+                          stat.color === 'green' ? 'bg-green-100 dark:bg-green-900' :
+                          stat.color === 'pink' ? 'bg-pink-100 dark:bg-pink-900' :
+                          'bg-purple-100 dark:bg-purple-900'
+                        }`}>
+                          <i className={`${stat.icon} text-xl ${
+                            stat.color === 'blue' ? 'text-blue-600 dark:text-blue-400' :
+                            stat.color === 'green' ? 'text-green-600 dark:text-green-400' :
+                            stat.color === 'pink' ? 'text-pink-600 dark:text-pink-400' :
+                            'text-purple-600 dark:text-purple-400'
+                          }`}></i>
                         </div>
                       </div>
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                        stat.color === 'blue' ? 'bg-blue-100 dark:bg-blue-900' :
-                        stat.color === 'green' ? 'bg-green-100 dark:bg-green-900' :
-                        stat.color === 'pink' ? 'bg-pink-100 dark:bg-pink-900' :
-                        'bg-purple-100 dark:bg-purple-900'
-                      }`}>
-                        <i className={`${stat.icon} text-xl ${
-                          stat.color === 'blue' ? 'text-blue-600 dark:text-blue-400' :
-                          stat.color === 'green' ? 'text-green-600 dark:text-green-400' :
-                          stat.color === 'pink' ? 'text-pink-600 dark:text-pink-400' :
-                          'text-purple-600 dark:text-purple-400'
-                        }`}></i>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-
-              {/* Charts Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                  <div className="p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Monthly Trends</h3>
-                    <div className="space-y-4">
-                      {monthlyData.map((data, index) => (
-                        <div key={index} className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{data.month}</span>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <p className="text-sm text-gray-900 dark:text-white">{data.matches} matches</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">{data.births} births</p>
-                            </div>
-                            <div className="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                              <div 
-                                className="bg-blue-600 h-2 rounded-full"
-                                style={{ width: `${(data.matches / 20) * 100}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </Card>
-
-                <Card>
-                  <div className="p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Performers</h3>
-                    <div className="space-y-4">
-                      {topPerformers.map((performer, index) => (
-                        <div key={index} className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                              <i className="ri-user-line text-blue-600 dark:text-blue-400"></i>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white">{performer.name}</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">{performer.role}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="flex items-center gap-1">
-                              <i className="ri-star-fill text-yellow-400 text-sm"></i>
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">{performer.rating}</span>
-                            </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {performer.matches && `${performer.matches} matches`}
-                              {performer.procedures && `${performer.procedures} procedures`}
-                              {performer.contracts && `${performer.contracts} contracts`}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </Card>
-              </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

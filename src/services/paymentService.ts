@@ -17,12 +17,15 @@ export interface Payment {
   id?: string;
   surrogateId?: string; // Link to specific surrogate
   surrogateName: string; // Denormalized for easier display or manual entry
+  parentName?: string; // NEW - For invoice tracking
+  childName?: string; // NEW - For invoice tracking
   amount: number;
   type: 'Base Compensation' | 'Allowance' | 'Medical' | 'Travel' | 'Clothing' | 'Legal' | 'Other';
-  status: 'Paid' | 'Pending' | 'Scheduled' | 'Overdue' | 'Cancelled';
+  status: 'Paid' | 'Pending' | 'Scheduled' | 'Overdue' | 'Cancelled' | 'Rejected'; // UPDATED
   dueDate: string; // YYYY-MM-DD
   paidDate?: string; // YYYY-MM-DD
   description?: string;
+  itemDescription?: string; // NEW - Detailed item description for invoices
   notes?: string;
   referenceNumber?: string; // Check # or Transaction ID
   createdAt?: Date;

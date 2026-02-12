@@ -16,11 +16,13 @@ import { db } from '../lib/firebase';
 export interface Appointment {
   id?: string;
   title: string;
-  type: 'consultation' | 'medical' | 'legal' | 'psychological';
+  type: 'consultation' | 'medical' | 'legal' | 'psychological' | 'screening' | 'general'; // UPDATED
   date: string; // YYYY-MM-DD
   time: string; // HH:MM AM/PM
   duration: string; // e.g. "60 min"
-  participants: string[]; // Array of participant names or IDs
+  participants: string[]; // Array of participant names
+  userIds?: string[]; // NEW - User IDs for filtering
+  caseId?: string; // NEW - Link to specific case/journey
   location: string;
   status: 'confirmed' | 'pending' | 'scheduled' | 'completed' | 'cancelled';
   notes?: string;
