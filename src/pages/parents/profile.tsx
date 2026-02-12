@@ -7,6 +7,7 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
+import AboutSection from '../../components/feature/AboutSection';
 import FileUploadSection, { type FileRecord } from '../../components/data/FileUploadSection';
 import Toast from '../../components/base/Toast';
 import { db, storage } from '../../lib/firebase';
@@ -336,21 +337,96 @@ const ParentProfilePage: React.FC = () => {
     const parent1 = (parent.parent1 as Record<string, unknown>) ?? {};
     const parent2 = (parent.parent2 as Record<string, unknown>) ?? {};
 
+    // Helper to find first non-empty value
+    const getValue = (...args: any[]) => args.find(v => v !== undefined && v !== null && v !== '');
+
     // Map fields
-    const bio = about.bio || '';
-    const aboutUs = about.aboutUs || formData.messageToSurrogate || form2Data.familyDescription || '';
-    const relationshipPreference = about.relationshipPreference || formData.relationshipType || '';
-    const occupation = about.occupation || [parent1.occupation, parent2.occupation].filter(Boolean).join(' & ') || '';
-    const education = about.education || [parent1.education, parent2.education].filter(Boolean).join(' & ') || '';
+    const bio = getValue(
+        about.bio,
+        parent.bio,
+        [(form2Data?.parent1 as any)?.aboutYourself, (form2Data?.parent2 as any)?.aboutYourself].filter(Boolean).join('\n\n'),
+        (parent1 as any)?.aboutYourself
+    );
+
+    const aboutUs = getValue(
+        about.aboutUs,
+        formData.message,
+        formData.whySurrogate,
+        (form2Data?.surrogateRelated as any)?.additionalInfoForSurrogate,
+        formData.messageToSurrogate,
+        form2Data.familyDescription
+    );
+
+    const relationshipPreference = getValue(
+        about.relationshipPreference,
+        parent.relationshipPreference,
+        (form2Data?.surrogateRelated as any)?.pregnancyRelationship,
+        formData.relationshipType
+    );
+
+    const occupation = getValue(
+        about.occupation,
+        parent.occupation,
+        [(form2Data?.parent1 as any)?.occupation, (form2Data?.parent2 as any)?.occupation].filter(Boolean).join(' & '),
+        [parent1.occupation, parent2.occupation].filter(Boolean).join(' & ')
+    );
+    
+    const education = getValue(
+        about.education,
+        parent.education,
+        [(form2Data?.parent1 as any)?.education, (form2Data?.parent2 as any)?.education].filter(Boolean).join(' & '),
+        [parent1.education, parent2.education].filter(Boolean).join(' & ')
+    );
+
+    const hobbies = getValue(
+        about.hobbies,
+        [(form2Data?.parent1 as any)?.hobbiesInterests, (form2Data?.parent2 as any)?.hobbiesInterests].filter(Boolean).join(', ')
+    );
+
+    const religion = getValue(
+        about.religion,
+        [(form2Data?.parent1 as any)?.religion, (form2Data?.parent2 as any)?.religion].filter(Boolean).join(' & ')
+    );
+
+    const familyLifestyle = getValue(
+        about.familyLifestyle,
+        [(form2Data?.parent1 as any)?.personalityDescription, (form2Data?.parent2 as any)?.personalityDescription].filter(Boolean).join('\n\n')
+    );
+
+    // Calculate Age helper
+    const calculateAge = (dob: string | undefined) => {
+        if (!dob) return '';
+        try {
+            const date = new Date(dob);
+            if (isNaN(date.getTime())) return '';
+            const ageDifMs = Date.now() - date.getTime();
+            const ageDate = new Date(ageDifMs);
+            return Math.abs(ageDate.getUTCFullYear() - 1970).toString();
+        } catch { return ''; }
+    };
+
+    const p1Age = (parent1 as any)?.age || calculateAge((parent1 as any)?.dob) || calculateAge((form2Data?.parent1 as any)?.dob);
+    const p2Age = (parent2 as any)?.age || calculateAge((parent2 as any)?.dob) || calculateAge((form2Data?.parent2 as any)?.dob);
+    
+    const age = getValue(
+        about.age,
+        parent.age,
+        (formData as any)?.age,
+        [p1Age, p2Age].filter(a => a && a !== '0').join(' & ')
+    );
 
     return {
         ...ABOUT_PARENT_TEMPLATE,
         ...about,
-        bio,
-        aboutUs,
-        relationshipPreference,
-        occupation,
-        education
+        bio: bio || '',
+        age: age || '',
+        aboutUs: aboutUs || '',
+        relationshipPreference: relationshipPreference || '',
+        occupation: occupation || '',
+        education: education || '',
+        hobbies: hobbies || '',
+        religion: religion || '',
+        familyLifestyle: familyLifestyle || ''
     };
   }, [parent]);
 
@@ -553,7 +629,12 @@ const ParentProfilePage: React.FC = () => {
                                 
                                 {/* Additional Images from Documents */}
                                 {parent.documents
-                                    ?.filter(doc => doc.type?.startsWith('image/') || !doc.type)
+                                    ?.filter(doc => {
+                                        const isImage = doc.type?.startsWith('image/');
+                                        const hasImageExt = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.name);
+                                        const isMissingType = !doc.type;
+                                        return isImage || hasImageExt || (isMissingType && hasImageExt);
+                                    })
                                     .map((doc, index) => (
                                         <div key={`${doc.url}-${index}`} className="break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 shadow-md group relative">
                                             <img
@@ -566,7 +647,7 @@ const ParentProfilePage: React.FC = () => {
                                     ))
                                 }
 
-                                {!parent.profileImageUrl && (!parent.documents || !parent.documents.some(d => d.type?.startsWith('image/') || !d.type)) && (
+                                {!parent.profileImageUrl && (!parent.documents || !parent.documents.some(d => d.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(d.name))) && (
                                      <div className="break-inside-avoid flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 text-4xl text-gray-300 dark:text-gray-600">
                                         <i className="ri-image-line"></i>
                                     </div>
@@ -577,15 +658,10 @@ const ParentProfilePage: React.FC = () => {
                         {/* Right Column - About Info */}
                         <div className="xl:col-span-7 space-y-6">
                             <Card>
-                                <div className="mb-4">
-                                    <h2 className="text-xl font-semibold">About {displayName}</h2>
-                                </div>
-                                
-                                <EditableJsonSection
-                                    title="" 
-                                    description="Family details, lifestyle, and preferences."
+                                <AboutSection
+                                    title={`About ${displayName}`}
                                     data={aboutData}
-                                    emptyMessage="No about information provided."
+                                    type="parent"
                                     templateData={ABOUT_PARENT_TEMPLATE}
                                     onSave={(value) => handleUpdateField('about', value)}
                                 />

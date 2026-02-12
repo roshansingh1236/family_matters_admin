@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../lib/firebase';
 import Button from '../base/Button';
+import ConfirmationDialog from '../base/ConfirmationDialog';
 
 type FileCategory = 'Legal' | 'Financial' | 'Medical' | 'Personal' | 'Other';
 
@@ -36,6 +37,9 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<FileCategory>('Other');
+  
+  // Dialog State
+  const [fileToDelete, setFileToDelete] = useState<FileRecord | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,9 +79,6 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
       return;
     }
 
-    // DEBUG: Log start
-    console.log('Starting upload for:', file.name, 'Category:', selectedCategory);
-
     try {
       const storagePath = `users/${userId}/${selectedCategory}/${Date.now()}_${file.name}`;
       const storageRef = ref(storage, storagePath);
@@ -86,33 +87,17 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
       uploadTask.on('state_changed',
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log(`Upload progress: ${progress}%`); // DEBUG
           setUploadProgress(progress);
-          if (snapshot.state === 'paused') console.log('Upload is paused');
-          if (snapshot.state === 'running') console.log('Upload is running');
         },
         (error) => {
           console.error('Upload failed:', error);
-          console.error('Error Code:', error.code);
-          console.error('Error Message:', error.message);
-          
           let friendlyError = `Upload failed: ${error.message}`;
-          if (error.code === 'storage/unauthorized') {
-            friendlyError = 'Permission denied. Please check your Firebase Storage rules.';
-          } else if (error.code === 'storage/canceled') {
-            friendlyError = 'Upload canceled.';
-          } else if (error.code === 'storage/unknown') {
-            friendlyError = 'Unknown error occurred. Please check console for details.';
-          }
-          
           setUploadError(friendlyError);
           setIsUploading(false);
         },
         async () => {
           try {
-            console.log('Upload completed. Getting download URL...');
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            console.log('Download URL obtained:', downloadURL);
             
             const newFile: FileRecord = {
               name: file.name,
@@ -143,20 +128,42 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     }
   };
 
-  const handleDelete = async (fileToDelete: FileRecord) => {
-    if (!window.confirm(`Are you sure you want to delete ${fileToDelete.name}?`)) return;
+  const confirmDelete = async () => {
+    if (!fileToDelete) return;
+
+    // Helper to get path from URL if missing
+    const getStoragePath = (file: FileRecord): string | null => {
+        if (file.path) return file.path;
+        try {
+            const urlObj = new URL(file.url);
+            const pathStart = urlObj.pathname.indexOf('/o/');
+            if (pathStart === -1) return null;
+            const encodedPath = urlObj.pathname.substring(pathStart + 3);
+            return decodeURIComponent(encodedPath);
+        } catch {
+            return null;
+        }
+    };
+
+    const storagePath = getStoragePath(fileToDelete);
 
     try {
-      const storageRef = ref(storage, fileToDelete.path);
-      await deleteObject(storageRef).catch((error) => {
-        console.warn('File might not exist in storage, proceeding to remove record:', error);
-      });
+      if (storagePath) {
+          const storageRef = ref(storage, storagePath);
+          await deleteObject(storageRef).catch((error) => {
+            console.warn('File might not exist in storage or invalid path, proceeding to remove record:', error);
+          });
+      } else {
+          console.warn('Could not determine storage path, removing record only.');
+      }
 
-      const updatedFiles = files.filter((f) => f.path !== fileToDelete.path);
+      const updatedFiles = files.filter((f) => f.url !== fileToDelete.url); // Filter by URL as it's more unique/stable
       await onFilesChange(updatedFiles);
     } catch (error) {
       console.error('Error deleting file:', error);
       alert('Failed to delete file.');
+    } finally {
+        setFileToDelete(null);
     }
   };
 
@@ -174,6 +181,16 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
 
   return (
     <div className="space-y-6">
+      <ConfirmationDialog
+        isOpen={!!fileToDelete}
+        onClose={() => setFileToDelete(null)}
+        onConfirm={confirmDelete}
+        title="Delete File"
+        message={`Are you sure you want to delete ${fileToDelete?.name}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        isDestructive={true}
+      />
+
       <div>
         <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-50">{title}</h3>
         {description && <p className="mt-1 text-sm text-emerald-700/80 dark:text-emerald-200/70">{description}</p>}
@@ -279,7 +296,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                   <p className="text-[10px] text-white/80">{file.category}</p>
                 </div>
                 <button
-                  onClick={() => handleDelete(file)}
+                  onClick={() => setFileToDelete(file)}
                   className="absolute right-2 top-2 rounded-full bg-white/20 p-1.5 text-white backdrop-blur-sm transition-colors hover:bg-red-500"
                   title="Delete image"
                 >
@@ -322,7 +339,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                     <i className="ri-download-line text-lg"></i>
                   </a>
                   <button
-                    onClick={() => handleDelete(file)}
+                    onClick={() => setFileToDelete(file)}
                     className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
                     title="Delete"
                   >

@@ -65,6 +65,7 @@ export const ABOUT_SURROGATE_TEMPLATE = {
 
 export const ABOUT_PARENT_TEMPLATE = {
   bio: '',
+  age: '',
   aboutUs: '',
   relationshipPreference: '',
   familyLifestyle: '',

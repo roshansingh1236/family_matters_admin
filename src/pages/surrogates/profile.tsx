@@ -7,6 +7,7 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
+import AboutSection from '../../components/feature/AboutSection';
 import FileUploadSection, { type FileRecord } from '../../components/data/FileUploadSection';
 import Toast from '../../components/base/Toast';
 import { db, storage } from '../../lib/firebase';
@@ -286,55 +287,72 @@ const SurrogateProfilePage: React.FC = () => {
     }
   };
 
-  const aboutData = useMemo(() => {
+    const aboutData = useMemo(() => {
     if (!surrogate) return null;
     const about = (surrogate.about as Record<string, unknown>) ?? {};
     const formData = (surrogate.formData as Record<string, unknown>) ?? {};
     // Based on user dump, formData contains a nested form2 object with rich data
     const nestedForm2 = (formData.form2 as Record<string, unknown>) ?? {};
 
-    let age = about.age || formData.age || nestedForm2.age;
+    // Helper to find first non-empty value
+    const getValue = (...args: any[]) => args.find(v => v !== undefined && v !== null && v !== '');
+
+    const age = getValue(about.age, surrogate.age, formData.age, nestedForm2.age);
+    
+    // Calculate Age Fallback if not explicitly set
+    let calculatedAge = '';
     if (!age && formData.dateOfBirth) {
         try {
             const dob = new Date(formData.dateOfBirth as string);
             if (!isNaN(dob.getTime())) {
                 const diff = Date.now() - dob.getTime();
                 const ageDate = new Date(diff);
-                age = String(Math.abs(ageDate.getUTCFullYear() - 1970));
+                calculatedAge = String(Math.abs(ageDate.getUTCFullYear() - 1970));
             }
         } catch (e) {
             console.error("Error calculating age", e);
         }
     }
 
-    let height = about.height;
-    if (!height) {
-        height = formData.height || nestedForm2.height;
-    }
+    const height = getValue(about.height, surrogate.height, formData.height, nestedForm2.height);
 
     // Map additional fields with nested form2 fallbacks
-    // Priority: About (Manual) -> FormData (Direct) -> Nested Form2 (Deep)
-    const education = about.education || formData.educationLevel || nestedForm2.educationLevel || formData['Education Level'];
-    const occupation = about.occupation || formData.occupation || nestedForm2.occupation || formData['Occupation'];
-    const bioMotherHeritage = about.bioMotherHeritage || formData.ethnicity || nestedForm2.ethnicity || formData['Ethnicity'];
-    const relationshipPreference = about.relationshipPreference || formData.relationshipStatus || nestedForm2.relationshipStatus || formData['Relationship Status'];
+    // Priority: About (Manual) -> Root -> FormData (Direct) -> Nested Form2 (Deep)
+    const education = getValue(about.education, surrogate.education, formData.educationLevel, nestedForm2.educationLevel, formData['Education Level']);
+    const occupation = getValue(about.occupation, surrogate.occupation, formData.occupation, nestedForm2.occupation, formData['Occupation']);
     
-    // Message to parents / About Me
-    const bio = about.bio || 
-                    formData.messageToParents || nestedForm2.messageToParents || 
-                    formData['Message To Parents'] || 
-                    formData.surrogacyReasons || nestedForm2.surrogacyReasons ||
-                    formData['Surrogacy Reasons'];
+    const bioMotherHeritage = getValue(about.bioMotherHeritage, surrogate.bioMotherHeritage, formData.ethnicity, nestedForm2.ethnicity, formData['Ethnicity']);
+    const bioFatherHeritage = getValue(about.bioFatherHeritage, surrogate.bioFatherHeritage);
+    
+    const relationshipPreference = getValue(about.relationshipPreference, surrogate.relationshipPreference, formData.relationshipStatus, nestedForm2.relationshipStatus, formData['Relationship Status']);
+    
+    const amhStatus = getValue(about.amhStatus, surrogate.amhStatus);
+    const opennessToSecondCycle = getValue(about.opennessToSecondCycle, surrogate.opennessToSecondCycle);
+
+    // Message to parents / About Me / Bio
+    const bio = getValue(
+        about.bio, 
+        surrogate.bio, // Root bio from mobile app
+        formData.messageToParents, 
+        nestedForm2.messageToParents, 
+        formData['Message To Parents'], 
+        formData.surrogacyReasons, 
+        nestedForm2.surrogacyReasons,
+        formData['Surrogacy Reasons']
+    );
 
     return {
         ...ABOUT_SURROGATE_TEMPLATE,
         ...about,
-        age: age ? String(age) : '',
+        age: age ? String(age) : calculatedAge,
         height: height ? String(height) : '',
         education: education || '',
         occupation: occupation || '',
         bioMotherHeritage: bioMotherHeritage || '', 
+        bioFatherHeritage: bioFatherHeritage || '',
         relationshipPreference: relationshipPreference || '',
+        amhStatus: amhStatus || '',
+        opennessToSecondCycle: opennessToSecondCycle || '',
         bio: bio || ''
     };
   }, [surrogate]);
@@ -601,7 +619,12 @@ const SurrogateProfilePage: React.FC = () => {
                                 
                                 {/* Additional Images from Documents */}
                                 {surrogate.documents
-                                    ?.filter(doc => doc.type?.startsWith('image/') || !doc.type)
+                                    ?.filter(doc => {
+                                        const isImage = doc.type?.startsWith('image/');
+                                        const hasImageExt = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.name);
+                                        const isMissingType = !doc.type;
+                                        return isImage || hasImageExt || (isMissingType && hasImageExt);
+                                    })
                                     .map((doc, index) => (
                                         <div key={`${doc.url}-${index}`} className="break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 shadow-md group relative">
                                             <img
@@ -614,7 +637,7 @@ const SurrogateProfilePage: React.FC = () => {
                                     ))
                                 }
 
-                                {!surrogate.profileImageUrl && (!surrogate.documents || !surrogate.documents.some(d => d.type?.startsWith('image/') || !d.type)) && (
+                                {!surrogate.profileImageUrl && (!surrogate.documents || !surrogate.documents.some(d => d.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(d.name))) && (
                                      <div className="break-inside-avoid flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 text-4xl text-gray-300 dark:text-gray-600">
                                         <i className="ri-image-line"></i>
                                     </div>
@@ -625,15 +648,10 @@ const SurrogateProfilePage: React.FC = () => {
                         {/* Right Column - About Info */}
                         <div className="xl:col-span-7 space-y-6">
                             <Card>
-                                <div className="mb-4">
-                                    <h2 className="text-xl font-semibold">About {surrogate.firstName || 'Surrogate'}</h2>
-                                </div>
-                                
-                                <EditableJsonSection
-                                    title="" 
-                                    description="Personal details, heritage, and background information."
+                                <AboutSection
+                                    title={`About ${surrogate.firstName || 'Surrogate'}`}
                                     data={aboutData}
-                                    emptyMessage="No about information provided."
+                                    type="surrogate"
                                     templateData={ABOUT_SURROGATE_TEMPLATE}
                                     onSave={(value) => handleUpdateField('about', value)}
                                 />
