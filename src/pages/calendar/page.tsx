@@ -5,7 +5,10 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { appointmentService, Appointment } from '../../services/appointmentService';
+import { appointmentService } from '../../services/appointmentService';
+import type { Appointment } from '../../services/appointmentService';
+import UserSelector from '../../components/feature/UserSelector';
+import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
 
 const CalendarPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -14,6 +17,7 @@ const CalendarPage: React.FC = () => {
   const [showNewEventModal, setShowNewEventModal] = useState(false);
   const [events, setEvents] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showMedicalModal, setShowMedicalModal] = useState(false);
 
   // New Event Form State
   const [formData, setFormData] = useState<Partial<Appointment>>({
@@ -25,7 +29,8 @@ const CalendarPage: React.FC = () => {
     participants: [],
     location: 'Clinic',
     status: 'scheduled',
-    notes: ''
+    notes: '',
+    userId: ''
   });
 
   const fetchEvents = async () => {
@@ -423,11 +428,29 @@ const CalendarPage: React.FC = () => {
                       </label>
                       <input
                         type="text"
-                        value={formData.title}
+                        value={formData.title || ''}
                         onChange={e => setFormData({...formData, title: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none"
                         placeholder="Enter event title"
                       />
+                    </div>
+
+                    <UserSelector 
+                      value={formData.userId || ''} 
+                      onChange={val => setFormData({...formData, userId: val})}
+                      label="Associated User (Surrogate/Parent)"
+                    />
+                    
+                    <div className="pt-2">
+                       <Button 
+                          type="button" 
+                          variant="outline" 
+                          className="w-full border-dashed border-2 hover:border-blue-500 hover:text-blue-500 transition-all py-3 flex items-center justify-center gap-2"
+                          onClick={() => setShowMedicalModal(true)}
+                       >
+                          <i className="ri-health-book-line"></i>
+                          Add New Medical Record for this Event
+                       </Button>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
@@ -485,6 +508,11 @@ const CalendarPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          <MedicalRecordModal 
+            isOpen={showMedicalModal} 
+            onClose={() => setShowMedicalModal(false)}
+          />
         </main>
       </div>
     </div>

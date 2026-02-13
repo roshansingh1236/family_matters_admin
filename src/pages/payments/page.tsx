@@ -5,7 +5,10 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { paymentService, Payment } from '../../services/paymentService';
+import { paymentService } from '../../services/paymentService';
+import type { Payment } from '../../services/paymentService';
+import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
+import UserSelector from '../../components/feature/UserSelector';
 
 const PaymentsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -13,9 +16,11 @@ const PaymentsPage: React.FC = () => {
   const [showNewPaymentModal, setShowNewPaymentModal] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showMedicalModal, setShowMedicalModal] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState<Partial<Payment>>({
+    surrogateId: '',
     surrogateName: '',
     amount: 0,
     type: 'Base Compensation',
@@ -53,8 +58,9 @@ const PaymentsPage: React.FC = () => {
     Pending: 'yellow',
     Scheduled: 'blue',
     Overdue: 'red',
-    Cancelled: 'gray'
-  };
+    Cancelled: 'gray',
+    Rejected: 'red'
+  } as const;
 
   const handleSavePayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,14 +234,25 @@ const PaymentsPage: React.FC = () => {
                   <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-xl">
                      <h2 className="text-xl font-bold mb-4 dark:text-white">{formData.id ? 'Edit Payment' : 'New Payment'}</h2>
                      <form onSubmit={handleSavePayment} className="space-y-4">
-                        <input 
-                            type="text" 
-                            placeholder="Surrogate/Recipient Name" 
-                            required 
-                            className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            value={formData.surrogateName} 
-                            onChange={e => setFormData({...formData, surrogateName: e.target.value})} 
+                        <UserSelector 
+                            value={formData.surrogateId || ''} 
+                            onChange={id => setFormData({...formData, surrogateId: id})}
+                            onSelect={user => setFormData({...formData, surrogateId: user.id, surrogateName: user.name.split(' (')[0]})}
+                            label="Recipient (Surrogate or Parent)"
+                            required
                         />
+                        
+                        <div className="pt-1">
+                            <button 
+                                type="button"
+                                onClick={() => setShowMedicalModal(true)}
+                                className="w-full py-2 px-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
+                            >
+                                <i className="ri-health-book-line"></i>
+                                Associated Medical Record
+                            </button>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <input 
                                 type="number" 
@@ -312,6 +329,11 @@ const PaymentsPage: React.FC = () => {
                   </div>
                 </div>
             )}
+
+            <MedicalRecordModal 
+               isOpen={showMedicalModal}
+               onClose={() => setShowMedicalModal(false)}
+            />
         </main>
       </div>
     </div>

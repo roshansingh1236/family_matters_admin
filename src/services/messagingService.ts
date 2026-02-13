@@ -28,9 +28,13 @@ export interface Message {
   senderId: string;
   senderName: string;
   text: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'file';
+  replyTo?: string; // ID of the message being replied to
   timestamp: Date;
   read: boolean;
 }
+
 
 const CONVERSATIONS_COLLECTION = 'conversations';
 const MESSAGES_SUBCOLLECTION = 'messages';
@@ -142,8 +146,11 @@ export const messagingService = {
     conversationId: string,
     senderId: string,
     senderName: string,
-    text: string
+    text: string,
+    media?: { url: string; type: 'image' | 'file' },
+    replyTo?: string
   ): Promise<void> => {
+
     try {
       // Add message to subcollection
       await addDoc(
@@ -152,10 +159,14 @@ export const messagingService = {
           senderId,
           senderName,
           text,
+          mediaUrl: media?.url || null,
+          mediaType: media?.type || null,
+          replyTo: replyTo || null,
           timestamp: Timestamp.now(),
           read: false
         }
       );
+
 
       // Update conversation last message
       const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
@@ -174,10 +185,11 @@ export const messagingService = {
         });
 
         await updateDoc(conversationRef, {
-          lastMessage: text.substring(0, 100), // Truncate for preview
+          lastMessage: media ? `Sent a ${media.type}` : text.substring(0, 100),
           lastMessageTime: Timestamp.now(),
           unreadCount: updatedUnreadCount
         });
+
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -203,5 +215,67 @@ export const messagingService = {
       console.error('Error marking as read:', error);
       throw error;
     }
+  },
+
+  // Delete a message
+  deleteMessage: async (conversationId: string, messageId: string): Promise<void> => {
+    try {
+      // Just for admin, let's allow permanent deletion for now
+      // In a real app, maybe just mark as deleted
+      const { deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION, messageId));
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      throw error;
+    }
+  },
+
+  // Clear all messages in a conversation
+  clearChat: async (conversationId: string): Promise<void> => {
+    try {
+      const messagesQuery = query(collection(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION));
+      const snapshot = await getDocs(messagesQuery);
+      const { deleteDoc } = await import('firebase/firestore');
+      
+      const deletePromises = snapshot.docs.map(messageDoc => 
+        deleteDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION, messageDoc.id))
+      );
+      
+      await Promise.all(deletePromises);
+
+      // Update conversation preview
+      const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
+      await updateDoc(conversationRef, {
+        lastMessage: 'Chat cleared',
+        lastMessageTime: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+      throw error;
+    }
+  },
+
+  // Delete an entire conversation
+  deleteConversation: async (conversationId: string): Promise<void> => {
+    try {
+      // First clear all messages
+      const messagesQuery = query(collection(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION));
+      const snapshot = await getDocs(messagesQuery);
+      const { deleteDoc } = await import('firebase/firestore');
+      
+      const deletePromises = snapshot.docs.map(messageDoc => 
+        deleteDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION, messageDoc.id))
+      );
+      
+      await Promise.all(deletePromises);
+
+      // Then delete the conversation doc
+      await deleteDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId));
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      throw error;
+    }
   }
 };
+
+

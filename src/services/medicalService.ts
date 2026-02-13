@@ -15,17 +15,19 @@ import { db } from '../lib/firebase';
 
 export interface MedicalRecord {
   id?: string;
-  surrogateId?: string; // Link to specific surrogate (optional if global, but good for filtering)
-  patientName: string; 
-  userId?: string; // Explicit link to user ID
-  date: string; // YYYY-MM-DD
-  type: 'Screening' | 'Ultrasound' | 'Lab Result' | 'Check-up' | 'Procedure' | 'Other';
+  surrogateId?: string;
+  patientName: string;
+  userId?: string;
+  date: string;
+  type: 'Screening' | 'Ultrasound' | 'Lab Result' | 'Check-up' | 'Procedure' | 'Examination' | 'Vaccination' | 'Other';
   title: string;
   summary: string;
-  provider: string; // Doctor/Clinic Name
+  provider: string;
+  doctor?: string; // Missing field
+  facility?: string; // Missing field
   status: 'Verified' | 'Pending' | 'Flagged';
   sharedWithParents: boolean;
-  attachments?: string[]; // URLs
+  attachments?: string[];
   createdAt?: Date;
 }
 
@@ -116,7 +118,7 @@ export const medicalService = {
     }
   },
 
-  createMedication: async (medication: Omit<Medication, 'id'>): Promise<string> => {
+  addMedication: async (medication: Omit<Medication, 'id'>): Promise<string> => {
     try {
       const docRef = await addDoc(collection(db, MEDS_COLLECTION), {
         ...medication

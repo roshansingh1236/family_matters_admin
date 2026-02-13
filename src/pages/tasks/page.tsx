@@ -8,6 +8,8 @@ import Badge from '../../components/base/Badge';
 import { taskService, type Task } from '../../services/taskService';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import SearchableDropdown from '../../components/base/SearchableDropdown';
+
 
 const TasksPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'completed'>('all');
@@ -202,17 +204,15 @@ const TasksPage: React.FC = () => {
             </div>
 
             {/* User Filter */}
-            <select
+            <SearchableDropdown
+              options={[{ id: 'all', name: 'All Users' }, ...users]}
               value={selectedUser}
-              onChange={(e) => setSelectedUser(e.target.value)}
-              className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="all">All Users</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>{user.name}</option>
-              ))}
-            </select>
+              onChange={(value) => setSelectedUser(value)}
+              placeholder="Filter by user..."
+              className="w-64"
+            />
           </div>
+
 
           {error && (
             <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg">
@@ -423,19 +423,16 @@ const TasksPage: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assign To</label>
-                        <select
+                        <SearchableDropdown
+                          label="Assign To"
+                          options={users}
+                          value={formData.assignee || ''}
+                          onChange={(value) => setFormData({ ...formData, assignee: value })}
+                          placeholder="Select User"
                           required
-                          value={formData.assignee}
-                          onChange={e => setFormData({ ...formData, assignee: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                        >
-                          <option value="">Select User</option>
-                          {users.map(user => (
-                            <option key={user.id} value={user.id}>{user.name}</option>
-                          ))}
-                        </select>
+                        />
                       </div>
+
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Due Date</label>

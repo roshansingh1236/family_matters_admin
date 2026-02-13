@@ -5,8 +5,7 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import { milestoneService, type SurrogacyCase, type JourneyStage } from '../../services/milestoneService';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import UserSelector from '../../components/feature/UserSelector';
 
 const MilestonesPage: React.FC = () => {
   const [cases, setCases] = useState<SurrogacyCase[]>([]);
@@ -19,11 +18,11 @@ const MilestonesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   // Users for case creation
-  const [surrogates, setSurrogates] = useState<Array<{ id: string; name: string }>>([]);
-  const [parents, setParents] = useState<Array<{ id: string; name: string }>>([]);
   const [newCaseData, setNewCaseData] = useState({
     surrogateId: '',
+    surrogateName: '',
     parentId: '',
+    parentName: '',
     notes: ''
   });
 
@@ -46,33 +45,8 @@ const MilestonesPage: React.FC = () => {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      const [surrogatesSnapshot, parentsSnapshot] = await Promise.all([
-        getDocs(collection(db, 'surrogates')),
-        getDocs(collection(db, 'parents'))
-      ]);
-
-      const surrogatesData = surrogatesSnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        name: `${doc.data().firstName || ''} ${doc.data().lastName || ''}`.trim() || doc.data().email || 'Unknown'
-      }));
-
-      const parentsData = parentsSnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        name: `${doc.data().firstName || ''} ${doc.data().lastName || ''}`.trim() || doc.data().email || 'Unknown'
-      }));
-
-      setSurrogates(surrogatesData);
-      setParents(parentsData);
-    } catch (err) {
-      console.error('Error fetching users:', err);
-    }
-  };
-
   useEffect(() => {
     fetchCases();
-    fetchUsers();
   }, []);
 
   const handleCreateCase = async () => {
@@ -82,26 +56,24 @@ const MilestonesPage: React.FC = () => {
     }
 
     try {
-      const surrogate = surrogates.find(s => s.id === newCaseData.surrogateId);
-      const parent = parents.find(p => p.id === newCaseData.parentId);
-
-      if (!surrogate || !parent) {
-        setError('Selected users not found');
-        return;
-      }
-
       await milestoneService.createCase({
         surrogateId: newCaseData.surrogateId,
-        surrogateName: surrogate.name,
+        surrogateName: newCaseData.surrogateName,
         parentId: newCaseData.parentId,
-        parentName: parent.name,
+        parentName: newCaseData.parentName,
         currentStage: 'Matching',
         notes: newCaseData.notes
       });
 
       await fetchCases();
       setShowCreateModal(false);
-      setNewCaseData({ surrogateId: '', parentId: '', notes: '' });
+      setNewCaseData({ 
+        surrogateId: '', 
+        surrogateName: '',
+        parentId: '', 
+        parentName: '',
+        notes: '' 
+      });
       setError(null);
     } catch (err) {
       console.error(err);
@@ -508,35 +480,35 @@ const MilestonesPage: React.FC = () => {
 
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Select Surrogate
-                      </label>
-                      <select
+                      <UserSelector
                         value={newCaseData.surrogateId}
-                        onChange={(e) => setNewCaseData({ ...newCaseData, surrogateId: e.target.value })}
-                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                      >
-                        <option value="">Choose a surrogate...</option>
-                        {surrogates.map(surrogate => (
-                          <option key={surrogate.id} value={surrogate.id}>{surrogate.name}</option>
-                        ))}
-                      </select>
+                        onChange={(id) => setNewCaseData({ ...newCaseData, surrogateId: id })}
+                        onSelect={(user) => setNewCaseData({ 
+                          ...newCaseData, 
+                          surrogateId: user.id, 
+                          surrogateName: user.name.split(' (')[0] 
+                        })}
+                        role="Surrogate"
+                        label="Select Surrogate"
+                        placeholder="Choose a surrogate..."
+                        required
+                      />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Select Parent
-                      </label>
-                      <select
+                      <UserSelector
                         value={newCaseData.parentId}
-                        onChange={(e) => setNewCaseData({ ...newCaseData, parentId: e.target.value })}
-                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                      >
-                        <option value="">Choose a parent...</option>
-                        {parents.map(parent => (
-                          <option key={parent.id} value={parent.id}>{parent.name}</option>
-                        ))}
-                      </select>
+                        onChange={(id) => setNewCaseData({ ...newCaseData, parentId: id })}
+                        onSelect={(user) => setNewCaseData({ 
+                          ...newCaseData, 
+                          parentId: user.id, 
+                          parentName: user.name.split(' (')[0] 
+                        })}
+                        role="Intended Parent"
+                        label="Select Parent"
+                        placeholder="Choose a parent..."
+                        required
+                      />
                     </div>
 
                     <div>

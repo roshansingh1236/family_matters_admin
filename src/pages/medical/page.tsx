@@ -5,7 +5,9 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { medicalService, MedicalRecord, Medication } from '../../services/medicalService';
+import { medicalService } from '../../services/medicalService';
+import type { MedicalRecord, Medication } from '../../services/medicalService';
+import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
 
 const MedicalPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'records' | 'medications'>('records');
@@ -223,44 +225,13 @@ const MedicalPage: React.FC = () => {
              </>
           )}
           
-          {/* Record Modal */}
-          {showRecordModal && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                  <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-xl">
-                      <h2 className="text-xl font-bold mb-4 dark:text-white">{recordForm.id ? 'Edit Record' : 'New Medical Record'}</h2>
-                      <form onSubmit={handleSaveRecord} className="space-y-4">
-                          <input type="text" placeholder="Title" required className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                 value={recordForm.title} onChange={e => setRecordForm({...recordForm, title: e.target.value})} />
-                          <div className="grid grid-cols-2 gap-4">
-                              <select className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                      value={recordForm.type} onChange={e => setRecordForm({...recordForm, type: e.target.value as any})}>
-                                  <option>Screening</option><option>Lab Result</option><option>Ultrasound</option><option>Vaccination</option><option>Other</option>
-                              </select>
-                              <input type="date" required className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                     value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})} />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                              <input type="text" placeholder="Doctor" className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                     value={recordForm.doctor} onChange={e => setRecordForm({...recordForm, doctor: e.target.value})} />
-                              <input type="text" placeholder="Facility" className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                     value={recordForm.facility} onChange={e => setRecordForm({...recordForm, facility: e.target.value})} />
-                          </div>
-                          <textarea placeholder="Summary/Notes" className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" rows={3}
-                                    value={recordForm.summary} onChange={e => setRecordForm({...recordForm, summary: e.target.value})}></textarea>
-                          
-                          <div className="flex items-center gap-2">
-                              <input type="checkbox" id="share" checked={recordForm.sharedWithParents} onChange={e => setRecordForm({...recordForm, sharedWithParents: e.target.checked})} />
-                              <label htmlFor="share" className="dark:text-gray-300">Share with Parents</label>
-                          </div>
-
-                          <div className="flex justify-end gap-2 mt-4">
-                              <Button type="button" variant="outline" onClick={() => setShowRecordModal(false)}>Cancel</Button>
-                              <Button type="submit" color="blue">Save</Button>
-                          </div>
-                      </form>
-                  </div>
-              </div>
-          )}
+          {/* Modal Replacement */}
+          <MedicalRecordModal 
+              isOpen={showRecordModal}
+              onClose={() => setShowRecordModal(false)}
+              onSuccess={fetchData}
+              initialData={recordForm}
+          />
 
            {/* Record Detail View Modal */}
            {selectedRecord && (

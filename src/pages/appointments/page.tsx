@@ -5,7 +5,10 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { appointmentService, Appointment } from '../../services/appointmentService';
+import { appointmentService } from '../../services/appointmentService';
+import type { Appointment } from '../../services/appointmentService';
+import UserSelector from '../../components/feature/UserSelector';
+import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
 
 // Define appointment types
 const appointmentTypes = [
@@ -29,6 +32,7 @@ const AppointmentsPage: React.FC = () => {
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
+  const [showMedicalModal, setShowMedicalModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<Appointment>>({
     title: '',
@@ -39,7 +43,8 @@ const AppointmentsPage: React.FC = () => {
     participants: [],
     location: '',
     status: 'scheduled',
-    notes: ''
+    notes: '',
+    userId: ''
   });
   const [participantsInput, setParticipantsInput] = useState('');
 
@@ -547,6 +552,23 @@ const AppointmentsPage: React.FC = () => {
                             />
                         </div>
 
+                        <UserSelector 
+                            value={formData.userId || ''} 
+                            onChange={val => setFormData({...formData, userId: val})}
+                            label="Associated User (Surrogate/Parent)"
+                        />
+
+                        <div className="pt-1">
+                            <button 
+                                type="button"
+                                onClick={() => setShowMedicalModal(true)}
+                                className="w-full py-2 px-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
+                            >
+                                <i className="ri-health-book-line"></i>
+                                New Medical Record
+                            </button>
+                        </div>
+
                          <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
@@ -610,7 +632,7 @@ const AppointmentsPage: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Participants (comma separated)</label>
                             <input 
                                 type="text" 
-                                value={participantsInput} 
+                                value={participantsInput || ''} 
                                 onChange={e => setParticipantsInput(e.target.value)}
                                 className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                                 placeholder="e.g. John Doe, Jane Doe"
@@ -620,7 +642,7 @@ const AppointmentsPage: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
                             <select 
-                                value={formData.status}
+                                value={formData.status || ''}
                                 onChange={e => setFormData({...formData, status: e.target.value as any})}
                                 className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                             >
@@ -655,6 +677,10 @@ const AppointmentsPage: React.FC = () => {
             </div>
           )}
 
+          <MedicalRecordModal 
+              isOpen={showMedicalModal}
+              onClose={() => setShowMedicalModal(false)}
+          />
         </main>
       </div>
     </div>
