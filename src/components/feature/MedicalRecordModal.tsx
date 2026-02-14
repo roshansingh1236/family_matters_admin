@@ -8,13 +8,15 @@ interface MedicalRecordModalProps {
   onClose: () => void;
   onSuccess?: () => void;
   initialData?: Partial<MedicalRecord>;
+  userId?: string; // Associated User (Surrogate/Parent) ID
 }
 
 const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  initialData = {}
+  initialData = {},
+  userId
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showAddMedication, setShowAddMedication] = useState(false);
@@ -42,19 +44,22 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
     e.preventDefault();
     setIsLoading(true);
     try {
-      // 1. Save Medical Record
+      // 1. Save Medical Record with userId
       let recordId = recordForm.id;
+      const recordData = { ...recordForm, userId };
+      
       if (recordId) {
-        await medicalService.updateRecord(recordId, recordForm);
+        await medicalService.updateRecord(recordId, recordData);
       } else {
-        const newRecord = await medicalService.createRecord(recordForm as any);
+        const newRecord = await medicalService.createRecord(recordData as any);
         // Assuming result might contain ID or we might need it for medication
         // For simplicity, we just proceed
       }
 
-      // 2. Save Medication if requested
+      // 2. Save Medication if requested with userId
       if (showAddMedication && medForm.name) {
-        await medicalService.addMedication(medForm as any);
+        const medicationData = { ...medForm, userId };
+        await medicalService.addMedication(medicationData as any);
       }
 
       if (onSuccess) onSuccess();

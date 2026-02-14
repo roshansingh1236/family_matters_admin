@@ -10,7 +10,7 @@ import { db } from '../../lib/firebase';
 
 const BabyWatchPage: React.FC = () => {
   const [updates, setUpdates] = useState<BabyWatchUpdate[]>([]);
-  const [cases, setCases] = useState<Array<{ id: string; name: string }>>([]);
+  const [cases, setCases] = useState<any[]>([]);
   const [selectedCase, setSelectedCase] = useState<string>('all');
   const [selectedUpdate, setSelectedUpdate] = useState<BabyWatchUpdate | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -21,6 +21,10 @@ const BabyWatchPage: React.FC = () => {
 
   const [formData, setFormData] = useState<Partial<BabyWatchUpdate>>({
     caseId: '',
+    parentId: '',
+    parentName: '',
+    surrogateId: '',
+    surrogateName: '',
     date: new Date().toISOString().split('T')[0],
     gestationalAge: '',
     weight: '',
@@ -49,7 +53,8 @@ const BabyWatchPage: React.FC = () => {
       const casesSnapshot = await getDocs(collection(db, 'cases'));
       const casesData = casesSnapshot.docs.map(doc => ({
         id: doc.id,
-        name: `${doc.data().surrogateName} & ${doc.data().parentName}`
+        ...doc.data(),
+        displayName: `${doc.data().surrogateName} & ${doc.data().parentName}`
       }));
       setCases(casesData);
     } catch (err) {
@@ -69,6 +74,10 @@ const BabyWatchPage: React.FC = () => {
   const handleOpenNewModal = () => {
     setFormData({
       caseId: '',
+      parentId: '',
+      parentName: '',
+      surrogateId: '',
+      surrogateName: '',
       date: new Date().toISOString().split('T')[0],
       gestationalAge: '',
       weight: '',
@@ -160,12 +169,12 @@ const BabyWatchPage: React.FC = () => {
             <select
               value={selectedCase}
               onChange={(e) => setSelectedCase(e.target.value)}
-              className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              className="px-4 py-2 rounded-xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm hover:shadow-md"
             >
               <option value="all">All Cases ({updates.length})</option>
               {cases.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({updates.filter(u => u.caseId === c.id).length})
+                  {c.displayName} ({updates.filter(u => u.caseId === c.id).length})
                 </option>
               ))}
             </select>
@@ -192,20 +201,22 @@ const BabyWatchPage: React.FC = () => {
                 filteredUpdates.map((update) => (
                   <Card 
                     key={update.id} 
-                    className="hover:shadow-lg transition-shadow cursor-pointer overflow-hidden"
+                    padding="none"
+                    className="group hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden border-0 bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10 hover:-translate-y-1 flex flex-col"
                     onClick={() => setSelectedUpdate(update)}
                   >
                     {update.imageUrl && (
-                      <div className="w-full h-48 bg-gray-100 dark:bg-gray-700 mb-4 -mt-6 -mx-6 overflow-hidden">
+                      <div className="w-full h-56 bg-gray-100 dark:bg-gray-900 overflow-hidden relative">
                         <img 
                           src={update.imageUrl} 
                           alt="Ultrasound" 
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                         />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                       </div>
                     )}
                     
-                    <div className="space-y-3">
+                    <div className="p-6 space-y-4 flex-1 flex flex-col">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
                           {update.gestationalAge}
@@ -215,20 +226,26 @@ const BabyWatchPage: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <i className="ri-calendar-line"></i>
+                      <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                            <i className="ri-calendar-line"></i>
+                          </div>
                           <span>{update.date}</span>
                         </div>
                         {update.weight && (
-                          <div className="flex items-center gap-2">
-                            <i className="ri-scales-line"></i>
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center text-pink-600 dark:text-pink-400">
+                              <i className="ri-scales-line"></i>
+                            </div>
                             <span>{update.weight}</span>
                           </div>
                         )}
                         {update.heartRate && (
-                          <div className="flex items-center gap-2">
-                            <i className="ri-heart-pulse-line"></i>
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
+                              <i className="ri-heart-pulse-line"></i>
+                            </div>
                             <span>{update.heartRate}</span>
                           </div>
                         )}
@@ -246,79 +263,100 @@ const BabyWatchPage: React.FC = () => {
 
           {/* Update Detail Modal */}
           {selectedUpdate && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Update Details</h2>
-                    <button
-                      onClick={() => setSelectedUpdate(null)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      <i className="ri-close-line text-xl text-gray-600 dark:text-gray-400"></i>
-                    </button>
-                  </div>
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-xl transition-all duration-300 animate-in fade-in">
+              <div className="bg-white/90 dark:bg-gray-900/90 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-white/20 dark:border-white/5 overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="relative">
+                  <button
+                    onClick={() => setSelectedUpdate(null)}
+                    className="absolute top-4 right-4 z-10 p-3 bg-black/20 hover:bg-black/40 backdrop-blur-md text-white rounded-full transition-all"
+                  >
+                    <i className="ri-close-line text-xl"></i>
+                  </button>
 
-                  {selectedUpdate.imageUrl && (
-                    <div className="mb-6 rounded-lg overflow-hidden">
-                      <img 
-                        src={selectedUpdate.imageUrl} 
-                        alt="Ultrasound" 
-                        className="w-full h-auto"
-                      />
-                    </div>
-                  )}
-
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                        {selectedUpdate.gestationalAge}
-                      </h3>
-                      {selectedUpdate.sharedWithParents && (
-                        <Badge color="green">Shared with Parents</Badge>
+                  <div className="grid grid-cols-1 md:grid-cols-2">
+                    {/* Left: Image */}
+                    <div className="bg-gray-100 dark:bg-gray-800">
+                      {selectedUpdate.imageUrl ? (
+                        <img 
+                          src={selectedUpdate.imageUrl} 
+                          alt="Ultrasound" 
+                          className="w-full h-full object-cover min-h-[400px]"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-12 text-gray-400">
+                          <i className="ri-image-line text-6xl mb-4"></i>
+                          <p>No image available</p>
+                        </div>
                       )}
                     </div>
 
-                    <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Date</h4>
-                          <p className="text-gray-600 dark:text-gray-300">{selectedUpdate.date}</p>
+                    {/* Right: Content */}
+                    <div className="p-8 space-y-8">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold uppercase tracking-wider">
+                            Medical Update
+                          </span>
+                          {selectedUpdate.sharedWithParents && (
+                            <Badge color="green">Shared with Parents</Badge>
+                          )}
                         </div>
-                        {selectedUpdate.weight && (
-                          <div>
-                            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Weight</h4>
-                            <p className="text-gray-600 dark:text-gray-300">{selectedUpdate.weight}</p>
-                          </div>
-                        )}
-                        {selectedUpdate.heartRate && (
-                          <div>
-                            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Heart Rate</h4>
-                            <p className="text-gray-600 dark:text-gray-300">{selectedUpdate.heartRate}</p>
-                          </div>
-                        )}
+                        <h2 className="text-4xl font-black text-gray-900 dark:text-white leading-tight">
+                          {selectedUpdate.gestationalAge}
+                        </h2>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
+                            <i className="ri-calendar-line text-blue-500"></i> Date
+                          </p>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUpdate.date}</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
+                            <i className="ri-scales-line text-pink-500"></i> Weight
+                          </p>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUpdate.weight || 'N/A'}</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
+                            <i className="ri-heart-pulse-line text-red-500"></i> Heart Rate
+                          </p>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUpdate.heartRate || 'N/A'}</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
+                            <i className="ri-user-line text-purple-500"></i> Surrogate
+                          </p>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUpdate.surrogateName || 'N/A'}</p>
+                        </div>
                       </div>
 
                       <div>
-                        <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Medical Notes</h4>
-                        <p className="text-gray-600 dark:text-gray-300">{selectedUpdate.medicalNotes}</p>
+                        <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">Medical Notes</h4>
+                        <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/20">
+                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed italic">
+                            "{selectedUpdate.medicalNotes}"
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex gap-3 pt-2">
-                      <Button color="blue" className="flex-1" onClick={() => handleOpenEditModal(selectedUpdate)}>
-                        <i className="ri-edit-line mr-2"></i>
-                        Edit
-                      </Button>
-                      <Button 
-                        color="red" 
-                        variant="outline" 
-                        className="flex-1" 
-                        onClick={() => selectedUpdate.id && handleDelete(selectedUpdate.id, selectedUpdate.imagePath)}
-                      >
-                        <i className="ri-delete-bin-line mr-2"></i>
-                        Delete
-                      </Button>
+                      <div className="flex gap-4 pt-4">
+                        <Button color="blue" className="flex-1 py-4 text-lg rounded-2xl shadow-lg shadow-blue-500/20" onClick={() => handleOpenEditModal(selectedUpdate)}>
+                          <i className="ri-edit-line mr-2"></i>
+                          Edit
+                        </Button>
+                        <Button 
+                          color="red" 
+                          variant="outline" 
+                          className="flex-1 py-4 text-lg rounded-2xl hover:bg-red-50 dark:hover:bg-red-900/10" 
+                          onClick={() => selectedUpdate.id && handleDelete(selectedUpdate.id, selectedUpdate.imagePath)}
+                        >
+                          <i className="ri-delete-bin-line mr-2"></i>
+                          Delete
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -328,9 +366,9 @@ const BabyWatchPage: React.FC = () => {
 
           {/* Create/Edit Modal */}
           {showModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-                <form onSubmit={handleSubmit} className="p-6">
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-xl animate-in fade-in transition-all">
+              <div className="bg-white/95 dark:bg-gray-900/95 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-white/20 dark:border-white/5 animate-in zoom-in-95 duration-200">
+                <form onSubmit={handleSubmit} className="p-8">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                       {formData.id ? 'Edit Update' : 'New Update'}
@@ -395,12 +433,23 @@ const BabyWatchPage: React.FC = () => {
                         <select
                           required
                           value={formData.caseId}
-                          onChange={e => setFormData({ ...formData, caseId: e.target.value })}
+                          onChange={e => {
+                            const caseId = e.target.value;
+                            const selectedCaseObj = cases.find(c => c.id === caseId);
+                            setFormData({ 
+                              ...formData, 
+                              caseId,
+                              parentId: selectedCaseObj?.parentId || '',
+                              parentName: selectedCaseObj?.parentName || '',
+                              surrogateId: selectedCaseObj?.surrogateId || '',
+                              surrogateName: selectedCaseObj?.surrogateName || ''
+                            });
+                          }}
                           className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                         >
                           <option value="">Select Case</option>
                           {cases.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
+                            <option key={c.id} value={c.id}>{c.displayName}</option>
                           ))}
                         </select>
                       </div>
@@ -481,12 +530,17 @@ const BabyWatchPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex gap-3 mt-6">
-                    <Button type="button" variant="outline" className="flex-1" onClick={() => setShowModal(false)}>
+                  <div className="flex gap-4 mt-8">
+                    <Button type="button" variant="outline" className="flex-1 py-4 text-lg rounded-2xl" onClick={() => setShowModal(false)}>
                       Cancel
                     </Button>
-                    <Button type="submit" color="blue" className="flex-1" disabled={isLoading}>
-                      {isLoading ? 'Saving...' : 'Save Update'}
+                    <Button type="submit" color="blue" className="flex-1 py-4 text-lg rounded-2xl shadow-lg shadow-blue-500/20" disabled={isLoading}>
+                      {isLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <i className="ri-loader-4-line animate-spin"></i>
+                          Saving...
+                        </span>
+                      ) : 'Save Update'}
                     </Button>
                   </div>
                 </form>

@@ -18,17 +18,21 @@ const PaymentsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showMedicalModal, setShowMedicalModal] = useState(false);
   
-  // Form State
-  const [formData, setFormData] = useState<Partial<Payment>>({
+  const initialFormData: Partial<Payment> = {
     surrogateId: '',
     surrogateName: '',
+    parentId: '',
+    parentName: '',
     amount: 0,
     type: 'Base Compensation',
+    category: 'Withdrawn',
     status: 'Scheduled',
-    dueDate: '',
+    dueDate: new Date().toISOString().split('T')[0],
     description: '',
     notes: ''
-  });
+  };
+
+  const [formData, setFormData] = useState<Partial<Payment>>(initialFormData);
 
   const fetchPayments = async () => {
     setIsLoading(true);
@@ -72,7 +76,7 @@ const PaymentsPage: React.FC = () => {
       }
       await fetchPayments();
       setShowNewPaymentModal(false);
-      setFormData({ surrogateName: '', amount: 0, type: 'Base Compensation', status: 'Scheduled', dueDate: '', description: '', notes: '' });
+      setFormData(initialFormData);
     } catch (error) {
       console.error(error);
     }
@@ -107,7 +111,7 @@ const PaymentsPage: React.FC = () => {
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Compensation</h1>
               <p className="text-gray-600 dark:text-gray-400">Track surrogate compensation and expenses.</p>
             </div>
-            <Button color="blue" onClick={() => { setFormData({}); setShowNewPaymentModal(true); }}>
+            <Button color="blue" onClick={() => { setFormData(initialFormData); setShowNewPaymentModal(true); }}>
                <i className="ri-add-line mr-2"></i> Record Payment
             </Button>
           </div>
@@ -158,13 +162,29 @@ const PaymentsPage: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                             payment.status === 'Paid' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'
+                             payment.category === 'Received' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
                           }`}>
-                            <i className="ri-money-dollar-circle-line text-xl"></i>
+                            <i className={payment.category === 'Received' ? "ri-arrow-left-down-line text-xl" : "ri-arrow-right-up-line text-xl"}></i>
                           </div>
                           <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white">{payment.surrogateName}</h3>
-                            <p className="text-sm text-gray-500">{payment.type} • {payment.dueDate}</p>
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-semibold text-gray-900 dark:text-white">
+                                    {payment.surrogateName || payment.parentName || 'Unknown Recipient'}
+                                </h3>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                    payment.category === 'Received' 
+                                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30' 
+                                    : 'bg-orange-50 text-orange-600 dark:bg-orange-900/30'
+                                }`}>
+                                    {payment.category || 'Withdrawn'}
+                                </span>
+                            </div>
+                            <p className="text-sm text-gray-500">
+                                {payment.type} • {payment.dueDate}
+                                <span className="ml-2 text-xs font-normal text-gray-400 capitalize whitespace-nowrap">
+                                    ({payment.surrogateId ? 'Surrogate' : payment.parentId ? 'Parent' : 'N/A'})
+                                </span>
+                            </p>
                           </div>
                         </div>
                         <div className="text-right">
@@ -189,7 +209,12 @@ const PaymentsPage: React.FC = () => {
                     <div className="space-y-4 mb-6">
                        <div className="flex justify-between border-b dark:border-gray-700 pb-2">
                           <span className="text-gray-600 dark:text-gray-400">Recipient</span>
-                          <span className="font-medium dark:text-white">{selectedPayment.surrogateName}</span>
+                          <span className="font-medium dark:text-white">
+                            {selectedPayment.surrogateName || selectedPayment.parentName}
+                            <span className="ml-2 text-xs text-gray-400">
+                              ({selectedPayment.surrogateId ? 'Surrogate' : 'Parent'})
+                            </span>
+                          </span>
                        </div>
                        <div className="flex justify-between border-b dark:border-gray-700 pb-2">
                           <span className="text-gray-600 dark:text-gray-400">Amount</span>
@@ -197,7 +222,16 @@ const PaymentsPage: React.FC = () => {
                        </div>
                        <div className="flex justify-between border-b dark:border-gray-700 pb-2">
                           <span className="text-gray-600 dark:text-gray-400">Type</span>
-                          <span className="font-medium dark:text-white">{selectedPayment.type}</span>
+                          <div className="flex flex-col items-end">
+                            <span className="font-medium dark:text-white">{selectedPayment.type}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full mt-1 ${
+                                selectedPayment.category === 'Received' 
+                                ? 'bg-blue-100 text-blue-700' 
+                                : 'bg-orange-100 text-orange-700'
+                            }`}>
+                                {selectedPayment.category || 'Withdrawn'}
+                            </span>
+                          </div>
                        </div>
                        <div className="flex justify-between border-b dark:border-gray-700 pb-2">
                           <span className="text-gray-600 dark:text-gray-400">Status</span>
@@ -235,9 +269,30 @@ const PaymentsPage: React.FC = () => {
                      <h2 className="text-xl font-bold mb-4 dark:text-white">{formData.id ? 'Edit Payment' : 'New Payment'}</h2>
                      <form onSubmit={handleSavePayment} className="space-y-4">
                         <UserSelector 
-                            value={formData.surrogateId || ''} 
-                            onChange={id => setFormData({...formData, surrogateId: id})}
-                            onSelect={user => setFormData({...formData, surrogateId: user.id, surrogateName: user.name.split(' (')[0]})}
+                            value={formData.surrogateId || formData.parentId || ''} 
+                            onChange={() => {
+                                // We'll handle this in onSelect to get the role
+                            }}
+                            onSelect={user => {
+                                const cleanName = user.name.split(' (')[0];
+                                if (user.role === 'Surrogate') {
+                                    setFormData({
+                                        ...formData, 
+                                        surrogateId: user.id, 
+                                        surrogateName: cleanName,
+                                        parentId: '',
+                                        parentName: ''
+                                    });
+                                } else {
+                                    setFormData({
+                                        ...formData, 
+                                        parentId: user.id, 
+                                        parentName: cleanName,
+                                        surrogateId: '',
+                                        surrogateName: ''
+                                    });
+                                }
+                            }}
                             label="Recipient (Surrogate or Parent)"
                             required
                         />
@@ -253,13 +308,38 @@ const PaymentsPage: React.FC = () => {
                             </button>
                         </div>
 
+                        <div className="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                            <button
+                                type="button"
+                                onClick={() => setFormData({...formData, category: 'Withdrawn'})}
+                                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${
+                                    formData.category === 'Withdrawn'
+                                    ? 'bg-white dark:bg-gray-600 text-orange-600 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                <i className="ri-arrow-right-up-line mr-1"></i> Withdrawn
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFormData({...formData, category: 'Received'})}
+                                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${
+                                    formData.category === 'Received'
+                                    ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                <i className="ri-arrow-left-down-line mr-1"></i> Received
+                            </button>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <input 
                                 type="number" 
                                 placeholder="Amount" 
                                 required 
                                 className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                value={formData.amount} 
+                                value={formData.amount || ''} 
                                 onChange={e => setFormData({...formData, amount: Number(e.target.value)})} 
                             />
                             <select 

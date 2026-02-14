@@ -49,11 +49,21 @@ export const taskService = {
   // Create a new task
   createTask: async (task: Omit<Task, 'id'>): Promise<string> => {
     try {
+      console.log('Creating new task:', {
+        title: task.title,
+        assignee: task.assignee,
+        assigneeName: task.assigneeName,
+        dueDate: task.dueDate,
+        isCompleted: task.isCompleted
+      });
+      
       const docRef = await addDoc(collection(db, COLLECTION_NAME), {
         ...task,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       });
+      
+      console.log('Task created successfully with ID:', docRef.id);
       return docRef.id;
     } catch (error) {
       console.error('Error creating task:', error);

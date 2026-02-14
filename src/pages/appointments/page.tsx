@@ -8,7 +8,10 @@ import Badge from '../../components/base/Badge';
 import { appointmentService } from '../../services/appointmentService';
 import type { Appointment } from '../../services/appointmentService';
 import UserSelector from '../../components/feature/UserSelector';
+import MultiUserSelector from '../../components/feature/MultiUserSelector';
 import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 // Define appointment types
 const appointmentTypes = [
@@ -46,7 +49,7 @@ const AppointmentsPage: React.FC = () => {
     notes: '',
     userId: ''
   });
-  const [participantsInput, setParticipantsInput] = useState('');
+  const [participantNames, setParticipantNames] = useState<Record<string, string>>({});
 
   const fetchAppointments = async () => {
     setIsLoading(true);
@@ -67,6 +70,44 @@ const AppointmentsPage: React.FC = () => {
   useEffect(() => {
     fetchAppointments();
   }, []);
+
+  const fetchParticipantNames = async (userIds: string[]) => {
+    const names: Record<string, string> = {};
+    for (const userId of userIds) {
+      if (participantNames[userId]) continue;
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          let name = '';
+          if (data.formData) {
+            name = [data.formData.firstName, data.formData.lastName].filter(Boolean).join(' ');
+          }
+          if (!name && data.parent1?.name) {
+            name = data.parent1.name;
+          }
+          if (!name) {
+            name = [data.firstName, data.lastName].filter(Boolean).join(' ');
+          }
+          if (!name) {
+            name = data.email || 'Unknown User';
+          }
+          names[userId] = `${name} (${data.role || 'User'})`;
+        } else {
+          names[userId] = 'Unknown User';
+        }
+      } catch (error) {
+        console.error("Error fetching participant name:", error);
+      }
+    }
+    setParticipantNames(prev => ({ ...prev, ...names }));
+  };
+
+  useEffect(() => {
+    if (selectedAppointment?.participants) {
+      fetchParticipantNames(selectedAppointment.participants);
+    }
+  }, [selectedAppointment]);
 
   const filteredAppointments = useMemo(() => {
      if (!Array.isArray(appointments)) return [];
@@ -157,16 +198,15 @@ const AppointmentsPage: React.FC = () => {
       participants: [],
       location: '',
       status: 'scheduled',
-      notes: ''
+      notes: '',
+      userId: ''
     });
-    setParticipantsInput('');
     setShowModal(true);
   };
 
   const handleOpenEditModal = (appointment: Appointment) => {
     setIsEditing(true);
     setFormData(appointment);
-    setParticipantsInput(Array.isArray(appointment.participants) ? appointment.participants.join(', ') : '');
     setShowModal(true);
     setSelectedAppointment(null); // Close detail modal if open
   };
@@ -175,8 +215,7 @@ const AppointmentsPage: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const participants = participantsInput.split(',').map(p => p.trim()).filter(p => p);
-      const appointmentData = { ...formData, participants } as Appointment;
+      const appointmentData = formData as Appointment;
 
       if (isEditing && appointmentData.id) {
         await appointmentService.updateAppointment(appointmentData.id, appointmentData);
@@ -480,10 +519,10 @@ const AppointmentsPage: React.FC = () => {
                              <i className="ri-group-line text-purple-500"></i> Participants
                         </h4>
                         <div className="flex flex-wrap gap-2">
-                          {(selectedAppointment.participants && Array.isArray(selectedAppointment.participants) && selectedAppointment.participants.length > 0) ? selectedAppointment.participants.map((participant, index) => (
-                            <div key={index} className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-600 shadow-sm">
-                              <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500"></div>
-                              <span className="text-gray-700 dark:text-gray-200 text-sm">{participant}</span>
+                          {(selectedAppointment.participants && Array.isArray(selectedAppointment.participants) && selectedAppointment.participants.length > 0) ? selectedAppointment.participants.map((participantId, index) => (
+                            <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full border border-blue-100 dark:border-blue-800 shadow-sm">
+                              <i className="ri-user-line text-xs"></i>
+                              <span className="text-sm font-medium">{participantNames[participantId] || 'Loading...'}</span>
                             </div>
                           )) : (
                               <span className="text-gray-500 text-sm italic">No participants listed</span>
@@ -629,13 +668,11 @@ const AppointmentsPage: React.FC = () => {
                         </div>
 
                          <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Participants (comma separated)</label>
-                            <input 
-                                type="text" 
-                                value={participantsInput || ''} 
-                                onChange={e => setParticipantsInput(e.target.value)}
-                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                placeholder="e.g. John Doe, Jane Doe"
+                            <MultiUserSelector 
+                                value={formData.participants || []} 
+                                onChange={val => setFormData({...formData, participants: val})}
+                                label="Participants"
+                                placeholder="Search and add participants..."
                             />
                         </div>
 

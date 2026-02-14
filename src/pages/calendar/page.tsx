@@ -8,7 +8,10 @@ import Badge from '../../components/base/Badge';
 import { appointmentService } from '../../services/appointmentService';
 import type { Appointment } from '../../services/appointmentService';
 import UserSelector from '../../components/feature/UserSelector';
+import MultiUserSelector from '../../components/feature/MultiUserSelector';
 import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 const CalendarPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -18,6 +21,7 @@ const CalendarPage: React.FC = () => {
   const [events, setEvents] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showMedicalModal, setShowMedicalModal] = useState(false);
+  const [participantNames, setParticipantNames] = useState<Record<string, string>>({});
 
   // New Event Form State
   const [formData, setFormData] = useState<Partial<Appointment>>({
@@ -127,11 +131,40 @@ const CalendarPage: React.FC = () => {
 
   const handleCreateEvent = async () => {
     try {
-        await appointmentService.createAppointment(formData as any);
+        if (formData.id) {
+            await appointmentService.updateAppointment(formData.id, formData as any);
+        } else {
+            await appointmentService.createAppointment(formData as any);
+        }
         await fetchEvents();
         setShowNewEventModal(false);
+        setFormData({
+            title: '',
+            type: 'consultation',
+            date: new Date().toISOString().split('T')[0],
+            time: '09:00',
+            duration: '60 min',
+            participants: [],
+            location: 'Clinic',
+            status: 'scheduled',
+            notes: '',
+            userId: ''
+        });
     } catch (error) {
-        console.error("Failed to create event", error);
+        console.error("Failed to save event", error);
+    }
+  };
+
+  const handleEditEvent = () => {
+    if (selectedEvent) {
+        setFormData({
+            ...selectedEvent,
+            // Ensure date and time are strings for input fields
+            date: selectedEvent.date,
+            time: selectedEvent.time
+        });
+        setShowNewEventModal(true);
+        setSelectedEvent(null);
     }
   };
 
@@ -145,6 +178,50 @@ const CalendarPage: React.FC = () => {
           console.error("Failed to delete event", error);
       }
   }
+
+  // Fetch participant names from user IDs
+  const fetchParticipantNames = async (userIds: string[]) => {
+    const names: Record<string, string> = {};
+    for (const userId of userIds) {
+      if (participantNames[userId]) {
+        names[userId] = participantNames[userId];
+        continue;
+      }
+      try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          let name = '';
+          if (data.formData) {
+            name = [data.formData.firstName, data.formData.lastName].filter(Boolean).join(' ');
+          }
+          if (!name && data.parent1?.name) {
+            name = data.parent1.name;
+          }
+          if (!name) {
+            name = [data.firstName, data.lastName].filter(Boolean).join(' ');
+          }
+          if (!name) {
+            name = data.email || 'Unknown User';
+          }
+          names[userId] = `${name} (${data.role || 'User'})`;
+        } else {
+          names[userId] = userId;
+        }
+      } catch (error) {
+        console.error('Error fetching user name:', error);
+        names[userId] = userId;
+      }
+    }
+    setParticipantNames(prev => ({ ...prev, ...names }));
+  };
+
+  // Fetch participant names when event is selected
+  useEffect(() => {
+    if (selectedEvent?.participants && Array.isArray(selectedEvent.participants)) {
+      fetchParticipantNames(selectedEvent.participants);
+    }
+  }, [selectedEvent]);
 
   const renderMonthView = () => {
     const days = getDaysInMonth(currentDate);
@@ -254,7 +331,21 @@ const CalendarPage: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <Button color="blue" onClick={() => setShowNewEventModal(true)}>
+                <Button color="blue" onClick={() => {
+                  setFormData({
+                    title: '',
+                    type: 'consultation',
+                    date: new Date().toISOString().split('T')[0],
+                    time: '09:00',
+                    duration: '60 min',
+                    participants: [],
+                    location: 'Clinic',
+                    status: 'scheduled',
+                    notes: '',
+                    userId: ''
+                  });
+                  setShowNewEventModal(true);
+                }}>
                   <i className="ri-add-line mr-2"></i>
                   New Event
                 </Button>
@@ -378,11 +469,11 @@ const CalendarPage: React.FC = () => {
 
                     <div>
                       <span className="text-gray-600 dark:text-gray-400 font-medium">Participants:</span>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {(selectedEvent.participants && Array.isArray(selectedEvent.participants) && selectedEvent.participants.length > 0) ? selectedEvent.participants.map((participant, index) => (
-                          <div key={index} className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full text-xs">
-                            <i className="ri-user-line text-gray-400"></i>
-                            <span className="text-gray-900 dark:text-white">{participant}</span>
+                      <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                        {(selectedEvent.participants && Array.isArray(selectedEvent.participants) && selectedEvent.participants.length > 0) ? selectedEvent.participants.map((participantId, index) => (
+                          <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full border border-blue-100 dark:border-blue-800 shadow-sm">
+                            <i className="ri-user-line text-xs"></i>
+                            <span className="font-medium">{participantNames[participantId] || 'Loading...'}</span>
                           </div>
                         )) : (
                             <span className="text-gray-500 italic text-sm">No participants</span>
@@ -390,8 +481,17 @@ const CalendarPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {selectedEvent.notes && (
+                      <div>
+                        <span className="text-gray-600 dark:text-gray-400 font-medium">Notes:</span>
+                        <div className="mt-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-100 dark:border-gray-600">
+                          {selectedEvent.notes}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex gap-3 pt-4">
-                      <Button color="blue" className="flex-1">
+                      <Button color="blue" className="flex-1" onClick={handleEditEvent}>
                         <i className="ri-edit-line mr-2"></i>
                         Edit
                       </Button>
@@ -412,7 +512,9 @@ const CalendarPage: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full shadow-2xl">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">New Event</h2>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                      {formData.id ? 'Edit Event' : 'New Event'}
+                    </h2>
                     <button
                       onClick={() => setShowNewEventModal(false)}
                       className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
@@ -438,6 +540,14 @@ const CalendarPage: React.FC = () => {
                     <UserSelector 
                       value={formData.userId || ''} 
                       onChange={val => setFormData({...formData, userId: val})}
+                      onSelect={(user) => {
+                        // Automatically add selected user ID to participants
+                        setFormData(prev => ({
+                          ...prev,
+                          userId: user.id,
+                          participants: [user.id]
+                        }));
+                      }}
                       label="Associated User (Surrogate/Parent)"
                     />
                     
@@ -479,6 +589,15 @@ const CalendarPage: React.FC = () => {
                     </div>
 
                     <div>
+                       <MultiUserSelector 
+                          value={formData.participants || []} 
+                          onChange={val => setFormData({...formData, participants: val})}
+                          label="Participants"
+                          placeholder="Search and add participants..."
+                       />
+                    </div>
+
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Event Type
                       </label>
@@ -494,10 +613,23 @@ const CalendarPage: React.FC = () => {
                       </select>
                     </div>
 
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Notes
+                      </label>
+                      <textarea
+                        value={formData.notes || ''}
+                        onChange={e => setFormData({...formData, notes: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none resize-none"
+                        placeholder="Add any additional notes here..."
+                        rows={3}
+                      />
+                    </div>
+
                     <div className="flex gap-3 pt-4">
                       <Button color="blue" className="flex-1" onClick={handleCreateEvent}>
                         <i className="ri-save-line mr-2"></i>
-                        Create Event
+                        {formData.id ? 'Update Event' : 'Create Event'}
                       </Button>
                       <Button variant="outline" className="flex-1" onClick={() => setShowNewEventModal(false)}>
                         Cancel
@@ -512,6 +644,7 @@ const CalendarPage: React.FC = () => {
           <MedicalRecordModal 
             isOpen={showMedicalModal} 
             onClose={() => setShowMedicalModal(false)}
+            userId={formData.userId}
           />
         </main>
       </div>

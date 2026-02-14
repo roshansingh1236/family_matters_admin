@@ -16,11 +16,13 @@ import { db } from '../lib/firebase';
 export interface Payment {
   id?: string;
   surrogateId?: string; // Link to specific surrogate
-  surrogateName: string; // Denormalized for easier display or manual entry
-  parentName?: string; // NEW - For invoice tracking
+  surrogateName?: string; // Denormalized for easier display or manual entry
+  parentId?: string; // NEW - Link to specific parent
+  parentName?: string; // NEW - For invoice tracking / display
   childName?: string; // NEW - For invoice tracking
   amount: number;
   type: 'Base Compensation' | 'Allowance' | 'Medical' | 'Travel' | 'Clothing' | 'Legal' | 'Other';
+  category: 'Withdrawn' | 'Received'; // NEW - Direction of payment
   status: 'Paid' | 'Pending' | 'Scheduled' | 'Overdue' | 'Cancelled' | 'Rejected'; // UPDATED
   dueDate: string; // YYYY-MM-DD
   paidDate?: string; // YYYY-MM-DD

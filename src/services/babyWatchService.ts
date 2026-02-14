@@ -17,6 +17,10 @@ import { db, storage } from '../lib/firebase';
 export interface BabyWatchUpdate {
   id?: string;
   caseId: string; // Link to specific journey
+  parentId: string;
+  parentName: string;
+  surrogateId: string;
+  surrogateName: string;
   date: string; // YYYY-MM-DD for easier display
   gestationalAge: string; // e.g., "12 Weeks"
   weight?: string;
