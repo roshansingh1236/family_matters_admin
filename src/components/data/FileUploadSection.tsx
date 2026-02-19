@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { storageService, STORAGE_BUCKETS } from '../../services/storageService';
 import Button from '../base/Button';
 import ConfirmationDialog from '../base/ConfirmationDialog';
 
@@ -24,7 +24,7 @@ type FileUploadSectionProps = {
   onFilesChange: (files: FileRecord[]) => Promise<void> | void;
 };
 
-const BUCKET_NAME = 'users';
+const BUCKET_NAME = STORAGE_BUCKETS.USERS;
 
 const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   title,
@@ -83,22 +83,11 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     try {
       const storagePath = `${userId}/${selectedCategory}/${Date.now()}_${file.name}`;
       
-      const { data, error: uploadError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(storagePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      const { url } = await storageService.uploadFile(BUCKET_NAME, storagePath, file);
 
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(storagePath);
-            
       const newFile: FileRecord = {
         name: file.name,
-        url: publicUrl,
+        url,
         category: selectedCategory,
         uploadedAt: new Date().toISOString(),
         type: file.type,
@@ -123,13 +112,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
 
     try {
       if (fileToDelete.path) {
-          const { error: deleteError } = await supabase.storage
-            .from(BUCKET_NAME)
-            .remove([fileToDelete.path]);
-            
-          if (deleteError) {
-              console.warn('File might not exist in storage or invalid path, proceeding to remove record:', deleteError);
-          }
+          await storageService.deleteFile(BUCKET_NAME, fileToDelete.path);
       } else {
           console.warn('Could not determine storage path, removing record only.');
       }

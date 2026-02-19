@@ -1,5 +1,6 @@
 
 import { supabase } from '../lib/supabase';
+import { storageService, STORAGE_BUCKETS } from './storageService';
 
 export interface BabyWatchUpdate {
   id?: string;
@@ -21,7 +22,7 @@ export interface BabyWatchUpdate {
 }
 
 const TABLE_NAME = 'baby_watch_updates';
-const BUCKET_NAME = 'baby_watch';
+const BUCKET_NAME = STORAGE_BUCKETS.BABY_WATCH;
 
 export const babyWatchService = {
   // Fetch all updates
@@ -53,26 +54,12 @@ export const babyWatchService = {
 
   // Upload image to Supabase Storage
   uploadImage: async (file: File, caseId: string): Promise<{ url: string; path: string }> => {
-    try {
-      const timestamp = Date.now();
-      const fileName = `${caseId}_${timestamp}_${file.name}`;
-      const filePath = `updates/${fileName}`;
-      
-      const { error } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(filePath, file);
-      
-      if (error) throw error;
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(filePath);
-        
-      return { url: publicUrl, path: filePath };
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      throw error;
-    }
+    const timestamp = Date.now();
+    const fileName = `${caseId}_${timestamp}_${file.name}`;
+    const filePath = `updates/${fileName}`;
+    
+    const { url } = await storageService.uploadFile(BUCKET_NAME, filePath, file);
+    return { url, path: filePath };
   },
 
   // Create a new update
@@ -147,7 +134,7 @@ export const babyWatchService = {
   deleteUpdate: async (id: string, imagePath?: string): Promise<void> => {
     try {
       if (imagePath) {
-        await supabase.storage.from(BUCKET_NAME).remove([imagePath]);
+        await storageService.deleteFile(BUCKET_NAME, imagePath);
       }
       const { error } = await supabase
         .from(TABLE_NAME)

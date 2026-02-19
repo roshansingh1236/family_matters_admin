@@ -8,6 +8,7 @@ import Button from '../../components/base/Button';
 import EditableJsonSection from '../../components/data/EditableJsonSection';
 import AboutSection from '../../components/feature/AboutSection';
 import FileUploadSection, { type FileRecord } from '../../components/data/FileUploadSection';
+import { storageService, STORAGE_BUCKETS } from '../../services/storageService';
 import Toast from '../../components/base/Toast';
 import {
   CORE_PROFILE_TEMPLATE,
@@ -255,17 +256,39 @@ const ParentProfilePage: React.FC = () => {
     async (field: string, value: Record<string, unknown>) => {
       if (!id) return;
       
+      let updatePayload: Record<string, any> = {};
+
+      if (field.includes('.')) {
+          const [topLevel, nested] = field.split('.');
+          const currentTopLevel = (parent as any)?.[topLevel] || {};
+          updatePayload = {
+              [topLevel]: {
+                  ...currentTopLevel,
+                  [nested]: value
+              }
+          };
+      } else {
+          updatePayload = { [field]: value };
+      }
+
       const { error: updateError } = await supabase
         .from('users')
-        .update({ [field]: value })
+        .update(updatePayload)
         .eq('id', id);
 
       if (updateError) {
         console.error(`Failed to update ${field}`, updateError);
         setToast({ message: `Failed to update ${field}`, type: 'error' });
+      } else {
+        // Immediate local reflection
+        setParent((prev: any) => ({
+            ...prev,
+            ...updatePayload
+        }));
+        setToast({ message: `${field} updated successfully`, type: 'success' });
       }
     },
-    [id]
+    [id, parent]
   );
 
   const handleUpdateCore = useCallback(
@@ -288,6 +311,13 @@ const ParentProfilePage: React.FC = () => {
       if (updateError) {
         console.error('Failed to update core profile', updateError);
         setToast({ message: 'Failed to update core profile', type: 'error' });
+      } else {
+        // Immediate local reflection
+        setParent((prev: any) => ({
+            ...prev,
+            ...filteredValue
+        }));
+        setToast({ message: 'Core profile updated successfully', type: 'success' });
       }
     },
     [id]
@@ -330,19 +360,11 @@ const ParentProfilePage: React.FC = () => {
       setIsUploadingImage(true);
       const storagePath = `${id}/profile/avatar_${Date.now()}_${file.name}`;
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('users')
-        .upload(storagePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('users')
-        .getPublicUrl(storagePath);
+      const { url } = await storageService.uploadFile(STORAGE_BUCKETS.USERS, storagePath, file);
 
       const { error: updateError } = await supabase
         .from('users')
-        .update({ profileImageUrl: publicUrl })
+        .update({ profileImageUrl: url })
         .eq('id', id);
 
       if (updateError) throw updateError;

@@ -50,6 +50,7 @@ const statusDefinitions = [
 
 const ParentsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
+  const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('grid');
   const [selectedParent, setSelectedParent] = useState<User | null>(null);
   const [parents, setParents] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -200,10 +201,36 @@ const ParentsPage: React.FC = () => {
         <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Intended Parents</h1>
-            <p className="text-gray-600 dark:text-gray-400">Manage all intended parents and their journey progress.</p>
-          </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Intended Parents</h1>
+                <p className="text-gray-600 dark:text-gray-400">Manage all intended parents and their journey progress.</p>
+              </div>
+              <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+                <button
+                  onClick={() => setViewStyle('grid')}
+                  className={`p-2 rounded-md transition-colors cursor-pointer ${
+                    viewStyle === 'grid'
+                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  }`}
+                  title="Grid View"
+                >
+                  <i className="ri-layout-grid-line text-lg"></i>
+                </button>
+                <button
+                  onClick={() => setViewStyle('table')}
+                  className={`p-2 rounded-md transition-colors cursor-pointer ${
+                    viewStyle === 'table'
+                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  }`}
+                  title="Table View"
+                >
+                  <i className="ri-table-line text-lg"></i>
+                </button>
+              </div>
+            </div>
 
           {/* Status Tabs */}
           <div className="mb-6 overflow-x-auto">
@@ -244,7 +271,7 @@ const ParentsPage: React.FC = () => {
                 <Card className="p-6 text-center text-gray-600 dark:text-gray-300">
                   No intended parents found for this filter.
                 </Card>
-              ) : (
+              ) : viewStyle === 'grid' ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                   {filteredParents.map((parent) => (
                     <Card
@@ -300,6 +327,68 @@ const ParentsPage: React.FC = () => {
                     </Card>
                   ))}
                 </div>
+              ) : (
+                <Card className="overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs uppercase">
+                        <tr>
+                          <th className="px-6 py-3 font-semibold">Name</th>
+                          <th className="px-6 py-3 font-semibold">Status</th>
+                          <th className="px-6 py-3 font-semibold">Location</th>
+                          <th className="px-6 py-3 font-semibold">Timeline</th>
+                          <th className="px-6 py-3 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {filteredParents.map((parent) => (
+                          <tr 
+                            key={parent.id} 
+                            className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+                            onClick={() => setSelectedParent(parent)}
+                          >
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <i className="ri-parent-line text-purple-600 dark:text-purple-400 text-sm"></i>
+                                </div>
+                                <div>
+                                  <div className="font-medium text-gray-900 dark:text-white">
+                                    {getDisplayName(parent)}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-500 font-mono">
+                                    {parent.id.split('-')[0]}...
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              {getStatusBadge(parent)}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                              {getLocation(parent)}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                              {getTimeline(parent)}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(event: React.MouseEvent) => {
+                                  event.stopPropagation();
+                                  navigate(`/parents/${parent.id}`);
+                                }}
+                              >
+                                <i className="ri-eye-line"></i>
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
               )}
             </>
           )}

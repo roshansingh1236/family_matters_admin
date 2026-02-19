@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 import { messagingService, type Conversation, type Message } from '../../services/messagingService';
 import { supabase } from '../../lib/supabase';
+import { storageService, STORAGE_BUCKETS } from '../../services/storageService';
 import SearchableDropdown from '../../components/base/SearchableDropdown';
 import { MoreVertical, Smile, Paperclip, Send, Trash2, Reply, Image as ImageIcon, File as FileIcon, X } from 'lucide-react';
 
@@ -130,17 +131,9 @@ const MessagesPage: React.FC = () => {
         const fileName = `${Date.now()}.${fileExt}`;
         const filePath = `messages/${selectedConversation.id}/${fileName}`;
         
-        const { error: uploadError } = await supabase.storage
-          .from('messages')
-          .upload(filePath, selectedMedia.file);
+        const { url } = await storageService.uploadFile(STORAGE_BUCKETS.MESSAGES, filePath, selectedMedia.file);
           
-        if (uploadError) throw uploadError;
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('messages')
-          .getPublicUrl(filePath);
-          
-        mediaData = { url: publicUrl, type: selectedMedia.type };
+        mediaData = { url, type: selectedMedia.type };
       }
 
       await messagingService.sendMessage(

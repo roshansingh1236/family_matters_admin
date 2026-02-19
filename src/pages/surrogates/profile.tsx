@@ -10,6 +10,7 @@ import AboutSection from '../../components/feature/AboutSection';
 import FileUploadSection, { type FileRecord } from '../../components/data/FileUploadSection';
 import Toast from '../../components/base/Toast';
 import Badge from '../../components/base/Badge';
+import { storageService, STORAGE_BUCKETS } from '../../services/storageService';
 import { medicalService, type MedicalRecord, type Medication } from '../../services/medicalService';
 import { paymentService } from '../../services/paymentService';
 import type { Payment } from '../../types';
@@ -289,17 +290,40 @@ const SurrogateProfilePage: React.FC = () => {
   const handleUpdateField = useCallback(
     async (field: string, value: Record<string, unknown>) => {
       if (!id) return;
+
+      let updatePayload: Record<string, any> = {};
+
+      if (field.includes('.')) {
+          const [topLevel, nested] = field.split('.');
+          const currentTopLevel = (surrogate as any)?.[topLevel] || {};
+          updatePayload = {
+              [topLevel]: {
+                  ...currentTopLevel,
+                  [nested]: value
+              }
+          };
+      } else {
+          updatePayload = { [field]: value };
+      }
+
       const { error: updateError } = await supabase
         .from('users')
-        .update({ [field]: value })
+        .update(updatePayload)
         .eq('id', id);
 
       if (updateError) {
         console.error(`Failed to update ${field}`, updateError);
         setToast({ message: `Failed to update ${field}`, type: 'error' });
+      } else {
+        // Immediate local reflection
+        setSurrogate((prev: any) => ({
+            ...prev,
+            ...updatePayload
+        }));
+        setToast({ message: `${field} updated successfully`, type: 'success' });
       }
     },
-    [id]
+    [id, surrogate]
   );
 
   const handleUpdateCore = useCallback(
@@ -322,6 +346,13 @@ const SurrogateProfilePage: React.FC = () => {
       if (updateError) {
         console.error('Failed to update core profile', updateError);
         setToast({ message: 'Failed to update core profile', type: 'error' });
+      } else {
+        // Immediate local reflection
+        setSurrogate((prev: any) => ({
+            ...prev,
+            ...filteredValue
+        }));
+        setToast({ message: 'Core profile updated successfully', type: 'success' });
       }
     },
     [id]
@@ -434,19 +465,11 @@ const SurrogateProfilePage: React.FC = () => {
       setIsUploadingImage(true);
       const storagePath = `${id}/profile/avatar_${Date.now()}_${file.name}`;
       
-      const { error: uploadError } = await supabase.storage
-        .from('users')
-        .upload(storagePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('users')
-        .getPublicUrl(storagePath);
+      const { url } = await storageService.uploadFile(STORAGE_BUCKETS.USERS, storagePath, file);
 
       const { error: updateError } = await supabase
         .from('users')
-        .update({ profileImageUrl: publicUrl })
+        .update({ profileImageUrl: url })
         .eq('id', id);
 
       if (updateError) throw updateError;
