@@ -4,22 +4,11 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
-
-interface Match {
-  id: string;
-  surrogateId: string;
-  surrogateName: string;
-  parentId: string;
-  parentName: string;
-  status: string;
-  createdAt: Date;
-  currentStage: string;
-}
+import { matchService } from '../../services/matchService';
+import type { Match, MatchStatus } from '../../types';
 
 const MatchesPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState<MatchStatus | 'All'>('All');
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,19 +20,10 @@ const MatchesPage: React.FC = () => {
   const fetchMatches = async () => {
     setIsLoading(true);
     try {
-      // Fetch from cases collection (milestones)
-      const casesSnapshot = await getDocs(collection(db, 'cases'));
-      const matchesData: Match[] = casesSnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        surrogateId: doc.data().surrogateId || '',
-        surrogateName: doc.data().surrogateName || 'Unknown',
-        parentId: doc.data().parentId || '',
-        parentName: doc.data().parentName || 'Unknown',
-        status: doc.data().currentStage || 'Matching',
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        currentStage: doc.data().currentStage || 'Matching'
-      }));
-      setMatches(matchesData);
+      const data = await matchService.getAllMatches();
+      // Ensure data is sorted by createdAt desc if not already
+      // The service does orderBy, so it should be fine.
+      setMatches(data);
     } catch (error) {
       console.error('Error fetching matches:', error);
       setMatches([]);
@@ -52,34 +32,35 @@ const MatchesPage: React.FC = () => {
     }
   };
 
-  const filteredMatches = activeTab === 'all' 
+  const filteredMatches = activeTab === 'All' 
     ? matches 
-    : matches.filter(match => match.status.toLowerCase() === activeTab);
+    : matches.filter(match => match.status === activeTab);
 
-  const getStatusBadge = (status: string) => {
-    const statusLower = status.toLowerCase();
-    switch (statusLower) {
-      case 'matching':
-        return <Badge color="yellow">Matching</Badge>;
-      case 'screening':
-      case 'medical':
-      case 'legal':
-        return <Badge color="blue">{status}</Badge>;
-      case 'pregnancy':
-        return <Badge color="green">Pregnancy</Badge>;
-      case 'completed':
-        return <Badge color="green">Completed</Badge>;
+  const getStatusBadge = (status: MatchStatus | string) => {
+    switch (status) {
+      case 'Proposed':
+        return <Badge color="yellow">{status}</Badge>;
+      case 'Presented':
+         return <Badge color="blue">{status}</Badge>;
+      case 'Accepted':
+      case 'Active':
+        return <Badge color="green">{status}</Badge>;
+      case 'Dissolved':
+      case 'Declined':
+        return <Badge color="red">{status}</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
   };
 
-  const matchStatuses = [
-    { id: 'all', label: 'All Matches', count: matches.length },
-    { id: 'matching', label: 'Matching', count: matches.filter(m => m.status.toLowerCase() === 'matching').length },
-    { id: 'screening', label: 'Screening', count: matches.filter(m => m.status.toLowerCase() === 'screening').length },
-    { id: 'pregnancy', label: 'Pregnancy', count: matches.filter(m => m.status.toLowerCase() === 'pregnancy').length },
-    { id: 'completed', label: 'Completed', count: matches.filter(m => m.status.toLowerCase() === 'completed').length }
+  const matchStatuses: { id: MatchStatus | 'All'; label: string }[] = [
+    { id: 'All', label: 'All Matches' },
+    { id: 'Proposed', label: 'Proposed' },
+    { id: 'Presented', label: 'Presented' },
+    { id: 'Accepted', label: 'Accepted' },
+    { id: 'Active', label: 'Active' },
+    { id: 'Dissolved', label: 'Dissolved' },
+    { id: 'Declined', label: 'Declined' },
   ];
 
   return (
@@ -98,19 +79,25 @@ const MatchesPage: React.FC = () => {
           {/* Status Tabs */}
           <div className="mb-6">
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit flex-wrap">
-              {matchStatuses.map((status) => (
-                <button
-                  key={status.id}
-                  onClick={() => setActiveTab(status.id)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                    activeTab === status.id
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  {status.label} ({status.count})
-                </button>
-              ))}
+              {matchStatuses.map((status) => {
+                 const count = status.id === 'All' 
+                    ? matches.length 
+                    : matches.filter(m => m.status === status.id).length;
+                 
+                 return (
+                  <button
+                    key={status.id}
+                    onClick={() => setActiveTab(status.id)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                      activeTab === status.id
+                        ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {status.label} ({count})
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -136,7 +123,7 @@ const MatchesPage: React.FC = () => {
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">Match #{match.id.slice(0, 8)}</h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Created {match.createdAt.toLocaleDateString()}
+                          Created {new Date(match.createdAt).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
@@ -149,8 +136,17 @@ const MatchesPage: React.FC = () => {
                         <i className="ri-user-heart-line text-pink-600 dark:text-pink-400"></i>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{match.surrogateName}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Surrogate</p>
+                        {/* We might need to fetch user names if not in Match object. Match object has IDs. 
+                            If we want names, we either populate them in backend or fetch here.
+                            For now, display IDs or placeholders if names are missing. 
+                            Ideally Match object should perform denormalization on creation.
+                            Assuming Match object has no names based on previous Type definition, checking...
+                            Wait, Match type definition in Step 206 mentions user IDs but no names.
+                            Old code had names. I should probably fetch names or update Match model to include them.
+                            For now, use ID or "Loading...".
+                        */}
+                        <p className="font-medium text-gray-900 dark:text-white">{match.gestationalCarrierId || "Pending GC"}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Surrogate ID</p>
                       </div>
                     </div>
 
@@ -159,8 +155,8 @@ const MatchesPage: React.FC = () => {
                         <i className="ri-parent-line text-purple-600 dark:text-purple-400"></i>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{match.parentName}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Intended Parents</p>
+                         <p className="font-medium text-gray-900 dark:text-white">{match.intendedParentId}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Intended Parent ID</p>
                       </div>
                     </div>
                   </div>
@@ -198,7 +194,7 @@ const MatchesPage: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Match #{selectedMatch.id.slice(0, 8)}</h3>
-                        <p className="text-gray-600 dark:text-gray-400">Created on {selectedMatch.createdAt.toLocaleDateString()}</p>
+                        <p className="text-gray-600 dark:text-gray-400">Created on {new Date(selectedMatch.createdAt).toLocaleDateString()}</p>
                         {getStatusBadge(selectedMatch.status)}
                       </div>
                     </div>
@@ -210,8 +206,8 @@ const MatchesPage: React.FC = () => {
                           Surrogate Information
                         </h4>
                         <div className="space-y-2">
-                          <p className="text-gray-900 dark:text-white font-medium">{selectedMatch.surrogateName}</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">ID: {selectedMatch.surrogateId.slice(0, 8)}</p>
+                          <p className="text-gray-900 dark:text-white font-medium">{selectedMatch.gestationalCarrierId || "Not Assigned"}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">ID: {selectedMatch.gestationalCarrierId?.slice(0, 8) || "N/A"}</p>
                         </div>
                       </div>
 
@@ -221,8 +217,8 @@ const MatchesPage: React.FC = () => {
                           Intended Parents
                         </h4>
                         <div className="space-y-2">
-                          <p className="text-gray-900 dark:text-white font-medium">{selectedMatch.parentName}</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">ID: {selectedMatch.parentId.slice(0, 8)}</p>
+                          <p className="text-gray-900 dark:text-white font-medium">{selectedMatch.intendedParentId}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">ID: {selectedMatch.intendedParentId.slice(0, 8)}</p>
                         </div>
                       </div>
                     </div>

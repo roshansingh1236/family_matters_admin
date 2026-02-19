@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { supabase } from '../../lib/supabase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
@@ -11,9 +10,9 @@ import AboutSection from '../../components/feature/AboutSection';
 import FileUploadSection, { type FileRecord } from '../../components/data/FileUploadSection';
 import Toast from '../../components/base/Toast';
 import Badge from '../../components/base/Badge';
-import { db, storage } from '../../lib/firebase';
-import { medicalService, MedicalRecord, Medication } from '../../services/medicalService';
-import { paymentService, Payment } from '../../services/paymentService';
+import { medicalService, type MedicalRecord, type Medication } from '../../services/medicalService';
+import { paymentService } from '../../services/paymentService';
+import type { Payment } from '../../types';
 import {
   CORE_PROFILE_TEMPLATE,
   FORM_CONTACT_TEMPLATE,
@@ -70,7 +69,7 @@ const TABS = [
 const SurrogateProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [surrogate, setSurrogate] = useState<FirestoreUser>(null);
+  const [surrogate, setSurrogate] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -84,7 +83,27 @@ const SurrogateProfilePage: React.FC = () => {
   const [medications, setMedications] = useState<Medication[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
 
-  const surrogateDocRef = useMemo(() => (id ? doc(db, 'users', id) : null), [id]);
+  const fetchSurrogate = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      
+      if (fetchError) throw fetchError;
+      setSurrogate(data);
+      setError(null);
+    } catch (err: any) {
+      console.error('Failed to load surrogate profile', err);
+      setError('Unable to load surrogate profile. Please try again later.');
+      setSurrogate(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     if (!id) {
@@ -93,36 +112,25 @@ const SurrogateProfilePage: React.FC = () => {
       return;
     }
 
-    if (!surrogateDocRef) {
-      setSurrogate(null);
-      setError('Surrogate profile not found.');
-      setIsLoading(false);
-      return;
-    }
+    fetchSurrogate();
 
-    const unsubscribe = onSnapshot(
-      surrogateDocRef,
-      (snapshot) => {
-        if (!snapshot.exists()) {
-          setSurrogate(null);
-          setError('Surrogate profile not found.');
-        } else {
-          setSurrogate({
-            id: snapshot.id,
-            ...(snapshot.data() as Record<string, unknown>)
-          });
-          setError(null);
+    // Setup real-time subscription
+    const channel = supabase
+      .channel(`surrogate-profile-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${id}`
+        },
+        (payload) => {
+          setSurrogate(payload.new);
         }
-        setIsLoading(false);
-      },
-      (err) => {
-        console.error('Failed to load surrogate profile', err);
-        setError('Unable to load surrogate profile. Please try again later.');
-        setSurrogate(null);
-        setIsLoading(false);
-      }
-    );
-    
+      )
+      .subscribe();
+
     // Fetch Clinical & Payment Data
     const loadAdditionalData = async () => {
         try {
@@ -140,8 +148,10 @@ const SurrogateProfilePage: React.FC = () => {
     };
     loadAdditionalData();
 
-    return () => unsubscribe();
-  }, [id, surrogateDocRef]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, fetchSurrogate]);
 
   const formatDateTime = (value: unknown) => {
     if (!value) return '—';
@@ -176,7 +186,7 @@ const SurrogateProfilePage: React.FC = () => {
     return displayName
       .split(' ')
       .filter(Boolean)
-      .map((part) => part[0]?.toUpperCase() ?? '')
+      .map((part: string) => part[0]?.toUpperCase() ?? '')
       .join('')
       .slice(0, 2) || 'FM';
   }, [displayName]);
@@ -278,15 +288,23 @@ const SurrogateProfilePage: React.FC = () => {
 
   const handleUpdateField = useCallback(
     async (field: string, value: Record<string, unknown>) => {
-      if (!surrogateDocRef) return;
-      await updateDoc(surrogateDocRef, { [field]: value });
+      if (!id) return;
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ [field]: value })
+        .eq('id', id);
+
+      if (updateError) {
+        console.error(`Failed to update ${field}`, updateError);
+        setToast({ message: `Failed to update ${field}`, type: 'error' });
+      }
     },
-    [surrogateDocRef]
+    [id]
   );
 
   const handleUpdateCore = useCallback(
     async (value: Record<string, unknown>) => {
-      if (!surrogateDocRef) return;
+      if (!id) return;
       const filteredValue = Object.keys(value).reduce<Record<string, unknown>>((acc, key) => {
         if (SURROGATE_CORE_FIELDS.includes(key as (typeof SURROGATE_CORE_FIELDS)[number])) {
           acc[key] = value[key];
@@ -295,16 +313,30 @@ const SurrogateProfilePage: React.FC = () => {
       }, {});
 
       if (Object.keys(filteredValue).length === 0) return;
-      await updateDoc(surrogateDocRef, filteredValue);
+      
+      const { error: updateError } = await supabase
+        .from('users')
+        .update(filteredValue)
+        .eq('id', id);
+
+      if (updateError) {
+        console.error('Failed to update core profile', updateError);
+        setToast({ message: 'Failed to update core profile', type: 'error' });
+      }
     },
-    [surrogateDocRef]
+    [id]
   );
   
   const handleStatusChange = async (newStatus: string) => {
-    if (!surrogateDocRef) return;
+    if (!id) return;
     setIsUpdatingStatus(true);
     try {
-      await updateDoc(surrogateDocRef, { status: newStatus });
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
       setToast({ message: 'Status updated successfully', type: 'success' });
     } catch (error) {
       console.error('Failed to update status', error);
@@ -386,14 +418,13 @@ const SurrogateProfilePage: React.FC = () => {
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !surrogateDocRef) return;
+    if (!file || !id) return;
 
     if (!file.type.startsWith('image/')) {
         setToast({ message: 'Please upload an image file', type: 'error' });
         return;
     }
 
-    // Limit file size to 5MB
     if (file.size > 5 * 1024 * 1024) {
         setToast({ message: 'File size must be less than 5MB', type: 'error' });
         return;
@@ -401,26 +432,26 @@ const SurrogateProfilePage: React.FC = () => {
 
     try {
       setIsUploadingImage(true);
-      const storageRef = ref(storage, `users/${id}/profile/avatar_${Date.now()}_${file.name}`);
-      const uploadTask = uploadBytesResumable(storageRef, file);
+      const storagePath = `${id}/profile/avatar_${Date.now()}_${file.name}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('users')
+        .upload(storagePath, file);
 
-      await new Promise<void>((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          null,
-          (error) => reject(error),
-          async () => {
-            try {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              await updateDoc(surrogateDocRef, { profileImageUrl: downloadURL });
-              setToast({ message: 'Profile picture updated successfully', type: 'success' });
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          }
-        );
-      });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('users')
+        .getPublicUrl(storagePath);
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ profileImageUrl: publicUrl })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
+
+      setToast({ message: 'Profile picture updated successfully', type: 'success' });
     } catch (error) {
       console.error('Error uploading image:', error);
       setToast({ message: 'Failed to upload profile picture', type: 'error' });
@@ -649,13 +680,13 @@ const SurrogateProfilePage: React.FC = () => {
                                 )}
                                 
                                 {surrogate.documents
-                                    ?.filter(doc => {
+                                    ?.filter((doc: any) => {
                                         const isImage = doc.type?.startsWith('image/');
                                         const hasImageExt = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.name);
                                         const isMissingType = !doc.type;
                                         return isImage || hasImageExt || (isMissingType && hasImageExt);
                                     })
-                                    .map((doc, index) => (
+                                    .map((doc: any, index: number) => (
                                         <div key={`${doc.url}-${index}`} className="break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 shadow-md group relative">
                                             <img
                                                 src={doc.url}
@@ -667,7 +698,7 @@ const SurrogateProfilePage: React.FC = () => {
                                     ))
                                 }
 
-                                {!surrogate.profileImageUrl && (!surrogate.documents || !surrogate.documents.some(d => d.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(d.name))) && (
+                                 {(!surrogate.profileImageUrl && (!surrogate.documents || !surrogate.documents.some((d: any) => d.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(d.name)))) && (
                                      <div className="break-inside-avoid flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 text-4xl text-gray-300 dark:text-gray-600">
                                         <i className="ri-image-line"></i>
                                     </div>

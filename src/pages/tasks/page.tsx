@@ -6,8 +6,7 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import { taskService, type Task } from '../../services/taskService';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase';
 import SearchableDropdown from '../../components/base/SearchableDropdown';
 
 
@@ -47,10 +46,15 @@ const TasksPage: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const usersData = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: (doc.data().firstName || doc.data().email || 'Unknown User') as string
+      const { data, error: fetchError } = await supabase
+        .from('users')
+        .select('id, email, full_name, role');
+
+      if (fetchError) throw fetchError;
+
+      const usersData = (data || []).map(u => ({
+        id: u.id,
+        name: (u.full_name || u.email || 'Unknown User') as string
       }));
       setUsers(usersData);
     } catch (err) {

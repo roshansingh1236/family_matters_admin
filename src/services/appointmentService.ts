@@ -1,53 +1,49 @@
 
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  getDocs, 
-  query, 
-  where, 
-  Timestamp,
-  orderBy
-} from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 
 export interface Appointment {
   id?: string;
   title: string;
-  type: 'consultation' | 'medical' | 'legal' | 'psychological' | 'screening' | 'general';
+  type: string;
   date: string;
   time: string;
   duration: string;
   participants: string[];
   userIds?: string[];
-  userId?: string; // Missing field
+  userId?: string; 
   caseId?: string;
   location: string;
-  status: 'confirmed' | 'pending' | 'scheduled' | 'completed' | 'cancelled';
+  status: string;
   notes?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-const COLLECTION_NAME = 'appointments';
+const TABLE_NAME = 'appointments';
 
 export const appointmentService = {
   // Fetch all appointments
   getAllAppointments: async (): Promise<Appointment[]> => {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        orderBy('date', 'desc'),
-        orderBy('time', 'asc')
-      );
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .order('date', { ascending: false });
       
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Appointment));
+      if (error) throw error;
+      return (data || []).map(a => ({
+          id: a.id,
+          title: a.title,
+          type: a.type,
+          date: a.date ? a.date.split('T')[0] : '',
+          time: a.date ? new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+          location: a.location,
+          status: a.status,
+          notes: a.description,
+          caseId: a.journey_id,
+          userId: a.user_id,
+          participants: a.participants || []
+      })) as Appointment[];
     } catch (error) {
       console.error('Error fetching appointments:', error);
       throw error;
@@ -55,14 +51,27 @@ export const appointmentService = {
   },
 
   // Create a new appointment
-  createAppointment: async (appointment: Omit<Appointment, 'id'>): Promise<string> => {
+  createAppointment: async (appointment: any): Promise<string> => {
     try {
-      const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-        ...appointment,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
-      return docRef.id;
+      const timestamp = appointment.time ? `${appointment.date}T${appointment.time}` : appointment.date;
+      
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .insert({
+          journey_id: appointment.caseId,
+          user_id: appointment.userId,
+          title: appointment.title,
+          description: appointment.notes,
+          date: new Date(timestamp).toISOString(),
+          location: appointment.location,
+          type: appointment.type,
+          status: appointment.status
+        })
+        .select('id')
+        .single();
+      
+      if (error) throw error;
+      return data.id;
     } catch (error) {
       console.error('Error creating appointment:', error);
       throw error;
@@ -70,13 +79,27 @@ export const appointmentService = {
   },
 
   // Update an appointment
-  updateAppointment: async (id: string, updates: Partial<Appointment>): Promise<void> => {
+  updateAppointment: async (id: string, updates: any): Promise<void> => {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      await updateDoc(docRef, {
-        ...updates,
-        updatedAt: Timestamp.now()
-      });
+      const mappedUpdates: any = {};
+      if (updates.title) mappedUpdates.title = updates.title;
+      if (updates.notes) mappedUpdates.description = updates.notes;
+      if (updates.location) mappedUpdates.location = updates.location;
+      if (updates.status) mappedUpdates.status = updates.status;
+      if (updates.type) mappedUpdates.type = updates.type;
+      
+      if (updates.date || updates.time) {
+          const d = updates.date || new Date().toISOString().split('T')[0];
+          const t = updates.time || '00:00:00';
+          mappedUpdates.date = new Date(`${d}T${t}`).toISOString();
+      }
+
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .update(mappedUpdates)
+        .eq('id', id);
+        
+      if (error) throw error;
     } catch (error) {
       console.error('Error updating appointment:', error);
       throw error;
@@ -86,7 +109,12 @@ export const appointmentService = {
   // Delete an appointment
   deleteAppointment: async (id: string): Promise<void> => {
     try {
-      await deleteDoc(doc(db, COLLECTION_NAME, id));
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw error;
     } catch (error) {
       console.error('Error deleting appointment:', error);
       throw error;
@@ -96,19 +124,27 @@ export const appointmentService = {
   // Get appointments by type
   getAppointmentsByType: async (type: string): Promise<Appointment[]> => {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where('type', '==', type),
-        orderBy('date', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Appointment));
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('type', type)
+        .order('date', { ascending: false });
+        
+      if (error) throw error;
+      return (data || []).map(a => ({
+          id: a.id,
+          title: a.title,
+          type: a.type,
+          date: a.date ? a.date.split('T')[0] : '',
+          location: a.location,
+          status: a.status,
+          caseId: a.journey_id,
+          userId: a.user_id
+      })) as Appointment[];
     } catch (error) {
       console.error('Error fetching appointments by type:', error);
       throw error;
     }
   }
 };
+

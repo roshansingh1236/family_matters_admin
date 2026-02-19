@@ -1,16 +1,17 @@
 
 import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const Sidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const { logout } = useAuth();
+
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
+      await logout();
       navigate('/auth/login');
     } catch (error) {
       console.error('Error signing out:', error);
@@ -22,7 +23,7 @@ export const Sidebar: React.FC = () => {
     { icon: 'ri-parent-line', label: 'Parents', path: '/parents' },
     { icon: 'ri-user-heart-line', label: 'Surrogates', path: '/surrogates' },
     { icon: 'ri-links-line', label: 'Matches', path: '/matches' },
-    { icon: 'ri-chat-1-line', label: 'Inquiries', path: '/inquiries' },
+    { icon: 'ri-question-answer-line', label: 'Inquiries', path: '/inquiries' },
     { icon: 'ri-file-text-line', label: 'Contracts', path: '/contracts' },
     { type: 'divider' },
     { icon: 'ri-task-line', label: 'Tasks', path: '/tasks' },
@@ -30,10 +31,12 @@ export const Sidebar: React.FC = () => {
     { icon: 'ri-time-line', label: 'Appointments', path: '/appointments' },
     { icon: 'ri-heart-pulse-line', label: 'Baby Watch', path: '/baby-watch' },
     { icon: 'ri-hospital-line', label: 'Medical', path: '/medical' },
+    { icon: 'ri-stethoscope-line', label: 'Screening', path: '/screening' },
     { icon: 'ri-money-dollar-circle-line', label: 'Compensation', path: '/payments' },
+    { icon: 'ri-bank-card-line', label: 'Agency Financials', path: '/financials' },
     { type: 'divider' },
     { icon: 'ri-message-3-line', label: 'Messages', path: '/messages' },
-    { icon: 'ri-roadmap-line', label: 'Milestones', path: '/milestones' },
+    { icon: 'ri-roadmap-line', label: 'Journeys', path: '/journeys' },
     { icon: 'ri-file-chart-line', label: 'Reports', path: '/reports' },
     { icon: 'ri-settings-4-line', label: 'Settings', path: '/settings' },
   ];

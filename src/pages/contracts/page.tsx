@@ -4,19 +4,8 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
-
-interface Contract {
-  id: string;
-  title: string;
-  type: string;
-  surrogateName: string;
-  parentName: string;
-  status: string;
-  createdAt: Date;
-  value: number;
-}
+import { contractService } from '../../services/contractService';
+import type { Contract } from '../../services/contractService';
 
 const ContractsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -32,18 +21,8 @@ const ContractsPage: React.FC = () => {
   const fetchContracts = async () => {
     setIsLoading(true);
     try {
-      const contractsSnapshot = await getDocs(collection(db, 'contracts'));
-      const contractsData: Contract[] = contractsSnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        title: doc.data().title || 'Untitled Contract',
-        type: doc.data().type || 'general',
-        surrogateName: doc.data().surrogateName || 'Unknown',
-        parentName: doc.data().parentName || 'Unknown',
-        status: doc.data().status || 'draft',
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-        value: doc.data().value || 0
-      }));
-      setContracts(contractsData);
+      const data = await contractService.getAllContracts();
+      setContracts(data);
     } catch (error) {
       console.error('Error fetching contracts:', error);
       setContracts([]);
@@ -192,7 +171,7 @@ const ContractsPage: React.FC = () => {
                           {contract.surrogateName} ↔ {contract.parentName}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Created: {contract.createdAt.toLocaleDateString()}
+                          Created: {new Date(contract.createdAt).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
@@ -257,7 +236,7 @@ const ContractsPage: React.FC = () => {
                         <div className="space-y-2">
                           <div className="flex justify-between">
                             <span className="text-gray-600 dark:text-gray-400">Created:</span>
-                            <span className="text-gray-900 dark:text-white">{selectedContract.createdAt.toLocaleDateString()}</span>
+                            <span className="text-gray-900 dark:text-white">{new Date(selectedContract.createdAt).toLocaleDateString()}</span>
                           </div>
                         </div>
                       </div>

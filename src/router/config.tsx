@@ -1,5 +1,4 @@
 
-
 import type { RouteObject } from 'react-router-dom';
 import HomePage from '../pages/home/page';
 import RequestsPage from '../pages/requests/page';
@@ -22,26 +21,15 @@ import NotFound from '../pages/NotFound';
 import TasksPage from '../pages/tasks/page';
 import BabyWatchPage from '../pages/baby-watch/page';
 import MessagesPage from '../pages/messages/page';
-import MilestonesPage from '../pages/milestones/page';
-
+import JourneysPage from '../pages/journeys/page';
+import FinancialsPage from '../pages/financials/page';
 import LandingPage from '../pages/landing/page';
+import ScreeningPage from '../pages/screening/page';
 
 const routes: RouteObject[] = [
   {
-    path: '/landing',
-    element: <LandingPage />,
-  },
-  {
     path: '/',
     element: <HomePage />,
-  },
-  {
-    path: '/auth/login',
-    element: <LoginPage />,
-  },
-  {
-    path: '/auth/signup',
-    element: <SignupPage />,
   },
   {
     path: '/requests',
@@ -76,6 +64,14 @@ const routes: RouteObject[] = [
     element: <AppointmentsPage />,
   },
   {
+    path: '/reports',
+    element: <ReportsPage />,
+  },
+  {
+    path: '/settings',
+    element: <SettingsPage />,
+  },
+  {
     path: '/calendar',
     element: <CalendarPage />,
   },
@@ -92,12 +88,12 @@ const routes: RouteObject[] = [
     element: <ContractsPage />,
   },
   {
-    path: '/reports',
-    element: <ReportsPage />,
+    path: '/auth/login',
+    element: <LoginPage />,
   },
   {
-    path: '/settings',
-    element: <SettingsPage />,
+    path: '/auth/signup',
+    element: <SignupPage />,
   },
   {
     path: '/tasks',
@@ -112,8 +108,20 @@ const routes: RouteObject[] = [
     element: <MessagesPage />,
   },
   {
-    path: '/milestones',
-    element: <MilestonesPage />,
+    path: '/journeys',
+    element: <JourneysPage />,
+  },
+  {
+    path: '/financials',
+    element: <FinancialsPage />,
+  },
+  {
+    path: '/landing',
+    element: <LandingPage />,
+  },
+  {
+    path: '/screening',
+    element: <ScreeningPage />,
   },
   {
     path: '*',

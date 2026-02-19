@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { supabase } from '../../lib/supabase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
@@ -10,7 +9,6 @@ import EditableJsonSection from '../../components/data/EditableJsonSection';
 import AboutSection from '../../components/feature/AboutSection';
 import FileUploadSection, { type FileRecord } from '../../components/data/FileUploadSection';
 import Toast from '../../components/base/Toast';
-import { db, storage } from '../../lib/firebase';
 import {
   CORE_PROFILE_TEMPLATE,
   FORM_CONTACT_TEMPLATE,
@@ -66,7 +64,7 @@ const TABS = [
 const ParentProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [parent, setParent] = useState<FirestoreUser>(null);
+  const [parent, setParent] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -75,7 +73,27 @@ const ParentProfilePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('overview');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const parentDocRef = useMemo(() => (id ? doc(db, 'users', id) : null), [id]);
+  const fetchParent = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      
+      if (fetchError) throw fetchError;
+      setParent(data);
+      setError(null);
+    } catch (err: any) {
+      console.error('Failed to load parent profile', err);
+      setError('Unable to load parent profile. Please try again later.');
+      setParent(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     if (!id) {
@@ -84,38 +102,29 @@ const ParentProfilePage: React.FC = () => {
       return;
     }
 
-    if (!parentDocRef) {
-      setParent(null);
-      setError('Parent profile not found.');
-      setIsLoading(false);
-      return;
-    }
+    fetchParent();
 
-    const unsubscribe = onSnapshot(
-      parentDocRef,
-      (snapshot) => {
-        if (!snapshot.exists()) {
-          setParent(null);
-          setError('Parent profile not found.');
-        } else {
-          setParent({
-            id: snapshot.id,
-            ...(snapshot.data() as Record<string, unknown>)
-          });
-          setError(null);
+    // Setup real-time subscription
+    const channel = supabase
+      .channel(`profile-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${id}`
+        },
+        (payload) => {
+          setParent(payload.new);
         }
-        setIsLoading(false);
-      },
-      (err) => {
-        console.error('Failed to load parent profile', err);
-        setError('Unable to load parent profile. Please try again later.');
-        setParent(null);
-        setIsLoading(false);
-      }
-    );
+      )
+      .subscribe();
 
-    return () => unsubscribe();
-  }, [id, parentDocRef]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, fetchParent]);
 
   const formatDateTime = (value: unknown) => {
     if (!value) return '—';
@@ -153,7 +162,7 @@ const ParentProfilePage: React.FC = () => {
     return displayName
       .split(' ')
       .filter(Boolean)
-      .map((part) => part[0]?.toUpperCase() ?? '')
+      .map((part: string) => part[0]?.toUpperCase() ?? '')
       .join('')
       .slice(0, 2) || 'FM';
   }, [displayName]);
@@ -244,15 +253,24 @@ const ParentProfilePage: React.FC = () => {
 
   const handleUpdateField = useCallback(
     async (field: string, value: Record<string, unknown>) => {
-      if (!parentDocRef) return;
-      await updateDoc(parentDocRef, { [field]: value });
+      if (!id) return;
+      
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ [field]: value })
+        .eq('id', id);
+
+      if (updateError) {
+        console.error(`Failed to update ${field}`, updateError);
+        setToast({ message: `Failed to update ${field}`, type: 'error' });
+      }
     },
-    [parentDocRef]
+    [id]
   );
 
   const handleUpdateCore = useCallback(
     async (value: Record<string, unknown>) => {
-      if (!parentDocRef) return;
+      if (!id) return;
       const filteredValue = Object.keys(value).reduce<Record<string, unknown>>((acc, key) => {
         if (PARENT_CORE_FIELDS.includes(key as (typeof PARENT_CORE_FIELDS)[number])) {
           acc[key] = value[key];
@@ -261,16 +279,30 @@ const ParentProfilePage: React.FC = () => {
       }, {});
 
       if (Object.keys(filteredValue).length === 0) return;
-      await updateDoc(parentDocRef, filteredValue);
+      
+      const { error: updateError } = await supabase
+        .from('users')
+        .update(filteredValue)
+        .eq('id', id);
+
+      if (updateError) {
+        console.error('Failed to update core profile', updateError);
+        setToast({ message: 'Failed to update core profile', type: 'error' });
+      }
     },
-    [parentDocRef]
+    [id]
   );
   
   const handleStatusChange = async (newStatus: string) => {
-    if (!parentDocRef) return;
+    if (!id) return;
     setIsUpdatingStatus(true);
     try {
-      await updateDoc(parentDocRef, { status: newStatus });
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
       setToast({ message: 'Status updated successfully', type: 'success' });
     } catch (error) {
       console.error('Failed to update status', error);
@@ -282,14 +314,13 @@ const ParentProfilePage: React.FC = () => {
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !parentDocRef) return;
+    if (!file || !id) return;
 
     if (!file.type.startsWith('image/')) {
         setToast({ message: 'Please upload an image file', type: 'error' });
         return;
     }
 
-    // Limit file size to 5MB
     if (file.size > 5 * 1024 * 1024) {
         setToast({ message: 'File size must be less than 5MB', type: 'error' });
         return;
@@ -297,32 +328,31 @@ const ParentProfilePage: React.FC = () => {
 
     try {
       setIsUploadingImage(true);
-      const storageRef = ref(storage, `users/${id}/profile/avatar_${Date.now()}_${file.name}`);
-      const uploadTask = uploadBytesResumable(storageRef, file);
+      const storagePath = `${id}/profile/avatar_${Date.now()}_${file.name}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('users')
+        .upload(storagePath, file);
 
-      await new Promise<void>((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          null,
-          (error) => reject(error),
-          async () => {
-            try {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              await updateDoc(parentDocRef, { profileImageUrl: downloadURL });
-              setToast({ message: 'Profile picture updated successfully', type: 'success' });
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          }
-        );
-      });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('users')
+        .getPublicUrl(storagePath);
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ profileImageUrl: publicUrl })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
+
+      setToast({ message: 'Profile picture updated successfully', type: 'success' });
     } catch (error) {
       console.error('Error uploading image:', error);
       setToast({ message: 'Failed to upload profile picture', type: 'error' });
     } finally {
       setIsUploadingImage(false);
-      // Reset input value to allow re-uploading the same file if needed
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
       }
@@ -629,13 +659,13 @@ const ParentProfilePage: React.FC = () => {
                                 
                                 {/* Additional Images from Documents */}
                                 {parent.documents
-                                    ?.filter(doc => {
+                                    ?.filter((doc: any) => {
                                         const isImage = doc.type?.startsWith('image/');
                                         const hasImageExt = /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.name);
                                         const isMissingType = !doc.type;
                                         return isImage || hasImageExt || (isMissingType && hasImageExt);
                                     })
-                                    .map((doc, index) => (
+                                    .map((doc: any, index: number) => (
                                         <div key={`${doc.url}-${index}`} className="break-inside-avoid overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 shadow-md group relative">
                                             <img
                                                 src={doc.url}
@@ -647,7 +677,7 @@ const ParentProfilePage: React.FC = () => {
                                     ))
                                 }
 
-                                {!parent.profileImageUrl && (!parent.documents || !parent.documents.some(d => d.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(d.name))) && (
+                                {!parent.profileImageUrl && (!parent.documents || !parent.documents.some((d: any) => d.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(d.name))) && (
                                      <div className="break-inside-avoid flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 text-4xl text-gray-300 dark:text-gray-600">
                                         <i className="ri-image-line"></i>
                                     </div>
@@ -663,7 +693,7 @@ const ParentProfilePage: React.FC = () => {
                                     data={aboutData}
                                     type="parent"
                                     templateData={ABOUT_PARENT_TEMPLATE}
-                                    onSave={(value) => handleUpdateField('about', value)}
+                                    onSave={(value: any) => handleUpdateField('about', value)}
                                 />
                             </Card>
                         </div>
@@ -783,7 +813,7 @@ const ParentProfilePage: React.FC = () => {
                                 description="Upload legal contracts, receipts, medical reports, and other documents."
                                 userId={parent.id}
                                 files={parent.documents ?? []}
-                                onFilesChange={(files) => handleUpdateField('documents', files as unknown as Record<string, unknown>)}
+                                onFilesChange={(files: any[]) => handleUpdateField('documents', files as unknown as Record<string, unknown>)}
                             />
                         </Card>
                     </div>

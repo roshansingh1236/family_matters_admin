@@ -1,70 +1,74 @@
 
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  getDocs, 
-  query, 
-  where, 
-  Timestamp,
-  orderBy
-} from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 
 export interface BabyWatchUpdate {
   id?: string;
-  caseId: string; // Link to specific journey
+  caseId: string;
   parentId: string;
   parentName: string;
   surrogateId: string;
   surrogateName: string;
-  date: string; // YYYY-MM-DD for easier display
-  gestationalAge: string; // e.g., "12 Weeks"
+  date: string;
+  gestationalAge: string;
   weight?: string;
   heartRate?: string;
   medicalNotes: string;
-  imageUrl?: string; // Firebase Storage URL
-  imagePath?: string; // Storage path for deletion
+  imageUrl?: string;
+  imagePath?: string;
   sharedWithParents: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-const COLLECTION_NAME = 'baby_watch';
+const TABLE_NAME = 'baby_watch_updates';
+const BUCKET_NAME = 'baby_watch';
 
 export const babyWatchService = {
   // Fetch all updates
   getAllUpdates: async (): Promise<BabyWatchUpdate[]> => {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        orderBy('date', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as BabyWatchUpdate));
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return (data || []).map(u => ({
+          id: u.id,
+          caseId: u.journey_id,
+          title: u.title,
+          medicalNotes: u.description,
+          gestationalAge: u.data?.gestationalAge,
+          weight: u.data?.weight,
+          heartRate: u.data?.heartRate,
+          imageUrl: u.attachments?.[0],
+          sharedWithParents: u.shared_with_parents,
+          createdAt: u.created_at
+      })) as any[];
     } catch (error) {
       console.error('Error fetching baby watch updates:', error);
       throw error;
     }
   },
 
-  // Upload image to Firebase Storage
+  // Upload image to Supabase Storage
   uploadImage: async (file: File, caseId: string): Promise<{ url: string; path: string }> => {
     try {
       const timestamp = Date.now();
       const fileName = `${caseId}_${timestamp}_${file.name}`;
-      const storageRef = ref(storage, `baby_watch/${fileName}`);
+      const filePath = `updates/${fileName}`;
       
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const { error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(filePath, file);
       
-      return { url, path: `baby_watch/${fileName}` };
+      if (error) throw error;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from(BUCKET_NAME)
+        .getPublicUrl(filePath);
+        
+      return { url: publicUrl, path: filePath };
     } catch (error) {
       console.error('Error uploading image:', error);
       throw error;
@@ -72,26 +76,36 @@ export const babyWatchService = {
   },
 
   // Create a new update
-  createUpdate: async (update: Omit<BabyWatchUpdate, 'id'>, imageFile?: File): Promise<string> => {
+  createUpdate: async (update: any, imageFile?: File): Promise<string> => {
     try {
       let imageUrl = update.imageUrl;
-      let imagePath = update.imagePath;
 
-      // Upload image if provided
       if (imageFile) {
-        const { url, path } = await babyWatchService.uploadImage(imageFile, update.caseId);
+        const { url } = await babyWatchService.uploadImage(imageFile, update.caseId);
         imageUrl = url;
-        imagePath = path;
       }
 
-      const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-        ...update,
-        imageUrl,
-        imagePath,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
-      return docRef.id;
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .insert({
+          journey_id: update.caseId,
+          title: update.title || `Update for ${update.date}`,
+          description: update.medicalNotes,
+          update_type: 'Milestone',
+          data: {
+              gestationalAge: update.gestationalAge,
+              weight: update.weight,
+              heartRate: update.heartRate,
+              date: update.date
+          },
+          attachments: imageUrl ? [imageUrl] : [],
+          shared_with_parents: update.sharedWithParents ?? true
+        })
+        .select('id')
+        .single();
+      
+      if (error) throw error;
+      return data.id;
     } catch (error) {
       console.error('Error creating baby watch update:', error);
       throw error;
@@ -99,23 +113,30 @@ export const babyWatchService = {
   },
 
   // Update an update
-  updateUpdate: async (id: string, updates: Partial<BabyWatchUpdate>, imageFile?: File): Promise<void> => {
+  updateUpdate: async (id: string, updates: any, imageFile?: File): Promise<void> => {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      
-      let updateData: any = {
-        ...updates,
-        updatedAt: Timestamp.now()
-      };
+       const mappedUpdates: any = {
+           updated_at: new Date().toISOString()
+       };
+       if (updates.medicalNotes) mappedUpdates.description = updates.medicalNotes;
+       if (updates.title) mappedUpdates.title = updates.title;
+       
+       // Handle JSONB data updates if needed
+       if (updates.gestationalAge || updates.weight || updates.heartRate) {
+           // This would require fetching current data or using a deep merge via RPC/Logic
+       }
 
-      // Upload new image if provided
-      if (imageFile && updates.caseId) {
-        const { url, path } = await babyWatchService.uploadImage(imageFile, updates.caseId);
-        updateData.imageUrl = url;
-        updateData.imagePath = path;
-      }
+       if (imageFile && updates.caseId) {
+           const { url } = await babyWatchService.uploadImage(imageFile, updates.caseId);
+           mappedUpdates.attachments = [url];
+       }
 
-      await updateDoc(docRef, updateData);
+       const { error } = await supabase
+        .from(TABLE_NAME)
+        .update(mappedUpdates)
+        .eq('id', id);
+        
+      if (error) throw error;
     } catch (error) {
       console.error('Error updating baby watch update:', error);
       throw error;
@@ -125,18 +146,15 @@ export const babyWatchService = {
   // Delete an update
   deleteUpdate: async (id: string, imagePath?: string): Promise<void> => {
     try {
-      // Delete image from storage if exists
       if (imagePath) {
-        try {
-          const imageRef = ref(storage, imagePath);
-          await deleteObject(imageRef);
-        } catch (error) {
-          console.warn('Error deleting image from storage:', error);
-          // Continue with document deletion even if image deletion fails
-        }
+        await supabase.storage.from(BUCKET_NAME).remove([imagePath]);
       }
-
-      await deleteDoc(doc(db, COLLECTION_NAME, id));
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
     } catch (error) {
       console.error('Error deleting baby watch update:', error);
       throw error;
@@ -146,29 +164,28 @@ export const babyWatchService = {
   // Get updates by case ID
   getUpdatesByCaseId: async (caseId: string): Promise<BabyWatchUpdate[]> => {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where('caseId', '==', caseId),
-        orderBy('date', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as BabyWatchUpdate));
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('journey_id', caseId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return (data || []).map(u => ({
+          id: u.id,
+          caseId: u.journey_id,
+          medicalNotes: u.description,
+          gestationalAge: u.data?.gestationalAge,
+          weight: u.data?.weight,
+          heartRate: u.data?.heartRate,
+          imageUrl: u.attachments?.[0],
+          sharedWithParents: u.shared_with_parents,
+          createdAt: u.created_at
+      })) as any[];
     } catch (error) {
-      console.warn('Error fetching updates by case (possibly missing index), trying simple fetch', error);
-      try {
-        const qSimple = query(collection(db, COLLECTION_NAME));
-        const snapshot = await getDocs(qSimple);
-        return snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as BabyWatchUpdate))
-          .filter(u => u.caseId === caseId)
-          .sort((a, b) => b.date.localeCompare(a.date));
-      } catch (innerError) {
-        console.error('Fallback fetch also failed', innerError);
-        return [];
-      }
+      console.error('Error fetching updates by case:', error);
+      return [];
     }
   }
 };
+

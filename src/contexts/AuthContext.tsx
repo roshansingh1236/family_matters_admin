@@ -1,18 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import {
-  browserLocalPersistence,
-  browserSessionPersistence,
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  setPersistence,
-  signInWithEmailAndPassword,
-  signOut,
-  type User,
-  type UserCredential
-} from 'firebase/auth';
-import { doc, onSnapshot, type DocumentData } from 'firebase/firestore';
-
-import { auth, db } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 type UserProfile = {
   id: string;
@@ -29,8 +17,8 @@ type AuthContextValue = {
   profile: UserProfile;
   profileLoading: boolean;
   profileError: string | null;
-  login: (params: { email: string; password: string; rememberMe?: boolean }) => Promise<UserCredential>;
-  signup: (params: { email: string; password: string }) => Promise<UserCredential>;
+  login: (params: { email: string; password: string; rememberMe?: boolean }) => Promise<any>;
+  signup: (params: { email: string; password: string }) => Promise<any>;
   logout: () => Promise<void>;
 };
 
@@ -48,12 +36,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
       setInitializing(false);
     });
 
-    return () => unsubscribe();
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setInitializing(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -64,46 +59,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return;
     }
 
-    setProfileLoading(true);
-    setProfileError(null);
+    const fetchProfile = async () => {
+        setProfileLoading(true);
+        setProfileError(null);
 
-    const profileRef = doc(db, 'users', user.uid);
-    const unsubscribe = onSnapshot(
-      profileRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data() as DocumentData;
-          setProfile({ id: snapshot.id, ...(data as Record<string, unknown>) });
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Failed to fetch user profile', error);
+            setProfile(null);
+            setProfileError(error.message);
         } else {
-          setProfile(null);
+            setProfile({
+                id: data.id,
+                role: data.role,
+                email: data.email,
+                firstName: data.full_name?.split(' ')[0] || '',
+                lastName: data.full_name?.split(' ').slice(1).join(' ') || '',
+                ...data
+            });
         }
         setProfileLoading(false);
-      },
-      (error) => {
-        console.error('Failed to subscribe to user profile', error);
-        setProfile(null);
-        setProfileError(error.message);
-        setProfileLoading(false);
-      }
-    );
+    };
 
-    return () => unsubscribe();
+    fetchProfile();
   }, [user]);
 
-  const login = async ({ email, password, rememberMe = true }: { email: string; password: string; rememberMe?: boolean }) => {
-    await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
-
-    return signInWithEmailAndPassword(auth, email, password);
+  const login = async ({ email, password }: { email: string; password: string; rememberMe?: boolean }) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+    });
+    if (error) throw error;
+    return data;
   };
 
   const signup = async ({ email, password }: { email: string; password: string }) => {
-    await setPersistence(auth, browserLocalPersistence);
-
-    return createUserWithEmailAndPassword(auth, email, password);
+    const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+    });
+    if (error) throw error;
+    return data;
   };
 
   const logout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
   };
 
   const value = useMemo(

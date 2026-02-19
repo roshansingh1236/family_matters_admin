@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Button from '../../../components/base/Button';
 import { useAuth } from '../../../contexts/AuthContext';
-import { FirebaseError } from 'firebase/app';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -38,26 +37,16 @@ const LoginPage: React.FC = () => {
         rememberMe: formData.rememberMe
       });
       navigate('/');
-    } catch (error) {
-      if (error instanceof FirebaseError) {
-        switch (error.code) {
-          case 'auth/invalid-credential':
-          case 'auth/invalid-email':
-          case 'auth/user-not-found':
-          case 'auth/wrong-password':
-            setErrorMessage('Invalid email or password. Please try again.');
-            break;
-          case 'auth/user-disabled':
-            setErrorMessage('This account has been disabled. Contact your administrator.');
-            break;
-          case 'auth/too-many-requests':
-            setErrorMessage('Too many failed attempts. Please wait a moment before trying again.');
-            break;
-          default:
-            setErrorMessage('Unable to sign in. Please try again later.');
-        }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      const message = error.message || error.error_description || 'Unable to sign in. Please try again later.';
+      
+      if (message.includes('Invalid login credentials')) {
+        setErrorMessage('Invalid email or password. Please try again.');
+      } else if (message.includes('Email not confirmed')) {
+        setErrorMessage('Please confirm your email address before signing in.');
       } else {
-        setErrorMessage('Unable to sign in. Please try again later.');
+        setErrorMessage(message);
       }
     } finally {
       setIsLoading(false);

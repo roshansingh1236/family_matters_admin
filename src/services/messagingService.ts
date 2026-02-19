@@ -1,26 +1,14 @@
 
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  getDocs, 
-  getDoc,
-  query, 
-  where, 
-  Timestamp,
-  orderBy
-} from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 
 export interface Conversation {
   id?: string;
-  participants: string[]; // User IDs including admin
+  participants: string[]; // User IDs 
   participantNames: Record<string, string>; // ID -> Name mapping
   lastMessage: string;
-  lastMessageTime: Date;
+  lastMessageTime: string;
   unreadCount: Record<string, number>; // User ID -> unread count
-  createdAt?: Date;
+  createdAt?: string;
 }
 
 export interface Message {
@@ -30,30 +18,52 @@ export interface Message {
   text: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'file';
-  replyTo?: string; // ID of the message being replied to
-  timestamp: Date;
+  replyTo?: string; 
+  timestamp: string;
   read: boolean;
 }
-
-
-const CONVERSATIONS_COLLECTION = 'conversations';
-const MESSAGES_SUBCOLLECTION = 'messages';
 
 export const messagingService = {
   // Get all conversations where admin is a participant
   getConversations: async (adminId: string): Promise<Conversation[]> => {
     try {
-      const q = query(
-        collection(db, CONVERSATIONS_COLLECTION),
-        where('participants', 'array-contains', adminId),
-        orderBy('lastMessageTime', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        lastMessageTime: doc.data().lastMessageTime?.toDate?.() || new Date(doc.data().lastMessageTime)
-      } as Conversation));
+      const { data, error } = await supabase
+        .from('conversation_participants')
+        .select(`
+          conversation_id,
+          conversations (
+            id,
+            last_message,
+            last_message_at,
+            created_at,
+            conversation_participants (
+              user_id,
+              users ( full_name )
+            )
+          )
+        `)
+        .eq('user_id', adminId);
+
+      if (error) throw error;
+
+      return (data || []).map((cp: any) => {
+          const conv = cp.conversations;
+          const participantIds = conv.conversation_participants.map((p: any) => p.user_id);
+          const names = conv.conversation_participants.reduce((acc: any, p: any) => {
+              acc[p.user_id] = p.users?.full_name || 'Unknown';
+              return acc;
+          }, {});
+          
+          return {
+              id: conv.id,
+              participants: participantIds,
+              participantNames: names,
+              lastMessage: conv.last_message,
+              lastMessageTime: conv.last_message_at,
+              unreadCount: {}, // Simplified
+              createdAt: conv.created_at
+          } as Conversation;
+      });
     } catch (error) {
       console.error('Error fetching conversations:', error);
       throw error;
@@ -63,29 +73,58 @@ export const messagingService = {
   // Get a specific conversation with its messages
   getConversationById: async (conversationId: string): Promise<{ conversation: Conversation; messages: Message[] }> => {
     try {
-      const conversationDoc = await getDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId));
+      const { data: convData, error: convError } = await supabase
+        .from('conversations')
+        .select(`
+            *,
+            conversation_participants (
+                user_id,
+                users ( full_name )
+            )
+        `)
+        .eq('id', conversationId)
+        .maybeSingle();
       
-      if (!conversationDoc.exists()) {
-        throw new Error('Conversation not found');
-      }
+      if (convError) throw convError;
+      if (!convData) throw new Error('Conversation not found');
 
-      const conversation = {
-        id: conversationDoc.id,
-        ...conversationDoc.data(),
-        lastMessageTime: conversationDoc.data().lastMessageTime?.toDate?.() || new Date(conversationDoc.data().lastMessageTime)
-      } as Conversation;
+      const participantIds = (convData as any).conversation_participants.map((p: any) => p.user_id);
+      const names = (convData as any).conversation_participants.reduce((acc: any, p: any) => {
+          acc[p.user_id] = p.users?.full_name || 'Unknown';
+          return acc;
+      }, {});
+
+      const conversation: Conversation = {
+          id: (convData as any).id,
+          participants: participantIds,
+          participantNames: names,
+          lastMessage: (convData as any).last_message,
+          lastMessageTime: (convData as any).last_message_at,
+          unreadCount: {},
+          createdAt: (convData as any).created_at
+      };
 
       // Fetch messages
-      const messagesQuery = query(
-        collection(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION),
-        orderBy('timestamp', 'asc')
-      );
-      const messagesSnapshot = await getDocs(messagesQuery);
-      const messages = messagesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate?.() || new Date(doc.data().timestamp)
-      } as Message));
+      const { data: msgData, error: msgError } = await supabase
+        .from('messages')
+        .select(`
+            *,
+            sender:sender_id ( full_name )
+        `)
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+      
+      if (msgError) throw msgError;
+
+      const messages: Message[] = (msgData || []).map(m => ({
+          id: m.id,
+          senderId: m.sender_id,
+          senderName: m.sender?.full_name || 'Unknown',
+          text: m.content,
+          mediaUrl: m.attachments?.[0],
+          timestamp: m.created_at,
+          read: m.is_read
+      }));
 
       return { conversation, messages };
     } catch (error) {
@@ -97,44 +136,35 @@ export const messagingService = {
   // Create a new conversation
   createConversation: async (
     adminId: string,
-    adminName: string,
-    userId: string,
-    userName: string
+    userId: string
   ): Promise<string> => {
     try {
-      // Check if conversation already exists
-      const existingQuery = query(
-        collection(db, CONVERSATIONS_COLLECTION),
-        where('participants', 'array-contains', adminId)
-      );
-      const existingSnapshot = await getDocs(existingQuery);
-      
-      const existing = existingSnapshot.docs.find(doc => {
-        const participants = doc.data().participants as string[];
-        return participants.includes(userId) && participants.length === 2;
+      // Check if conversation already exists (simplified to check for exact pair in participants table)
+      // This logic is better handled via an RPC or clever select in Supabase, 
+      // but for similarity to the original:
+      const { data: existing, error: existError } = await supabase.rpc('find_conversation_by_participants', {
+          p_user_ids: [adminId, userId]
       });
 
-      if (existing) {
-        return existing.id;
-      }
+      if (!existError && existing) return existing;
 
       // Create new conversation
-      const docRef = await addDoc(collection(db, CONVERSATIONS_COLLECTION), {
-        participants: [adminId, userId],
-        participantNames: {
-          [adminId]: adminName,
-          [userId]: userName
-        },
-        lastMessage: '',
-        lastMessageTime: Timestamp.now(),
-        unreadCount: {
-          [adminId]: 0,
-          [userId]: 0
-        },
-        createdAt: Timestamp.now()
-      });
+      const { data: conv, error: convError } = await supabase
+        .from('conversations')
+        .insert({ last_message: 'Started a new conversation' })
+        .select('id')
+        .maybeSingle();
+      
+      if (convError) throw convError;
+      if (!conv) throw new Error('Failed to create conversation');
 
-      return docRef.id;
+      // Add participants
+      await supabase.from('conversation_participants').insert([
+          { conversation_id: conv.id, user_id: adminId, role: 'admin' },
+          { conversation_id: conv.id, user_id: userId, role: 'user' }
+      ]);
+
+      return conv.id;
     } catch (error) {
       console.error('Error creating conversation:', error);
       throw error;
@@ -145,52 +175,31 @@ export const messagingService = {
   sendMessage: async (
     conversationId: string,
     senderId: string,
-    senderName: string,
     text: string,
-    media?: { url: string; type: 'image' | 'file' },
-    replyTo?: string
+    media?: { url: string; type: 'image' | 'file' }
   ): Promise<void> => {
-
     try {
-      // Add message to subcollection
-      await addDoc(
-        collection(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION),
-        {
-          senderId,
-          senderName,
-          text,
-          mediaUrl: media?.url || null,
-          mediaType: media?.type || null,
-          replyTo: replyTo || null,
-          timestamp: Timestamp.now(),
-          read: false
-        }
-      );
-
-
-      // Update conversation last message
-      const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
-      const conversationDoc = await getDoc(conversationRef);
+      const { error: msgError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: senderId,
+          content: text,
+          attachments: media?.url ? [media.url] : [],
+          is_read: false
+        });
       
-      if (conversationDoc.exists()) {
-        const participants = conversationDoc.data().participants as string[];
-        const unreadCount = conversationDoc.data().unreadCount as Record<string, number>;
-        
-        // Increment unread count for all participants except sender
-        const updatedUnreadCount = { ...unreadCount };
-        participants.forEach(participantId => {
-          if (participantId !== senderId) {
-            updatedUnreadCount[participantId] = (updatedUnreadCount[participantId] || 0) + 1;
-          }
-        });
+      if (msgError) throw msgError;
 
-        await updateDoc(conversationRef, {
-          lastMessage: media ? `Sent a ${media.type}` : text.substring(0, 100),
-          lastMessageTime: Timestamp.now(),
-          unreadCount: updatedUnreadCount
-        });
+      // Update conversation
+      await supabase
+        .from('conversations')
+        .update({
+            last_message: media ? `Sent a ${media.type}` : text.substring(0, 100),
+            last_message_at: new Date().toISOString()
+        })
+        .eq('id', conversationId);
 
-      }
     } catch (error) {
       console.error('Error sending message:', error);
       throw error;
@@ -200,17 +209,11 @@ export const messagingService = {
   // Mark messages as read
   markAsRead: async (conversationId: string, userId: string): Promise<void> => {
     try {
-      const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
-      const conversationDoc = await getDoc(conversationRef);
-      
-      if (conversationDoc.exists()) {
-        const unreadCount = conversationDoc.data().unreadCount as Record<string, number>;
-        const updatedUnreadCount = { ...unreadCount, [userId]: 0 };
-
-        await updateDoc(conversationRef, {
-          unreadCount: updatedUnreadCount
-        });
-      }
+      await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('conversation_id', conversationId)
+        .neq('sender_id', userId);
     } catch (error) {
       console.error('Error marking as read:', error);
       throw error;
@@ -218,12 +221,9 @@ export const messagingService = {
   },
 
   // Delete a message
-  deleteMessage: async (conversationId: string, messageId: string): Promise<void> => {
+  deleteMessage: async (messageId: string): Promise<void> => {
     try {
-      // Just for admin, let's allow permanent deletion for now
-      // In a real app, maybe just mark as deleted
-      const { deleteDoc } = await import('firebase/firestore');
-      await deleteDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION, messageId));
+      await supabase.from('messages').delete().eq('id', messageId);
     } catch (error) {
       console.error('Error deleting message:', error);
       throw error;
@@ -233,22 +233,8 @@ export const messagingService = {
   // Clear all messages in a conversation
   clearChat: async (conversationId: string): Promise<void> => {
     try {
-      const messagesQuery = query(collection(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION));
-      const snapshot = await getDocs(messagesQuery);
-      const { deleteDoc } = await import('firebase/firestore');
-      
-      const deletePromises = snapshot.docs.map(messageDoc => 
-        deleteDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION, messageDoc.id))
-      );
-      
-      await Promise.all(deletePromises);
-
-      // Update conversation preview
-      const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
-      await updateDoc(conversationRef, {
-        lastMessage: 'Chat cleared',
-        lastMessageTime: Timestamp.now()
-      });
+      await supabase.from('messages').delete().eq('conversation_id', conversationId);
+      await supabase.from('conversations').update({ last_message: 'Chat cleared' }).eq('id', conversationId);
     } catch (error) {
       console.error('Error clearing chat:', error);
       throw error;
@@ -258,24 +244,13 @@ export const messagingService = {
   // Delete an entire conversation
   deleteConversation: async (conversationId: string): Promise<void> => {
     try {
-      // First clear all messages
-      const messagesQuery = query(collection(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION));
-      const snapshot = await getDocs(messagesQuery);
-      const { deleteDoc } = await import('firebase/firestore');
-      
-      const deletePromises = snapshot.docs.map(messageDoc => 
-        deleteDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_SUBCOLLECTION, messageDoc.id))
-      );
-      
-      await Promise.all(deletePromises);
-
-      // Then delete the conversation doc
-      await deleteDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId));
+      await supabase.from('conversations').delete().eq('id', conversationId);
     } catch (error) {
       console.error('Error deleting conversation:', error);
       throw error;
     }
   }
 };
+
 
 

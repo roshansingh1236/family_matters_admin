@@ -5,8 +5,7 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import { babyWatchService, type BabyWatchUpdate } from '../../services/babyWatchService';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase';
 
 const BabyWatchPage: React.FC = () => {
   const [updates, setUpdates] = useState<BabyWatchUpdate[]>([]);
@@ -50,11 +49,16 @@ const BabyWatchPage: React.FC = () => {
 
   const fetchCases = async () => {
     try {
-      const casesSnapshot = await getDocs(collection(db, 'cases'));
-      const casesData = casesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        displayName: `${doc.data().surrogateName} & ${doc.data().parentName}`
+      const { data, error: fetchError } = await supabase
+        .from('journeys')
+        .select('*');
+
+      if (fetchError) throw fetchError;
+
+      const casesData = (data || []).map(c => ({
+        id: c.id,
+        ...c,
+        displayName: `Journey #${c.case_number}`
       }));
       setCases(casesData);
     } catch (err) {

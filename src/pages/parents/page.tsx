@@ -1,87 +1,135 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import DataSection from '../../components/data/DataSection';
-import { db } from '../../lib/firebase';
-
-type FirestoreUser = {
-  id: string;
-  role?: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  formData?: Record<string, unknown>;
-  form2Data?: Record<string, unknown>;
-  parent1?: Record<string, unknown>;
-  parent2?: Record<string, unknown>;
-  surrogateRelated?: Record<string, unknown>;
-  form2Completed?: boolean;
-  profileCompleted?: boolean;
-  createdAt?: unknown;
-  updatedAt?: unknown;
-  [key: string]: unknown;
-};
+import type { User, UserStatus } from '../../types';
+import { IP_STATUSES } from '../../types';
 
 const statusDefinitions = [
   {
     id: 'all',
     label: 'All',
-    filter: (_parent: FirestoreUser) => true
+    filter: (_parent: User) => true
   },
   {
-    id: 'to_be_matched',
-    label: 'To be Matched',
-    filter: (parent: FirestoreUser) => (parent as any).status === 'To be Matched' || (!parent.form2Completed && !parent.profileCompleted)
+    id: 'new_inquiry',
+    label: 'New Inquiry',
+    filter: (parent: User) => parent.status === 'New Inquiry'
   },
   {
-    id: 'matched',
-    label: 'Matched',
-    filter: (parent: FirestoreUser) => (parent as any).status === 'Matched'
+    id: 'consultation',
+    label: 'Consultation Complete',
+    filter: (parent: User) => parent.status === 'Consultation Complete'
   },
   {
-    id: 'rematch',
-    label: 'Rematch',
-    filter: (parent: FirestoreUser) => (parent as any).status === 'Rematch'
+    id: 'intake',
+    label: 'Intake in Progress',
+    filter: (parent: User) => parent.status === 'Intake in Progress'
+  },
+  {
+    id: 'accepted',
+    label: 'Accepted',
+    filter: (parent: User) => parent.status === 'Accepted to Program'
+  },
+  {
+    id: 'on_hold',
+    label: 'On Hold',
+    filter: (parent: User) => parent.status === 'On Hold'
+  },
+  {
+    id: 'declined',
+    label: 'Declined',
+    filter: (parent: User) => parent.status === 'Declined / Inactive'
   }
 ];
 
 const ParentsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
-  const [selectedParent, setSelectedParent] = useState<FirestoreUser | null>(null);
-  const [parents, setParents] = useState<FirestoreUser[]>([]);
+  const [selectedParent, setSelectedParent] = useState<User | null>(null);
+  const [parents, setParents] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  const fetchParents = async () => {
+    try {
+      const { data, error: err } = await supabase
+        .from('users')
+        .select('*')
+        .in('role', ['Intended Parent', 'intendedParent']);
+
+      if (err) throw err;
+      
+      const mappedData: User[] = (data || []).map(u => ({
+        id: u.id,
+        ...u,
+        profileCompleted: u.profile_completed || u.profileCompleted,
+        form2Completed: u.form2_completed || u.form2Completed || u.form_2_completed,
+        formData: u.form_data || u.formData || u.formdata,
+        form2Data: u.form2_data || u.form2Data || u.form2data,
+        updatedAt: u.updated_at,
+        createdAt: u.created_at
+      }));
+      
+      setParents(mappedData);
+      setIsLoading(false);
+      setError(null);
+    } catch (err: any) {
+      console.error('Failed to load intended parents', err);
+      setError('Unable to load intended parent records. Please try again later.');
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const parentsQuery = query(collection(db, 'users'), where('role', '==', 'Intended Parent'));
+    fetchParents();
 
-    const unsubscribe = onSnapshot(
-      parentsQuery,
-      (snapshot) => {
-        const data: FirestoreUser[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Record<string, unknown>)
-        }));
-        setParents(data);
-        setIsLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error('Failed to load intended parents', err);
-        setError('Unable to load intended parent records. Please try again later.');
-        setIsLoading(false);
-      }
-    );
+    const channel = supabase
+      .channel('public:users:parents')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'users'
+        // Filter in JS/TS as .in() is not supported directly in the payload filter for some Supabase client versions
+      }, (payload: any) => {
+        if (payload.new && (payload.new.role === 'Intended Parent' || payload.new.role === 'intendedParent')) {
+            fetchParents();
+        } else if (payload.old && (payload.old.role === 'Intended Parent' || payload.old.role === 'intendedParent')) {
+            fetchParents();
+        }
+      })
+      .subscribe();
 
-    return () => unsubscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  const handleStatusUpdate = async (userId: string, newStatus: UserStatus) => {
+    try {
+      const { error: err } = await supabase
+        .from('users')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (err) throw err;
+      
+      if (selectedParent && selectedParent.id === userId) {
+        setSelectedParent({ ...selectedParent, status: newStatus });
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('Failed to update status');
+    }
+  };
 
   const statusCounts = useMemo(() => {
     return statusDefinitions.reduce<Record<string, number>>((acc, status) => {
@@ -96,23 +144,23 @@ const ParentsPage: React.FC = () => {
     return parents.filter((parent) => currentStatus.filter(parent));
   }, [activeTab, parents]);
 
-  const getStatusBadge = (parent: FirestoreUser) => {
-    const status = (parent as any).status;
+  const getStatusBadge = (parent: User) => {
+    const status = parent.status;
     switch (status) {
-      case 'To be Matched':
-        return <Badge color="yellow">To be Matched</Badge>;
-      case 'Matched':
-        return <Badge color="green">Matched</Badge>;
-      case 'Rematch':
-        return <Badge color="red">Rematch</Badge>;
-      default:
-         if (parent.form2Completed) return <Badge color="green">Form 2 Complete</Badge>;
-         if (parent.profileCompleted) return <Badge color="blue">Profile Complete</Badge>;
-         return <Badge color="gray">Unknown</Badge>;
+      case 'New Inquiry': return <Badge color="blue">New Inquiry</Badge>;
+      case 'Consultation Complete': return <Badge color="indigo">Consultation</Badge>;
+      case 'Intake in Progress': return <Badge color="yellow">Intake</Badge>;
+      case 'Accepted to Program': return <Badge color="green">Accepted</Badge>;
+      case 'On Hold': return <Badge color="gray">On Hold</Badge>;
+      case 'Declined / Inactive': return <Badge color="red">Declined</Badge>;
+      // Legacy Fallbacks
+      case 'To be Matched': return <Badge color="yellow">To be Matched</Badge>;
+      case 'Matched': return <Badge color="green">Matched</Badge>;
+      default: return <Badge color="gray">{status || 'Unknown'}</Badge>;
     }
   };
 
-  const getDisplayName = (parent: FirestoreUser) => {
+  const getDisplayName = (parent: User) => {
     const parentName = (parent.parent1 as Record<string, unknown> | undefined)?.name as string | undefined;
     if (parentName && parentName.trim().length > 0) return parentName;
 
@@ -129,18 +177,18 @@ const ParentsPage: React.FC = () => {
     return parent.email ?? 'Intended Parent';
   };
 
-  const getLocation = (parent: FirestoreUser) => {
+  const getLocation = (parent: User) => {
     const formData = parent.formData as Record<string, unknown> | undefined;
     const city = (formData?.city as string | undefined) ?? '';
     const state = (formData?.state as string | undefined) ?? '';
     return [city, state].filter(Boolean).join(', ') || 'Not specified';
   };
 
-  const getTimeline = (parent: FirestoreUser) => {
+  const getTimeline = (parent: User) => {
     return ((parent.formData as Record<string, unknown> | undefined)?.whenToStart as string | undefined) ?? 'No timeline set';
   };
 
-  const getBudget = (parent: FirestoreUser) => {
+  const getBudget = (parent: User) => {
     return ((parent.form2Data as Record<string, unknown> | undefined)?.budget as string | undefined) ?? 'Not provided';
   };
 
@@ -158,7 +206,7 @@ const ParentsPage: React.FC = () => {
           </div>
 
           {/* Status Tabs */}
-          <div className="mb-6">
+          <div className="mb-6 overflow-x-auto">
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
               {statusDefinitions.map((status) => (
                 <button
@@ -248,9 +296,6 @@ const ParentsPage: React.FC = () => {
                           <i className="ri-eye-line mr-1"></i>
                           View Profile
                         </Button>
-                        <Button size="sm" color="blue">
-                          <i className="ri-message-line"></i>
-                        </Button>
                       </div>
                     </Card>
                   ))}
@@ -259,7 +304,6 @@ const ParentsPage: React.FC = () => {
             </>
           )}
 
-          {/* Parents Grid */}
           {/* Parent Detail Modal */}
           {selectedParent && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -280,10 +324,27 @@ const ParentsPage: React.FC = () => {
                       <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center">
                         <i className="ri-parent-line text-purple-600 dark:text-purple-400 text-2xl"></i>
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{getDisplayName(selectedParent)}</h3>
-                        <p className="text-gray-600 dark:text-gray-400 break-all">Parent ID: {selectedParent.id}</p>
-                        {getStatusBadge(selectedParent)}
+                        <p className="text-gray-600 dark:text-gray-400 break-all mb-2">Parent ID: {selectedParent.id}</p>
+                        
+                        {/* Status Dropdown */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
+                          <div className="relative">
+                            <select
+                              value={selectedParent.status || ''}
+                              onChange={(e) => handleStatusUpdate(selectedParent.id, e.target.value as UserStatus)}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white py-1 pl-2 pr-8"
+                            >
+                              <option value="">Select Status</option>
+                              {IP_STATUSES.map(status => (
+                                <option key={status} value={status}>{status}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {getStatusBadge(selectedParent)}
+                        </div>
                       </div>
                     </div>
 
@@ -298,6 +359,8 @@ const ParentsPage: React.FC = () => {
                         'Updated At': selectedParent.updatedAt
                       }}
                     />
+                    
+                    {/* ... Rest of DataSections (same as before) ... */}
                     <DataSection
                       title="Form 1 Responses"
                       data={(selectedParent.formData as Record<string, unknown>) ?? null}
@@ -330,17 +393,13 @@ const ParentsPage: React.FC = () => {
                     />
 
                     <div className="flex gap-3">
-                      <Button color="blue" className="flex-1">
+                      <Button color="blue" className="flex-1" disabled={selectedParent.status !== 'Accepted to Program'}>
                         <i className="ri-links-line mr-2"></i>
                         Find Match
                       </Button>
                       <Button variant="outline" className="flex-1">
                         <i className="ri-message-line mr-2"></i>
                         Send Message
-                      </Button>
-                      <Button variant="outline" className="flex-1">
-                        <i className="ri-edit-line mr-2"></i>
-                        Edit Profile
                       </Button>
                     </div>
                   </div>

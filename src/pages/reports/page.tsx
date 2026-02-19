@@ -3,8 +3,7 @@ import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase';
 
 const ReportsPage: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('6months');
@@ -38,21 +37,31 @@ const ReportsPage: React.FC = () => {
   const fetchStats = async () => {
     setIsLoading(true);
     try {
-      const [casesSnapshot, paymentsSnapshot] = await Promise.all([
-        getDocs(collection(db, 'cases')),
-        getDocs(collection(db, 'invoices'))
+      // Fetch Journeys and Financials from Supabase
+      const [
+        { data: matchesData, error: mError },
+        { data: journeysData, error: jError },
+        { data: financialsData, error: fError }
+      ] = await Promise.all([
+        supabase.from('matches').select('id'),
+        supabase.from('journeys').select('*'),
+        supabase.from('agency_financials').select('amount')
       ]);
 
-      const totalMatches = casesSnapshot.size;
-      const activeJourneys = casesSnapshot.docs.filter((doc: any) => 
-        doc.data().currentStage !== 'Completed'
+      if (mError) throw mError;
+      if (jError) throw jError;
+      if (fError) throw fError;
+
+      const totalMatches = (matchesData || []).length;
+      const activeJourneys = (journeysData || []).filter(j => 
+        j.status !== 'Completed' && j.status !== 'Cancelled'
       ).length;
-      const successfulBirths = casesSnapshot.docs.filter((doc: any) => 
-        doc.data().currentStage === 'Completed'
+      const successfulBirths = (journeysData || []).filter(j => 
+        j.status === 'Completed'
       ).length;
       
-      const totalRevenue = paymentsSnapshot.docs.reduce((sum: number, doc: any) => {
-        return sum + (doc.data().amount || 0);
+      const totalRevenue = (financialsData || []).reduce((sum, item) => {
+        return sum + (item.amount || 0);
       }, 0);
 
       setStats({

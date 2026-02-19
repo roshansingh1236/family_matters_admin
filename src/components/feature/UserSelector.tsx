@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase';
 import SearchableDropdown from '../base/SearchableDropdown';
 
 interface UserSelectorProps {
@@ -34,37 +33,37 @@ const UserSelector: React.FC<UserSelectorProps> = ({
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const usersRef = collection(db, 'users');
-        const rolesToFetch = role ? [role] : ['Surrogate', 'Intended Parent'];
+        const rolesToFetch = role 
+            ? (role === 'Surrogate' ? ['Surrogate', 'gestationalCarrier'] : ['Intended Parent', 'intendedParent'])
+            : ['Surrogate', 'gestationalCarrier', 'Intended Parent', 'intendedParent'];
         
-        const q = query(
-          usersRef, 
-          where('role', 'in', rolesToFetch)
-        );
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .in('role', rolesToFetch);
         
-        const querySnapshot = await getDocs(q);
-        const users: UserOption[] = querySnapshot.docs.map(doc => {
-          const data = doc.data();
-          
+        if (error) throw error;
+
+        const users: UserOption[] = (data || []).map(u => {
           // Helper to get display name (similar to pages)
           let name = '';
-          if (data.formData) {
-            name = [data.formData.firstName, data.formData.lastName].filter(Boolean).join(' ');
+          if (u.form_data) {
+            name = [u.form_data.firstName, u.form_data.lastName].filter(Boolean).join(' ');
           }
-          if (!name && data.parent1?.name) {
-            name = data.parent1.name;
-          }
-          if (!name) {
-            name = [data.firstName, data.lastName].filter(Boolean).join(' ');
+          if (!name && u.full_name) {
+            name = u.full_name;
           }
           if (!name) {
-            name = data.email || 'Unknown User';
+            name = [u.firstName, u.lastName].filter(Boolean).join(' ');
+          }
+          if (!name) {
+            name = u.email || 'Unknown User';
           }
 
           return {
-            id: doc.id,
-            name: `${name} (${data.role})`,
-            role: data.role
+            id: u.id,
+            name: `${name} (${u.role})`,
+            role: u.role
           };
         });
 
@@ -77,7 +76,7 @@ const UserSelector: React.FC<UserSelectorProps> = ({
     };
 
     fetchUsers();
-  }, []);
+  }, [role]);
 
   if (isLoading) {
     return (

@@ -1,17 +1,5 @@
 
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  getDocs, 
-  query, 
-  where, 
-  Timestamp,
-  orderBy
-} from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 
 export interface Task {
   id?: string;
@@ -21,25 +9,31 @@ export interface Task {
   assigneeName?: string; // Denormalized for display
   dueDate: string; // YYYY-MM-DD
   isCompleted: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-const COLLECTION_NAME = 'tasks';
+const TABLE_NAME = 'tasks';
 
 export const taskService = {
   // Fetch all tasks
   getAllTasks: async (): Promise<Task[]> => {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        orderBy('dueDate', 'asc')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Task));
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .order('due_date', { ascending: true });
+      
+      if (error) throw error;
+      return (data || []).map(t => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          assignee: t.user_id || t.assignee,
+          dueDate: t.due_date,
+          isCompleted: t.is_completed ?? (t.status === 'Completed'),
+          createdAt: t.created_at
+      })) as Task[];
     } catch (error) {
       console.error('Error fetching tasks:', error);
       throw error;
@@ -47,24 +41,23 @@ export const taskService = {
   },
 
   // Create a new task
-  createTask: async (task: Omit<Task, 'id'>): Promise<string> => {
+  createTask: async (task: any): Promise<string> => {
     try {
-      console.log('Creating new task:', {
-        title: task.title,
-        assignee: task.assignee,
-        assigneeName: task.assigneeName,
-        dueDate: task.dueDate,
-        isCompleted: task.isCompleted
-      });
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .insert({
+          user_id: task.assignee,
+          title: task.title,
+          description: task.description,
+          due_date: task.dueDate,
+          is_completed: task.isCompleted,
+          status: task.isCompleted ? 'Completed' : 'Pending'
+        })
+        .select('id')
+        .single();
       
-      const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-        ...task,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
-      
-      console.log('Task created successfully with ID:', docRef.id);
-      return docRef.id;
+      if (error) throw error;
+      return data.id;
     } catch (error) {
       console.error('Error creating task:', error);
       throw error;
@@ -72,13 +65,21 @@ export const taskService = {
   },
 
   // Update a task
-  updateTask: async (id: string, updates: Partial<Task>): Promise<void> => {
+  updateTask: async (id: string, updates: any): Promise<void> => {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      await updateDoc(docRef, {
-        ...updates,
-        updatedAt: Timestamp.now()
-      });
+      const mappedUpdates: any = {};
+      if (updates.title) mappedUpdates.title = updates.title;
+      if (updates.description) mappedUpdates.description = updates.description;
+      if (updates.assignee) mappedUpdates.user_id = updates.assignee;
+      if (updates.dueDate) mappedUpdates.due_date = updates.dueDate;
+      if (updates.isCompleted !== undefined) mappedUpdates.status = updates.isCompleted ? 'Completed' : 'Pending';
+
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .update(mappedUpdates)
+        .eq('id', id);
+        
+      if (error) throw error;
     } catch (error) {
       console.error('Error updating task:', error);
       throw error;
@@ -88,7 +89,12 @@ export const taskService = {
   // Delete a task
   deleteTask: async (id: string): Promise<void> => {
     try {
-      await deleteDoc(doc(db, COLLECTION_NAME, id));
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw error;
     } catch (error) {
       console.error('Error deleting task:', error);
       throw error;
@@ -98,58 +104,51 @@ export const taskService = {
   // Get tasks by user ID
   getTasksByUserId: async (userId: string): Promise<Task[]> => {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where('assignee', '==', userId),
-        orderBy('dueDate', 'asc')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Task));
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('user_id', userId)
+        .order('due_date', { ascending: true });
+      
+      if (error) throw error;
+      return (data || []).map(t => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          assignee: t.user_id,
+          dueDate: t.due_date,
+          isCompleted: t.is_completed ?? (t.status === 'Completed'),
+          createdAt: t.created_at
+      })) as Task[];
     } catch (error) {
-      console.warn('Error fetching tasks by user (possibly missing index), trying simple fetch', error);
-      try {
-        const qSimple = query(collection(db, COLLECTION_NAME));
-        const snapshot = await getDocs(qSimple);
-        return snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as Task))
-          .filter(t => t.assignee === userId)
-          .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-      } catch (innerError) {
-        console.error('Fallback fetch also failed', innerError);
-        return [];
-      }
+      console.error('Error fetching tasks by user:', error);
+      return [];
     }
   },
 
   // Get tasks by status
   getTasksByStatus: async (isCompleted: boolean): Promise<Task[]> => {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME),
-        where('isCompleted', '==', isCompleted),
-        orderBy('dueDate', 'asc')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Task));
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('is_completed', isCompleted)
+        .order('due_date', { ascending: true });
+        
+      if (error) throw error;
+      return (data || []).map(t => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          assignee: t.user_id,
+          dueDate: t.due_date,
+          isCompleted: t.is_completed ?? (t.status === 'Completed'),
+          createdAt: t.created_at
+      })) as Task[];
     } catch (error) {
-      console.warn('Error fetching tasks by status (possibly missing index), trying simple fetch', error);
-      try {
-        const qSimple = query(collection(db, COLLECTION_NAME));
-        const snapshot = await getDocs(qSimple);
-        return snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as Task))
-          .filter(t => t.isCompleted === isCompleted)
-          .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-      } catch (innerError) {
-        console.error('Fallback fetch also failed', innerError);
-        return [];
-      }
+      console.error('Error fetching tasks by status:', error);
+      return [];
     }
   }
 };
+

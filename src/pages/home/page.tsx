@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { supabase } from '../../lib/supabase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { db } from '../../lib/firebase';
 import DataSection from '../../components/data/DataSection';
 
 const HomePage: React.FC = () => {
@@ -24,7 +23,7 @@ const HomePage: React.FC = () => {
   };
 
   const handleRequestClick = () => {
-    navigate('/requests');
+    navigate('/inquiries');
   };
 
   const handleAppointmentClick = () => {
@@ -32,91 +31,90 @@ const HomePage: React.FC = () => {
   };
 
   useEffect(() => {
-    const parentsQuery = query(
-      collection(db, 'users'),
-      where('role', '==', 'Intended Parent'),
-      orderBy('updatedAt', 'desc')
-    );
+    const fetchData = async () => {
+      try {
+        // Fetch Parents
+        const { data: parentsData, error: pError } = await supabase
+          .from('users')
+          .select('*')
+          .in('role', ['Intended Parent', 'intendedParent'])
+          .order('updated_at', { ascending: false });
 
-    const unsubscribe = onSnapshot(
-      parentsQuery,
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          data: doc.data() as Record<string, unknown>
-        }));
-        setParents(data);
-        setIsParentsLoading(false);
-        setParentsError(null);
-      },
-      (error) => {
-        console.error('Failed to load parents for dashboard', error);
-        setParents([]);
-        setParentsError('Unable to load intended parent updates.');
-        setIsParentsLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const surrogatesQuery = query(
-      collection(db, 'users'),
-      where('role', '==', 'Surrogate'),
-      orderBy('updatedAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(
-      surrogatesQuery,
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          data: doc.data() as Record<string, unknown>
-        }));
-        setSurrogates(data);
-        setIsSurrogatesLoading(false);
-        setSurrogatesError(null);
-      },
-      (error) => {
-        console.error('Failed to load surrogates for dashboard', error);
-        setSurrogates([]);
-        setSurrogatesError('Unable to load surrogate updates.');
-        setIsSurrogatesLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    // Fetch users as inquiries for dashboard stats (aligning with RequestsPage logic)
-    const inquiriesQuery = query(
-      collection(db, 'users'),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(
-      inquiriesQuery,
-      (snapshot) => {
-         const data = snapshot.docs.map((doc) => {
-          const docData = doc.data();
-          return {
-            id: doc.id,
+        if (pError) throw pError;
+        setParents((parentsData || []).map(u => ({
+            id: u.id,
             data: {
-              ...docData,
-              // Default to 'online' if source is missing, matching RequestsPage logic
-              source: docData.source || 'online'
+                ...u,
+                firstName: u.full_name?.split(' ')[0],
+                lastName: u.full_name?.split(' ').slice(1).join(' '),
+                profileCompleted: u.profile_completed,
+                form2Completed: u.form2_completed,
+                formData: u.form_data,
+                updatedAt: u.updated_at,
+                createdAt: u.created_at
             }
-          };
-        });
-        setInquiries(data);
-      },
-      (error) => {
-        console.error('Failed to load inquiries for dashboard', error);
+        })));
+        setIsParentsLoading(false);
+
+        // Fetch Surrogates
+        const { data: surrogatesData, error: sError } = await supabase
+          .from('users')
+          .select('*')
+          .in('role', ['Surrogate', 'gestationalCarrier'])
+          .order('updated_at', { ascending: false });
+
+        if (sError) throw sError;
+        setSurrogates((surrogatesData || []).map(u => ({
+            id: u.id,
+            data: {
+                ...u,
+                firstName: u.full_name?.split(' ')[0],
+                lastName: u.full_name?.split(' ').slice(1).join(' '),
+                profileCompleted: u.profile_completed,
+                form2Completed: u.form2_completed,
+                formData: u.form_data,
+                updatedAt: u.updated_at,
+                createdAt: u.created_at
+            }
+        })));
+        setIsSurrogatesLoading(false);
+
+        // Fetch Inquiries
+        const { data: inquiriesData, error: iError } = await supabase
+          .from('users')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (iError) throw iError;
+        setInquiries((inquiriesData || []).map(u => ({
+            id: u.id,
+            data: {
+                ...u,
+                source: u.source || 'online'
+            }
+        })));
+
+      } catch (error: any) {
+        console.error('Failed to load dashboard data', error);
+        setParentsError('Unable to load dashboard updates.');
+        setIsParentsLoading(false);
+        setIsSurrogatesLoading(false);
       }
-    );
-    return () => unsubscribe();
+    };
+
+    fetchData();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('public:users')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const parentsStats = useMemo(() => {

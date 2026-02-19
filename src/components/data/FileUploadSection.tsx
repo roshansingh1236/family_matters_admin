@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase';
 import Button from '../base/Button';
 import ConfirmationDialog from '../base/ConfirmationDialog';
 
@@ -24,6 +23,8 @@ type FileUploadSectionProps = {
   files?: FileRecord[];
   onFilesChange: (files: FileRecord[]) => Promise<void> | void;
 };
+
+const BUCKET_NAME = 'users';
 
 const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   title,
@@ -80,50 +81,39 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     }
 
     try {
-      const storagePath = `users/${userId}/${selectedCategory}/${Date.now()}_${file.name}`;
-      const storageRef = ref(storage, storagePath);
-      const uploadTask = uploadBytesResumable(storageRef, file);
+      const storagePath = `${userId}/${selectedCategory}/${Date.now()}_${file.name}`;
+      
+      const { data, error: uploadError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
-      uploadTask.on('state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress);
-        },
-        (error) => {
-          console.error('Upload failed:', error);
-          let friendlyError = `Upload failed: ${error.message}`;
-          setUploadError(friendlyError);
-          setIsUploading(false);
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(BUCKET_NAME)
+        .getPublicUrl(storagePath);
             
-            const newFile: FileRecord = {
-              name: file.name,
-              url: downloadURL,
-              category: selectedCategory,
-              uploadedAt: new Date().toISOString(),
-              type: file.type,
-              path: storagePath
-            };
+      const newFile: FileRecord = {
+        name: file.name,
+        url: publicUrl,
+        category: selectedCategory,
+        uploadedAt: new Date().toISOString(),
+        type: file.type,
+        path: storagePath
+      };
 
-            const updatedFiles = [...files, newFile];
-            await onFilesChange(updatedFiles);
-            setIsUploading(false);
-            if (fileInputRef.current) {
-              fileInputRef.current.value = '';
-            }
-          } catch (urlError) {
-             console.error('Error getting download URL:', urlError);
-             setUploadError('Upload succeeded but failed to get file URL.');
-             setIsUploading(false);
-          }
-        }
-      );
-    } catch (error) {
-      console.error('Error starting upload:', error);
-      setUploadError('Failed to start upload.');
+      const updatedFiles = [...files, newFile];
+      await onFilesChange(updatedFiles);
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error: any) {
+      console.error('Upload failed:', error);
+      setUploadError(`Upload failed: ${error.message || 'Unknown error'}`);
       setIsUploading(false);
     }
   };
@@ -131,33 +121,20 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   const confirmDelete = async () => {
     if (!fileToDelete) return;
 
-    // Helper to get path from URL if missing
-    const getStoragePath = (file: FileRecord): string | null => {
-        if (file.path) return file.path;
-        try {
-            const urlObj = new URL(file.url);
-            const pathStart = urlObj.pathname.indexOf('/o/');
-            if (pathStart === -1) return null;
-            const encodedPath = urlObj.pathname.substring(pathStart + 3);
-            return decodeURIComponent(encodedPath);
-        } catch {
-            return null;
-        }
-    };
-
-    const storagePath = getStoragePath(fileToDelete);
-
     try {
-      if (storagePath) {
-          const storageRef = ref(storage, storagePath);
-          await deleteObject(storageRef).catch((error) => {
-            console.warn('File might not exist in storage or invalid path, proceeding to remove record:', error);
-          });
+      if (fileToDelete.path) {
+          const { error: deleteError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .remove([fileToDelete.path]);
+            
+          if (deleteError) {
+              console.warn('File might not exist in storage or invalid path, proceeding to remove record:', deleteError);
+          }
       } else {
           console.warn('Could not determine storage path, removing record only.');
       }
 
-      const updatedFiles = files.filter((f) => f.url !== fileToDelete.url); // Filter by URL as it's more unique/stable
+      const updatedFiles = files.filter((f) => f.url !== fileToDelete.url);
       await onFilesChange(updatedFiles);
     } catch (error) {
       console.error('Error deleting file:', error);

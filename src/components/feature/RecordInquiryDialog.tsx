@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { db, auth } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase';
 
 interface RecordInquiryDialogProps {
   isOpen: boolean;
@@ -31,54 +29,62 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
 
     try {
       const data: any = {
-        displayName: formData.name,
+        full_name: formData.name,
         email: formData.email,
         phone: formData.phone,
-        message: formData.message,
+        description: formData.message,
         source: 'phone',
         status: 'new',
-        role: variant === 'detailed' ? (formData.role === 'Surrogate' ? 'Surrogate' : 'Intended Parents') : 'inquiry',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        role: variant === 'detailed' ? (formData.role === 'Surrogate' ? 'Surrogate' : 'Intended Parent') : 'inquiry',
+        data: variant === 'detailed' ? {
+            age: formData.age,
+            location: formData.location,
+            experience: formData.experience
+        } : {}
       };
-
-      if (variant === 'detailed') {
-        data.age = formData.age;
-        data.location = formData.location;
-        data.experience = formData.experience;
-      }
 
       // If email is provided, try to create an Auth user
       if (formData.email) {
         if (formData.phone.length < 6) {
            alert("Phone number too short to be used as password (min 6 chars). Inquiry saved without account creation.");
-           // Fallback to normal save without auth if desired, OR return error. 
-           // For now, let's just proceed with addDoc (no auth) or fail. 
-           // Implementation plan said "Use phone number as password". 
-           // I'll assume valid phone. If not, I'll error out or just skip Auth.
-           // Let's TRY to create auth.
         }
 
         try {
           // Use phone number as password
-          const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.phone);
-          const uid = userCredential.user.uid;
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: formData.email,
+            password: formData.phone,
+            options: {
+                data: {
+                    full_name: formData.name,
+                    role: data.role
+                }
+            }
+          });
+
+          if (authError) {
+             if (authError.message.includes('User already registered')) {
+                alert("Email already in use. Saving inquiry without creating a new account.");
+             } else {
+                throw authError;
+             }
+          }
           
-          // Save with UID
-          await setDoc(doc(db, 'users', uid), data);
+          if (authData.user) {
+             data.id = authData.user.id;
+          }
         } catch (authError: any) {
              console.error("Auth creation failed:", authError);
-             if (authError.code === 'auth/email-already-in-use') {
-                 alert("Email already in use. Saving inquiry without creating a new account.");
-                 await addDoc(collection(db, 'users'), data);
-             } else {
-                 throw authError; // Re-throw other errors
-             }
+             throw authError;
         }
-      } else {
-        // No email, just save to Firestore
-        await addDoc(collection(db, 'users'), data);
       }
+
+      // Save to Supabase users table
+      const { error: dbError } = await supabase
+        .from('users')
+        .insert(data);
+
+      if (dbError) throw dbError;
 
       setFormData({
         name: '', email: '', phone: '', message: '',

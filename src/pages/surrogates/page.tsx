@@ -1,104 +1,135 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import DataSection from '../../components/data/DataSection';
-import { db } from '../../lib/firebase';
-
-type FirestoreUser = {
-  id: string;
-  role?: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  formData?: Record<string, unknown>;
-  form2?: Record<string, unknown>;
-  form2Data?: Record<string, unknown>;
-  form2Completed?: boolean;
-  profileCompleted?: boolean;
-  createdAt?: unknown;
-  updatedAt?: unknown;
-  [key: string]: unknown;
-};
+import type { User, UserStatus } from '../../types';
+import { GC_STATUSES } from '../../types';
 
 const statusDefinitions = [
   {
     id: 'all',
     label: 'All',
-    filter: (_surrogate: FirestoreUser) => true
+    filter: (_surrogate: User) => true
   },
   {
-    id: 'available',
-    label: 'Available',
-    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Available' || (!surrogate.form2Completed && !surrogate.profileCompleted)
+    id: 'new_application',
+    label: 'New Application',
+    filter: (surrogate: User) => surrogate.status === 'New Application'
   },
   {
-    id: 'potential',
-    label: 'Potential',
-    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Potential'
-  },
-  {
-    id: 'records_review',
-    label: 'Records Review',
-    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Records Review'
+    id: 'pre_screen',
+    label: 'Pre-Screen',
+    filter: (surrogate: User) => surrogate.status === 'Pre-Screen'
   },
   {
     id: 'screening',
     label: 'Screening',
-    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Screening'
+    filter: (surrogate: User) => surrogate.status === 'Screening in Progress'
   },
   {
-    id: 'legal',
-    label: 'Legal',
-    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Legal'
+    id: 'accepted',
+    label: 'Accepted',
+    filter: (surrogate: User) => surrogate.status === 'Accepted to Program'
   },
   {
-    id: 'cycling',
-    label: 'Cycling',
-    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Cycling'
+    id: 'on_hold',
+    label: 'On Hold',
+    filter: (surrogate: User) => surrogate.status === 'On Hold'
   },
   {
-    id: 'pregnant',
-    label: 'Pregnant',
-    filter: (surrogate: FirestoreUser) => (surrogate as any).status === 'Pregnant'
+    id: 'declined',
+    label: 'Declined',
+    filter: (surrogate: User) => surrogate.status === 'Declined / Inactive'
   }
 ];
 
 const SurrogatesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
-  const [selectedSurrogate, setSelectedSurrogate] = useState<FirestoreUser | null>(null);
-  const [surrogates, setSurrogates] = useState<FirestoreUser[]>([]);
+  const [selectedSurrogate, setSelectedSurrogate] = useState<User | null>(null);
+  const [surrogates, setSurrogates] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  const fetchSurrogates = async () => {
+    try {
+      const { data, error: err } = await supabase
+        .from('users')
+        .select('*')
+        .in('role', ['Surrogate', 'gestationalCarrier']);
+
+      if (err) throw err;
+      
+      const mappedData: User[] = (data || []).map(u => ({
+        id: u.id,
+        ...u,
+        profileCompleted: u.profile_completed || u.profileCompleted,
+        form2Completed: u.form2_completed || u.form2Completed || u.form_2_completed,
+        formData: u.form_data || u.formData || u.formdata,
+        form2: u.form2,
+        form2Data: u.form2_data || u.form2Data || u.form2data,
+        updatedAt: u.updated_at,
+        createdAt: u.created_at
+      }));
+      
+      setSurrogates(mappedData);
+      setIsLoading(false);
+      setError(null);
+    } catch (err: any) {
+      console.error('Failed to load surrogates', err);
+      setError('Unable to load surrogate records. Please try again later.');
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const surrogatesQuery = query(collection(db, 'users'), where('role', '==', 'Surrogate'));
+    fetchSurrogates();
 
-    const unsubscribe = onSnapshot(
-      surrogatesQuery,
-      (snapshot) => {
-        const data: FirestoreUser[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Record<string, unknown>)
-        }));
-        setSurrogates(data);
-        setIsLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error('Failed to load surrogates', err);
-        setError('Unable to load surrogate records. Please try again later.');
-        setIsLoading(false);
-      }
-    );
+    const channel = supabase
+      .channel('public:users:surrogates')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'users'
+      }, (payload: any) => {
+        if (payload.new && (payload.new.role === 'Surrogate' || payload.new.role === 'gestationalCarrier')) {
+            fetchSurrogates();
+        } else if (payload.old && (payload.old.role === 'Surrogate' || payload.old.role === 'gestationalCarrier')) {
+            fetchSurrogates();
+        }
+      })
+      .subscribe();
 
-    return () => unsubscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  const handleStatusUpdate = async (userId: string, newStatus: UserStatus) => {
+    try {
+      const { error: err } = await supabase
+        .from('users')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (err) throw err;
+      
+      if (selectedSurrogate && selectedSurrogate.id === userId) {
+        setSelectedSurrogate({ ...selectedSurrogate, status: newStatus });
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('Failed to update status');
+    }
+  };
 
   const statusCounts = useMemo(() => {
     return statusDefinitions.reduce<Record<string, number>>((acc, status) => {
@@ -113,32 +144,24 @@ const SurrogatesPage: React.FC = () => {
     return surrogates.filter((surrogate) => currentStatus.filter(surrogate));
   }, [activeTab, surrogates]);
 
-  const getStatusBadge = (surrogate: FirestoreUser) => {
-    const status = (surrogate as any).status;
+  const getStatusBadge = (surrogate: User) => {
+    const status = surrogate.status;
     switch (status) {
-      case 'Available':
-        return <Badge color="green">Available</Badge>;
-      case 'Potential':
-        return <Badge color="blue">Potential</Badge>;
-      case 'Records Review':
-        return <Badge color="yellow">Records Review</Badge>;
-      case 'Screening':
-        return <Badge color="purple">Screening</Badge>;
-      case 'Legal':
-        return <Badge color="indigo">Legal</Badge>;
-      case 'Cycling':
-        return <Badge color="pink">Cycling</Badge>;
-      case 'Pregnant':
-        return <Badge color="red">Pregnant</Badge>;
-      default:
-        // Fallback for existing boolean flags if no status is set
-        if (surrogate.form2Completed) return <Badge color="green">Form 2 Complete</Badge>;
-        if (surrogate.profileCompleted) return <Badge color="blue">Profile Complete</Badge>;
-        return <Badge color="gray">Unknown</Badge>;
+      case 'New Application': return <Badge color="blue">New App</Badge>;
+      case 'Pre-Screen': return <Badge color="indigo">Pre-Screen</Badge>;
+      case 'Screening in Progress': return <Badge color="purple">Screening</Badge>;
+      case 'Accepted to Program': return <Badge color="green">Accepted</Badge>;
+      case 'On Hold': return <Badge color="gray">On Hold</Badge>;
+      case 'Declined / Inactive': return <Badge color="red">Declined</Badge>;
+      // Legacy Fallbacks
+      case 'Available': return <Badge color="green">Available</Badge>;
+      case 'Potential': return <Badge color="blue">Potential</Badge>;
+      case 'Pregnant': return <Badge color="red">Pregnant</Badge>;
+      default: return <Badge color="gray">{status || 'Unknown'}</Badge>;
     }
   };
 
-  const getDisplayName = (surrogate: FirestoreUser) => {
+  const getDisplayName = (surrogate: User) => {
     const formFirstName = (surrogate.formData as Record<string, unknown> | undefined)?.firstName as string | undefined;
     const formLastName = (surrogate.formData as Record<string, unknown> | undefined)?.lastName as string | undefined;
     const combined = [formFirstName, formLastName].filter(Boolean).join(' ');
@@ -152,20 +175,20 @@ const SurrogatesPage: React.FC = () => {
     return surrogate.email ?? 'Surrogate';
   };
 
-  const getLocation = (surrogate: FirestoreUser) => {
+  const getLocation = (surrogate: User) => {
     const formData = surrogate.formData as Record<string, unknown> | undefined;
     const city = (formData?.city as string | undefined) ?? '';
     const state = (formData?.state as string | undefined) ?? '';
     return [city, state].filter(Boolean).join(', ') || 'Not specified';
   };
 
-  const getExperience = (surrogate: FirestoreUser) => {
+  const getExperience = (surrogate: User) => {
     const form2 = (surrogate.form2 as Record<string, unknown> | undefined) ?? {};
     const pregnancies = (form2?.pregnancyHistory as Record<string, unknown> | undefined)?.total as string | undefined;
     return pregnancies ?? ((surrogate.form2 as Record<string, unknown> | undefined)?.surrogacyChildren as string | undefined) ?? '—';
   };
 
-  const getAvailability = (surrogate: FirestoreUser) => {
+  const getAvailability = (surrogate: User) => {
     const form2 = surrogate.form2 as Record<string, unknown> | undefined;
     const availability = form2?.availability as string | undefined;
     return availability ?? 'Not provided';
@@ -185,7 +208,7 @@ const SurrogatesPage: React.FC = () => {
           </div>
 
           {/* Status Tabs */}
-          <div className="mb-6">
+          <div className="mb-6 overflow-x-auto">
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
               {statusDefinitions.map((status) => (
                 <button
@@ -275,9 +298,6 @@ const SurrogatesPage: React.FC = () => {
                           <i className="ri-eye-line mr-1"></i>
                           View Profile
                         </Button>
-                        <Button size="sm" color="blue">
-                          <i className="ri-message-line"></i>
-                        </Button>
                       </div>
                     </Card>
                   ))}
@@ -306,10 +326,27 @@ const SurrogatesPage: React.FC = () => {
                       <div className="w-16 h-16 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center">
                         <i className="ri-user-heart-line text-pink-600 dark:text-pink-400 text-2xl"></i>
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{getDisplayName(selectedSurrogate)}</h3>
-                        <p className="text-gray-600 dark:text-gray-400 break-all">Surrogate ID: {selectedSurrogate.id}</p>
-                        {getStatusBadge(selectedSurrogate)}
+                        <p className="text-gray-600 dark:text-gray-400 break-all mb-2">Surrogate ID: {selectedSurrogate.id}</p>
+                        
+                        {/* Status Dropdown */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
+                          <div className="relative">
+                            <select
+                              value={selectedSurrogate.status || ''}
+                              onChange={(e) => handleStatusUpdate(selectedSurrogate.id, e.target.value as UserStatus)}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white py-1 pl-2 pr-8"
+                            >
+                              <option value="">Select Status</option>
+                              {GC_STATUSES.map(status => (
+                                <option key={status} value={status}>{status}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {getStatusBadge(selectedSurrogate)}
+                        </div>
                       </div>
                     </div>
 
@@ -341,7 +378,7 @@ const SurrogatesPage: React.FC = () => {
                     />
 
                     <div className="flex gap-3">
-                      <Button color="blue" className="flex-1">
+                      <Button color="blue" className="flex-1" disabled={selectedSurrogate.status !== 'Accepted to Program'}>
                         <i className="ri-links-line mr-2"></i>
                         Create Match
                       </Button>

@@ -5,13 +5,12 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
+import { supabase } from '../../lib/supabase';
 import { appointmentService } from '../../services/appointmentService';
 import type { Appointment } from '../../services/appointmentService';
 import UserSelector from '../../components/feature/UserSelector';
 import MultiUserSelector from '../../components/feature/MultiUserSelector';
 import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 
 // Define appointment types
 const appointmentTypes = [
@@ -76,18 +75,22 @@ const AppointmentsPage: React.FC = () => {
     for (const userId of userIds) {
       if (participantNames[userId]) continue;
       try {
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+        if (data && !error) {
           let name = '';
-          if (data.formData) {
-            name = [data.formData.firstName, data.formData.lastName].filter(Boolean).join(' ');
+          if (data.form_data) {
+            name = [data.form_data.firstName, data.form_data.lastName].filter(Boolean).join(' ');
           }
           if (!name && data.parent1?.name) {
             name = data.parent1.name;
           }
           if (!name) {
-            name = [data.firstName, data.lastName].filter(Boolean).join(' ');
+            name = data.full_name;
           }
           if (!name) {
             name = data.email || 'Unknown User';

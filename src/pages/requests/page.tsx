@@ -1,8 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, orderBy, query, Timestamp, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
@@ -20,36 +18,48 @@ const RequestsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // Fetch users as requests (assuming new users are requests)
-    const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedRequests = snapshot.docs.map(doc => {
-        const data = doc.data();
-        // Determine source, trusting existing field or defaulting to 'online'
-        const source = data.source || 'online';
-        
+  const fetchRequests = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const fetchedRequests = (data || []).map(u => {
+        const source = u.source || 'online';
         return {
-          id: doc.id,
-          ...data,
-          applicantName: data.displayName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.email,
-          type: data.role === 'Surrogate' ? 'Surrogate Application' : 'Intended Parents',
-          status: data.status || 'pending', // Default status
+          id: u.id,
+          ...u,
+          applicantName: u.full_name || u.email,
+          type: u.role === 'Surrogate' ? 'Surrogate Application' : 'Intended Parents',
+          status: u.status || 'pending',
           source: source,
-          submittedDate: data.createdAt instanceof Timestamp 
-            ? data.createdAt.toDate().toLocaleDateString() 
-            : (data.submittedDate || 'N/A')
+          submittedDate: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A'
         };
       });
       setRequests(fetchedRequests);
       setIsLoading(false);
-    }, (error) => {
+    } catch (error) {
       console.error("Error fetching requests:", error);
       setIsLoading(false);
-    });
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    fetchRequests();
+
+    const channel = supabase
+      .channel('public:users:requests')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        fetchRequests();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   /* New state for action loading */
@@ -59,10 +69,15 @@ const RequestsPage: React.FC = () => {
     if (!selectedRequest) return;
     setIsActionLoading(true);
     try {
-      await updateDoc(doc(db, 'users', selectedRequest.id), {
-        status: status,
-        updatedAt: Timestamp.now()
-      });
+      const { error } = await supabase
+        .from('users')
+        .update({
+          status: status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedRequest.id);
+
+      if (error) throw error;
       setSelectedRequest(null);
     } catch (error) {
       console.error("Error updating status:", error);
@@ -84,11 +99,16 @@ const RequestsPage: React.FC = () => {
     if (!selectedRequest) return;
     setIsActionLoading(true);
     try {
-      await updateDoc(doc(db, 'users', selectedRequest.id), {
-        role: 'inquiry',
-        status: 'new', // Reset status as it's a new inquiry now
-        updatedAt: Timestamp.now()
-      });
+      const { error } = await supabase
+        .from('users')
+        .update({
+          role: 'inquiry',
+          status: 'new',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedRequest.id);
+
+      if (error) throw error;
       navigate('/inquiries');
     } catch (error) {
        console.error("Error converting to inquiry:", error);

@@ -147,7 +147,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
           <h2 className="text-3xl md:text-5xl font-bold text-white mb-8">Ready to modernize your agency?</h2>
           <button 
-             onClick={() => navigate('/auth/register')}
+             onClick={() => navigate('/auth/signup')}
              className="px-8 py-4 bg-white text-blue-600 rounded-full font-bold text-lg hover:bg-gray-100 transition-colors shadow-xl"
           >
             Get Started Now

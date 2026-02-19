@@ -10,8 +10,7 @@ import type { Appointment } from '../../services/appointmentService';
 import UserSelector from '../../components/feature/UserSelector';
 import MultiUserSelector from '../../components/feature/MultiUserSelector';
 import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase';
 
 const CalendarPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -19,7 +18,6 @@ const CalendarPage: React.FC = () => {
   const [selectedEvent, setSelectedEvent] = useState<Appointment | null>(null);
   const [showNewEventModal, setShowNewEventModal] = useState(false);
   const [events, setEvents] = useState<Appointment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [showMedicalModal, setShowMedicalModal] = useState(false);
   const [participantNames, setParticipantNames] = useState<Record<string, string>>({});
 
@@ -38,7 +36,6 @@ const CalendarPage: React.FC = () => {
   });
 
   const fetchEvents = async () => {
-    setIsLoading(true);
     try {
       const data = await appointmentService.getAllAppointments();
       setEvents(Array.isArray(data) ? data : []);
@@ -46,7 +43,7 @@ const CalendarPage: React.FC = () => {
       console.error('Failed to load events', err);
       setEvents([]);
     } finally {
-      setIsLoading(false);
+      // Done fetching
     }
   };
 
@@ -182,38 +179,46 @@ const CalendarPage: React.FC = () => {
   // Fetch participant names from user IDs
   const fetchParticipantNames = async (userIds: string[]) => {
     const names: Record<string, string> = {};
-    for (const userId of userIds) {
-      if (participantNames[userId]) {
-        names[userId] = participantNames[userId];
-        continue;
-      }
-      try {
-        const userDoc = await getDoc(doc(db, 'users', userId));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
+    const usersToFetch = userIds.filter(id => !participantNames[id]);
+    
+    if (usersToFetch.length === 0) return;
+
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .in('id', usersToFetch);
+
+      if (fetchError) throw fetchError;
+
+      if (data) {
+        data.forEach((userData: any) => {
           let name = '';
-          if (data.formData) {
-            name = [data.formData.firstName, data.formData.lastName].filter(Boolean).join(' ');
+          if (userData.formData) {
+            name = [userData.formData.firstName, userData.formData.lastName].filter(Boolean).join(' ');
           }
-          if (!name && data.parent1?.name) {
-            name = data.parent1.name;
-          }
-          if (!name) {
-            name = [data.firstName, data.lastName].filter(Boolean).join(' ');
+          if (!name && userData.parent1?.name) {
+            name = userData.parent1.name;
           }
           if (!name) {
-            name = data.email || 'Unknown User';
+            name = [userData.firstName, userData.lastName].filter(Boolean).join(' ');
           }
-          names[userId] = `${name} (${data.role || 'User'})`;
-        } else {
-          names[userId] = userId;
-        }
-      } catch (error) {
-        console.error('Error fetching user name:', error);
-        names[userId] = userId;
+          if (!name) {
+            name = userData.email || 'Unknown User';
+          }
+          names[userData.id] = `${name} (${userData.role || 'User'})`;
+        });
       }
+
+      // Add IDs that couldn't be found
+      usersToFetch.forEach(id => {
+        if (!names[id]) names[id] = id;
+      });
+
+      setParticipantNames(prev => ({ ...prev, ...names }));
+    } catch (error) {
+      console.error('Error fetching user names:', error);
     }
-    setParticipantNames(prev => ({ ...prev, ...names }));
   };
 
   // Fetch participant names when event is selected

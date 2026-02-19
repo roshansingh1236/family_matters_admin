@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Button from '../../../components/base/Button';
 import { useAuth } from '../../../contexts/AuthContext';
-import { FirebaseError } from 'firebase/app';
-import { updateProfile } from 'firebase/auth';
 
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -62,34 +60,35 @@ const SignupPage: React.FC = () => {
     setSubmitError(null);
     
     try {
-      const userCredential = await signup({
+      await signup({
         email: formData.email.trim(),
         password: formData.password
       });
 
+      // Note: In Supabase, you can't update display name like Firebase directly 
+      // if you don't have a public.users table synced or using user_metadata.
+      // Assuming our signup in AuthContext handles basic auth. 
+      // We might need to insert into public.users here if not handled by a trigger.
+      
       const displayName = `${formData.firstName} ${formData.lastName}`.trim();
-      if (displayName) {
-        await updateProfile(userCredential.user, { displayName });
-      }
+      const { error: updateError } = await (await import('../../../lib/supabase')).supabase.auth.updateUser({
+        data: { 
+            full_name: displayName,
+            role: formData.role
+        }
+      });
+
+      if (updateError) console.warn('User metadata update failed:', updateError);
 
       navigate('/');
-    } catch (error) {
-      if (error instanceof FirebaseError) {
-        switch (error.code) {
-          case 'auth/email-already-in-use':
-            setSubmitError('An account with this email already exists. Try signing in instead.');
-            break;
-          case 'auth/invalid-email':
-            setSubmitError('The email address appears to be invalid.');
-            break;
-          case 'auth/weak-password':
-            setSubmitError('Your password is too weak. Please choose a stronger password.');
-            break;
-          default:
-            setSubmitError('Unable to create your account right now. Please try again later.');
-        }
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      const message = error.message || 'Unable to create your account right now. Please try again later.';
+      
+      if (message.includes('User already registered')) {
+        setSubmitError('An account with this email already exists. Try signing in instead.');
       } else {
-        setSubmitError('Unable to create your account right now. Please try again later.');
+        setSubmitError(message);
       }
     } finally {
       setIsLoading(false);

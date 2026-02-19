@@ -2,11 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Button from '../../components/base/Button';
+import { useAuth } from '../../contexts/AuthContext';
 
 import { messagingService, type Conversation, type Message } from '../../services/messagingService';
-import { collection, getDocs } from 'firebase/firestore';
-import { db, storage } from '../../lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { supabase } from '../../lib/supabase';
 import SearchableDropdown from '../../components/base/SearchableDropdown';
 import { MoreVertical, Smile, Paperclip, Send, Trash2, Reply, Image as ImageIcon, File as FileIcon, X } from 'lucide-react';
 
@@ -35,6 +34,7 @@ const getAvatarColor = (name: string) => {
 
 
 const MessagesPage: React.FC = () => {
+  const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -56,10 +56,7 @@ const MessagesPage: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-
-
-  const adminId = 'admin123'; // In production, get from auth context
-  const adminName = 'Admin'; // In production, get from auth context
+  const adminId = user?.id || ''; // Use actual user ID
 
   const fetchConversations = async () => {
     setIsLoading(true);
@@ -78,10 +75,15 @@ const MessagesPage: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const usersData = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: (doc.data().firstName || doc.data().email || 'Unknown User') as string
+      const { data, error: fetchError } = await supabase
+        .from('users')
+        .select('id, email, full_name, role');
+
+      if (fetchError) throw fetchError;
+
+      const usersData = (data || []).map(u => ({
+        id: u.id,
+        name: (u.full_name || u.email || 'Unknown User') as string
       }));
       setUsers(usersData);
     } catch (err) {
@@ -124,19 +126,28 @@ const MessagesPage: React.FC = () => {
 
       if (selectedMedia) {
         setIsUploading(true);
-        const storageRef = ref(storage, `messages/${selectedConversation.id}/${Date.now()}_${selectedMedia.file.name}`);
-        await uploadBytes(storageRef, selectedMedia.file);
-        const url = await getDownloadURL(storageRef);
-        mediaData = { url, type: selectedMedia.type };
+        const fileExt = selectedMedia.file.name.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `messages/${selectedConversation.id}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('messages')
+          .upload(filePath, selectedMedia.file);
+          
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('messages')
+          .getPublicUrl(filePath);
+          
+        mediaData = { url: publicUrl, type: selectedMedia.type };
       }
 
       await messagingService.sendMessage(
         selectedConversation.id!,
         adminId,
-        adminName,
         messageText.trim(),
-        mediaData,
-        replyTo?.id
+        mediaData
       );
       
       setMessageText('');
@@ -164,7 +175,7 @@ const MessagesPage: React.FC = () => {
   const handleDeleteMessage = async (messageId: string) => {
     if (!selectedConversation) return;
     try {
-      await messagingService.deleteMessage(selectedConversation.id!, messageId);
+      await messagingService.deleteMessage(messageId);
       await loadConversation(selectedConversation);
       setActiveMessageOptions(null);
     } catch (err) {
@@ -189,9 +200,7 @@ const MessagesPage: React.FC = () => {
 
       const conversationId = await messagingService.createConversation(
         adminId,
-        adminName,
-        selectedUserId,
-        user.name
+        selectedUserId
       );
 
       await fetchConversations();
@@ -384,7 +393,7 @@ const MessagesPage: React.FC = () => {
                                   {otherName}
                                 </span>
                                 <span className={`text-[10px] font-bold uppercase tracking-tighter ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
-                                  {formatTime(conv.lastMessageTime)}
+                                  {formatTime(new Date(conv.lastMessageTime))}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between gap-2">
@@ -481,7 +490,7 @@ const MessagesPage: React.FC = () => {
                             {showTime && (
                               <div className="flex justify-center mb-4">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800/80 px-3 py-1 rounded-full backdrop-blur-sm">
-                                  {formatTime(msg.timestamp)}
+                                  {formatTime(new Date(msg.timestamp))}
                                 </span>
                               </div>
                             )}
