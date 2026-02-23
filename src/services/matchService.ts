@@ -15,8 +15,8 @@ const mapMatchFromDb = (dbMatch: any): Match => ({
   matchCriteria: dbMatch.match_criteria,
   agencyNotes: dbMatch.agency_notes,
   // These might need further mapping if nested
-  intendedParentData: dbMatch.intended_parent_data,
-  gestationalCarrierData: dbMatch.gestational_carrier_data,
+   intendedParentData: dbMatch.intendedParentData,      // ✅ camelCase
+  gestationalCarrierData: dbMatch.gestationalCarrierData, // ✅ camelCase
 });
 
 export const matchService = {
@@ -25,7 +25,11 @@ export const matchService = {
     try {
       const { data, error } = await supabase
         .from(TABLE_NAME)
-        .select('*')
+        .select(`
+        *,
+        intendedParentData:users!matches_intended_parent_id_fkey(*),
+        gestationalCarrierData:users!matches_gestational_carrier_id_fkey(*)
+      `)
         .order('created_at', { ascending: false });
       
       if (error) throw error;

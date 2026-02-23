@@ -6,15 +6,91 @@ import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import { matchService } from '../../services/matchService';
 import type { Match, MatchStatus } from '../../types';
+import { supabase } from "@/lib/supabase";
+import Toast from '../../components/base/Toast';
+
+const MATCH_STATUSES = [
+  'Proposed',
+  'Presented',
+  'Accepted',
+  'Active',
+  'Delivered',
+  'Escrow Closure',
+  'Cancelled',
+  'Completed',
+] as const;
 
 const MatchesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MatchStatus | 'All'>('All');
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUpdatingMatchStatus, setIsUpdatingMatchStatus] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
+  // Helper for fullname display, if needed in future
+  const getFullName = (user?: User) => {
+    if (!user) return "Not Assigned";
+
+    // Prefer full_name if available
+    if (user.full_name) return user.full_name;
+
+    const first = user.first_name || "";
+    const last = user.last_name || "";
+
+    const fullName = `${first} ${last}`.trim();
+
+    return fullName || "Unnamed User";
+  };
+
+  // Handle status change for a match
+  const handleStatusChange = async (newMatchStatus: string) => {
+    if (!selectedMatch?.id) return;
+
+    setIsUpdatingMatchStatus(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('matches')
+        .update({ status: newMatchStatus })
+        .eq('id', selectedMatch.id)
+        .select();
+
+      console.log("Selected Match ID:", selectedMatch.id);
+      console.log("UPDATE RESULT:", data);
+      console.log("UPDATE ERROR:", error);
+
+      if (error) throw error;
+
+      // Update selectedMatch locally
+      setSelectedMatch(prev =>
+        prev ? { ...prev, status: newMatchStatus } : prev
+      );
+
+      // Update matches list locally
+      setMatches(prev =>
+        prev.map(m =>
+          m.id === selectedMatch.id
+            ? { ...m, status: newMatchStatus }
+            : m
+        )
+      );
+
+      setToast({ message: 'Status updated successfully', type: 'success' });
+
+    } catch (error) {
+      console.error('Failed to update status', error);
+      setToast({ message: 'Failed to update status', type: 'error' });
+    } finally {
+      setIsUpdatingMatchStatus(false);
+    }
+  };
+
+  // Fetch matches and check admin status on component mount
   useEffect(() => {
     fetchMatches();
+    checkIfAdmin();
   }, []);
 
   const fetchMatches = async () => {
@@ -32,6 +108,23 @@ const MatchesPage: React.FC = () => {
     }
   };
 
+  // Check if current user is admin
+  const checkIfAdmin = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // If role stored in users table
+    const { data, error } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!error && data?.role === 'admin') {
+      setIsAdmin(true);
+    }
+  };
+
   const filteredMatches = activeTab === 'All' 
     ? matches 
     : matches.filter(match => match.status === activeTab);
@@ -45,8 +138,12 @@ const MatchesPage: React.FC = () => {
       case 'Accepted':
       case 'Active':
         return <Badge color="green">{status}</Badge>;
-      case 'Dissolved':
-      case 'Declined':
+      case 'Delivered':
+        return <Badge color="orange">{status}</Badge>;
+      case 'Completed':
+      case 'Escrow Closure':
+        return <Badge color="teal">{status}</Badge>;
+      case 'Cancelled':
         return <Badge color="red">{status}</Badge>;
       default:
         return <Badge>{status}</Badge>;
@@ -59,8 +156,10 @@ const MatchesPage: React.FC = () => {
     { id: 'Presented', label: 'Presented' },
     { id: 'Accepted', label: 'Accepted' },
     { id: 'Active', label: 'Active' },
-    { id: 'Dissolved', label: 'Dissolved' },
-    { id: 'Declined', label: 'Declined' },
+    { id: 'Delivered', label: 'Delivered' },
+    { id: 'Completed', label: 'Completed' },
+    { id: 'Escrow Closure', label: 'Escrow Closure' },
+    { id: 'Cancelled', label: 'Cancelled' },
   ];
 
   return (
@@ -145,8 +244,9 @@ const MatchesPage: React.FC = () => {
                             Old code had names. I should probably fetch names or update Match model to include them.
                             For now, use ID or "Loading...".
                         */}
-                        <p className="font-medium text-gray-900 dark:text-white">{match.gestationalCarrierId || "Pending GC"}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Surrogate ID</p>
+                        <p className="font-medium text-gray-900 dark:text-white">{getFullName(match.gestationalCarrierData) || "Pending GC"}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">role: {match.gestationalCarrierData?.role}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">email: {match.gestationalCarrierData?.email}</p>
                       </div>
                     </div>
 
@@ -155,8 +255,9 @@ const MatchesPage: React.FC = () => {
                         <i className="ri-parent-line text-purple-600 dark:text-purple-400"></i>
                       </div>
                       <div>
-                         <p className="font-medium text-gray-900 dark:text-white">{match.intendedParentId}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Intended Parent ID</p>
+                        <p className="font-medium text-gray-900 dark:text-white">{getFullName(match.intendedParentData) || "Pending IP"}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">role: {match.intendedParentData?.role}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">email: {match.intendedParentData?.email}</p>
                       </div>
                     </div>
                   </div>
@@ -195,7 +296,22 @@ const MatchesPage: React.FC = () => {
                       <div>
                         <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Match #{selectedMatch.id.slice(0, 8)}</h3>
                         <p className="text-gray-600 dark:text-gray-400">Created on {new Date(selectedMatch.createdAt).toLocaleDateString()}</p>
-                        {getStatusBadge(selectedMatch.status)}
+                          <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
+                            <i className="ri-donut-chart-line text-base text-white/90"></i>
+                            <span className="font-medium mr-1">Status:</span>
+                            <select
+                              value={selectedMatch.status}
+                              onChange={(e) => handleStatusChange(e.target.value)}
+                              disabled={isUpdatingMatchStatus}
+                              className="bg-transparent border-none text-white focus:ring-0 cursor-pointer py-0 pl-0 pr-8 font-semibold [&>option]:text-gray-900 [&>option]:bg-white"
+                            >
+                              {MATCH_STATUSES.map((status) => (
+                                <option key={status} value={status}>
+                                  {status}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                       </div>
                     </div>
 
@@ -206,7 +322,7 @@ const MatchesPage: React.FC = () => {
                           Surrogate Information
                         </h4>
                         <div className="space-y-2">
-                          <p className="text-gray-900 dark:text-white font-medium">{selectedMatch.gestationalCarrierId || "Not Assigned"}</p>
+                          <p className="text-gray-900 dark:text-white font-medium">{getFullName(selectedMatch.gestationalCarrierData) || "Not Assigned"}</p>
                           <p className="text-sm text-gray-600 dark:text-gray-400">ID: {selectedMatch.gestationalCarrierId?.slice(0, 8) || "N/A"}</p>
                         </div>
                       </div>
@@ -217,8 +333,8 @@ const MatchesPage: React.FC = () => {
                           Intended Parents
                         </h4>
                         <div className="space-y-2">
-                          <p className="text-gray-900 dark:text-white font-medium">{selectedMatch.intendedParentId}</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">ID: {selectedMatch.intendedParentId.slice(0, 8)}</p>
+                          <p className="text-gray-900 dark:text-white font-medium">{getFullName(selectedMatch.intendedParentData) || "Pending IP"}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">ID: {selectedMatch.intendedParentId?.slice(0, 8) || "N/A"}</p>
                         </div>
                       </div>
                     </div>
