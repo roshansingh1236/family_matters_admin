@@ -24,6 +24,7 @@ import {
   SURROGATE_PSYCH_CLEARANCE_TEMPLATE,
   ABOUT_SURROGATE_TEMPLATE
 } from '../../constants/jsonTemplates';
+import CreateMatchDialog from '../../components/feature/CreateMatchDialog';
 
 const SURROGATE_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
 
@@ -516,6 +517,7 @@ const SurrogateProfilePage: React.FC = () => {
               <i className="ri-arrow-left-line mr-2"></i>
               Back to list
             </Button>
+            {surrogate && <CreateMatchDialog user={surrogate} />}
           </div>
 
           {isLoading ? (

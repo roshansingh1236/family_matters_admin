@@ -25,6 +25,7 @@ import JourneysPage from '../pages/journeys/page';
 import FinancialsPage from '../pages/financials/page';
 import LandingPage from '../pages/landing/page';
 import ScreeningPage from '../pages/screening/page';
+import ProfilePreviewPage from '../components/feature/ProfilePreviewPage';
 
 const routes: RouteObject[] = [
   {
@@ -127,6 +128,10 @@ const routes: RouteObject[] = [
     path: '*',
     element: <NotFound />,
   },
+  {
+    path: '/profile-preview/:id',
+    element: <ProfilePreviewPage />,
+  }
 ];
 
 export default routes;

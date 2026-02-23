@@ -22,6 +22,7 @@ import {
   IP_EMBRYO_RECORDS_TEMPLATE,
   ABOUT_PARENT_TEMPLATE
 } from '../../constants/jsonTemplates';
+import CreateMatchDialog from '../../components/feature/CreateMatchDialog';
 
 const PARENT_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
 
@@ -503,6 +504,7 @@ const ParentProfilePage: React.FC = () => {
               <i className="ri-arrow-left-line mr-2"></i>
               Back to list
             </Button>
+            {parent && <CreateMatchDialog user={parent} />}
           </div>
 
           {isLoading ? (

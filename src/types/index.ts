@@ -72,8 +72,10 @@ export type MatchStatus =
   | 'Presented'
   | 'Accepted'
   | 'Active'
-  | 'Dissolved'
-  | 'Declined';
+  | 'Delivered'
+  | 'Escrow Closure'
+  | 'Cancelled'
+  | 'Completed';
 
 export interface Match {
   id: string;
