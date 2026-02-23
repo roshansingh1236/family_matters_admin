@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { User, UserRole, MatchStatus } from "@/types";
-import { X, Plus, Eye, Loader2, AlertCircle, Check } from "lucide-react";
+import { X, Plus, Eye, Loader2, AlertCircle, Check, Calendar } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -130,7 +130,6 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
     setError("");
     setSubmitting(true);
 
-    // Check for existing match between these two users
     const { data: existing } = await supabase
       .from("matches")
       .select("id")
@@ -166,6 +165,10 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
   // ── Guard ────────────────────────────────────────────────────────────────────
   if (!canCreateMatch) return null;
 
+  // ── Shared input classes ─────────────────────────────────────────────────────
+  const inputCls =
+    "w-full px-3 py-2 text-sm rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/40 focus:border-transparent bg-black border border-white/10";
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
@@ -173,8 +176,12 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
       <button
         onClick={() => setOpen(true)}
         disabled={!["To be Matched", "Rematch"].includes(user.status as string)}
-        title={!["To be Matched", "Rematch"].includes(user.status as string) ? `Status must be "To be Matched" or "Rematch" to create a match (current: ${user.status})` : "Create a new match"}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        title={
+          !["To be Matched", "Rematch"].includes(user.status as string)
+            ? `Status must be "To be Matched" or "Rematch" to create a match (current: ${user.status})`
+            : "Create a new match"
+        }
+        className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white text-sm font-medium rounded-lg transition-opacity disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
       >
         <Plus size={16} />
         Create a Match
@@ -189,18 +196,18 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
         >
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={handleClose}
           />
 
           {/* Panel */}
-          <div className="relative z-10 w-full max-w-2xl bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="relative z-10 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600">
 
             {/* ── Header ── */}
-            <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+            <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-white/20">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Create a Match</h2>
-                <p className="text-sm text-gray-500 mt-0.5">
+                <h2 className="text-lg font-semibold text-white">Create a Match</h2>
+                <p className="text-sm text-white/70 mt-0.5">
                   {isIntendedParent
                     ? "Select a surrogate to match with this intended parent."
                     : "Select an intended parent to match with this surrogate."}
@@ -208,7 +215,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
               </div>
               <button
                 onClick={handleClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100"
+                className="text-white/60 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
               >
                 <X size={20} />
               </button>
@@ -219,54 +226,72 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
 
               {/* ── User List ── */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {listLabel} <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-white mb-2">
+                  {listLabel} <span className="text-red-300">*</span>
                 </label>
-                <p className="text-xs text-gray-400 mb-2">
-                  Only users with status <span className="font-medium text-gray-600">"To be Matched"</span> or <span className="font-medium text-gray-600">"Rematch"</span> can be selected.
+                <p className="text-xs text-white/50 mb-2">
+                  Only users with status{" "}
+                  <span className="font-medium text-white/80">"To be Matched"</span> or{" "}
+                  <span className="font-medium text-white/80">"Rematch"</span> can be selected.
                 </p>
+
+                {/* Search */}
                 <div className="relative mb-2">
                   <input
                     type="text"
                     placeholder="Search by name or email..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={`${inputCls} pl-9`}
                   />
-                  <svg className="absolute left-3 top-2.5 text-gray-400" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <svg
+                    className="absolute left-3 top-2.5 text-white/40"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
                 </div>
 
                 {loadingOptions ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
+                  <div className="flex items-center gap-2 text-sm text-white/60 py-8 justify-center">
                     <Loader2 size={16} className="animate-spin" />
                     Loading...
                   </div>
                 ) : filteredOptions.length === 0 ? (
-                  <p className="text-sm text-gray-400 py-8 text-center">
-                    {search ? `No results for "${search}"` : `No ${isIntendedParent ? "surrogates" : "intended parents"} found.`}
+                  <p className="text-sm text-white/50 py-8 text-center">
+                    {search
+                      ? `No results for "${search}"`
+                      : `No ${isIntendedParent ? "surrogates" : "intended parents"} found.`}
                   </p>
                 ) : (
-                  <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-56 overflow-y-auto">
+                  <div className="bg-black rounded-xl divide-y divide-white/5 max-h-56 overflow-y-auto border border-white/10">
                     {filteredOptions.map((u) => {
                       const isSelected = selectedId === u.id;
-
                       return (
-                      <div
-                        key={u.id}
-                        onClick={() => setSelectedId(u.id)}
-                        className={`flex items-center justify-between px-4 py-3 transition-colors cursor-pointer hover:bg-gray-50 ${isSelected ? "bg-blue-50 border-l-4 border-l-blue-500" : ""}`}
-                      >
+                        <div
+                          key={u.id}
+                          onClick={() => setSelectedId(u.id)}
+                          className={`flex items-center justify-between px-4 py-3 transition-colors cursor-pointer hover:bg-white/5 ${
+                            isSelected ? "bg-white/10 border-l-4 border-l-white/60" : ""
+                          }`}
+                        >
                           {/* Avatar + name + email */}
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-sm font-semibold text-gray-500 shrink-0">
+                            <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-sm font-semibold text-white/80 shrink-0">
                               {getInitial(u)}
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-gray-800 leading-none">
+                              <p className="text-sm font-medium text-white leading-none">
                                 {getDisplayName(u)}
                               </p>
                               {u.email && (
-                                <p className="text-xs text-gray-400 mt-0.5">{u.email}</p>
+                                <p className="text-xs text-white/40 mt-0.5">{u.email}</p>
                               )}
                             </div>
                           </div>
@@ -274,7 +299,9 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                           {/* Status badge + eye */}
                           <div className="flex items-center gap-3 shrink-0">
                             {u.status && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{u.status}</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/60">
+                                {u.status}
+                              </span>
                             )}
                             <button
                               type="button"
@@ -283,7 +310,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                                 e.stopPropagation();
                                 navigate(`/profile-preview/${u.id}`);
                               }}
-                              className="text-gray-400 hover:text-blue-600 transition-colors p-1 rounded"
+                              className="text-white/40 hover:text-white transition-colors p-1 rounded"
                             >
                               <Eye size={16} />
                             </button>
@@ -293,29 +320,29 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                     })}
                   </div>
                 )}
-
               </div>
-
 
               {/* ── Status + Match Score ── */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Status <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-white">
+                    Status <span className="text-red-300">*</span>
                   </label>
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as MatchStatus)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={`${inputCls} bg-black`}
                   >
                     {MATCH_STATUSES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
+                      <option key={s} value={s} className="bg-gray-900 text-white">
+                        {s}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-white">
                     Match Score
                   </label>
                   <input
@@ -326,41 +353,40 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                     placeholder="e.g. 87.5"
                     value={matchScore}
                     onChange={(e) => setMatchScore(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={inputCls}
                   />
                 </div>
               </div>
 
               {/* ── Matched At ── */}
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-700">
-                  Matched At
-                </label>
-                <input
-                  type="datetime-local"
-                  value={matchedAt}
-                  onChange={(e) => setMatchedAt(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <label className="block text-sm font-medium text-white">Matched At</label>
+                <div className="relative">
+                  <Calendar size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none z-10" />
+                  <input
+                    type="datetime-local"
+                    value={matchedAt}
+                    onChange={(e) => setMatchedAt(e.target.value)}
+                    className={`${inputCls} pl-9 [color-scheme:dark]`}
+                  />
+                </div>
               </div>
 
               {/* ── Agency Notes ── */}
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-700">
-                  Agency Notes
-                </label>
+                <label className="block text-sm font-medium text-white">Agency Notes</label>
                 <textarea
                   rows={3}
                   placeholder="Add any internal notes about this match..."
                   value={agencyNotes}
                   onChange={(e) => setAgencyNotes(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  className={`${inputCls} resize-none`}
                 />
               </div>
 
               {/* ── Error ── */}
               {error && (
-                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-red-300 bg-red-500/20 border border-red-400/20 px-3 py-2 rounded-lg">
                   <AlertCircle size={15} />
                   {error}
                 </div>
@@ -368,11 +394,11 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
             </div>
 
             {/* ── Footer ── */}
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-white/20">
               <button
                 onClick={handleClose}
                 disabled={submitting}
-                className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-white bg-black/30 border border-white/20 rounded-lg hover:bg-black/50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -380,7 +406,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                 onClick={handleSubmit}
                 disabled={!canSubmit}
                 title={!selectedId ? "Please select a user first" : undefined}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-black/40 border border-white/30 rounded-lg hover:bg-black/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {submitting ? (
                   <>
@@ -395,7 +421,6 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                 )}
               </button>
             </div>
-
           </div>
         </div>
       )}
