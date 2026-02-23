@@ -43,10 +43,15 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
 
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<MatchStatus>("Proposed");
   const [matchScore, setMatchScore] = useState("");
   const [agencyNotes, setAgencyNotes] = useState("");
   const [matchedAt, setMatchedAt] = useState("");
+
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -55,13 +60,18 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const selectedUser = options.find((u) => u.id === selectedId);
-  const filteredOptions = options.filter((u) => {
-    const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.toLowerCase();
-    const email = (u.email ?? "").toLowerCase();
-    const q = search.toLowerCase();
-    return name.includes(q) || email.includes(q);
-  });
   const canSubmit = !!selectedId && !submitting;
+  const pageSize = 20;
+
+  // ── Debounce Search ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+      setHasMore(true);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // ── Close on Escape ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -82,12 +92,31 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
   useEffect(() => {
     if (!open || !canCreateMatch) return;
 
-    const fetchOptions = async () => {
-      setLoadingOptions(true);
-      const { data, error: fetchError } = await supabase
+    const fetchOptions = async (isInitial = false) => {
+      if (isInitial) {
+        setLoadingOptions(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      let query = supabase
         .from("users")
-        .select("id, role, email, first_name, last_name, status")
-        .eq("role", oppositeRole);
+        .select("id, role, email, first_name, last_name, status", { count: "exact" })
+        .eq("role", oppositeRole)
+        .in("status", ["Available", "To be Matched", "Rematch"]);
+
+      if (debouncedSearch) {
+        query = query.or(
+          `first_name.ilike.%${debouncedSearch}%,last_name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`
+        );
+      }
+
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error: fetchError, count } = await query
+        .range(from, to)
+        .order("first_name", { ascending: true });
 
       if (!fetchError && data) {
         const mapped = data.map((u: any) => ({
@@ -95,13 +124,17 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
           firstName: u.first_name,
           lastName: u.last_name,
         }));
-        setOptions(mapped as User[]);
+
+        setOptions((prev) => (page === 0 ? mapped : [...prev, ...mapped]));
+        setHasMore(count ? from + data.length < count : data.length === pageSize);
       }
+
       setLoadingOptions(false);
+      setLoadingMore(false);
     };
 
-    fetchOptions();
-  }, [open, canCreateMatch, oppositeRole]);
+    fetchOptions(page === 0);
+  }, [open, canCreateMatch, oppositeRole, debouncedSearch, page]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   const getDisplayName = (u: User) =>
@@ -113,6 +146,9 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
   const resetForm = useCallback(() => {
     setSelectedId("");
     setSearch("");
+    setDebouncedSearch("");
+    setPage(0);
+    setHasMore(true);
     setStatus("Proposed");
     setMatchScore("");
     setAgencyNotes("");
@@ -232,6 +268,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                 </label>
                 <p className="text-xs text-gray-500 dark:text-white/50 mb-2">
                   Only users with status{" "}
+                  <span className="font-medium text-gray-700 dark:text-white/80">"Available"</span>,{" "}
                   <span className="font-medium text-gray-700 dark:text-white/80">"To be Matched"</span> or{" "}
                   <span className="font-medium text-gray-700 dark:text-white/80">"Rematch"</span> can be selected.
                 </p>
@@ -264,7 +301,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                     <Loader2 size={16} className="animate-spin" />
                     Loading...
                   </div>
-                ) : filteredOptions.length === 0 ? (
+                ) : options.length === 0 ? (
                   <p className="text-sm text-gray-500 dark:text-white/50 py-8 text-center">
                     {search
                       ? `No results for "${search}"`
@@ -272,7 +309,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                   </p>
                 ) : (
                   <div className="bg-gray-50 dark:bg-black rounded-xl divide-y divide-gray-100 dark:divide-white/5 max-h-56 overflow-y-auto border border-gray-200 dark:border-white/10">
-                    {filteredOptions.map((u) => {
+                    {options.map((u) => {
                       const isSelected = selectedId === u.id;
                       return (
                         <div
@@ -319,6 +356,26 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                         </div>
                       );
                     })}
+
+                    {hasMore && (
+                      <div className="p-3 bg-white dark:bg-black sticky bottom-0 border-t border-gray-100 dark:border-white/5">
+                        <button
+                          type="button"
+                          onClick={() => setPage((prev) => prev + 1)}
+                          disabled={loadingMore}
+                          className="w-full py-2 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          {loadingMore ? (
+                            <>
+                              <Loader2 size={12} className="animate-spin" />
+                              Loading...
+                            </>
+                          ) : (
+                            "Load More"
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
