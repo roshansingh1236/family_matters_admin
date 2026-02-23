@@ -14,6 +14,10 @@ const mapMatchFromDb = (dbMatch: any): Match => ({
   matchScore: dbMatch.match_score,
   matchCriteria: dbMatch.match_criteria,
   agencyNotes: dbMatch.agency_notes,
+  parentAccepted: dbMatch.parent_accepted,
+  surrogateAccepted: dbMatch.surrogate_accepted,
+  parentDeclined: dbMatch.parent_declined,
+  surrogateDeclined: dbMatch.surrogate_declined,
   // These might need further mapping if nested
    intendedParentData: dbMatch.intendedParentData,      // ✅ camelCase
   gestationalCarrierData: dbMatch.gestationalCarrierData, // ✅ camelCase
@@ -100,6 +104,31 @@ export const matchService = {
       if (error) throw error;
     } catch (error) {
       console.error('Error updating match status:', error);
+      throw error;
+    }
+  },
+
+  // Update arbitrary match fields
+  updateMatch: async (id: string, updateData: Partial<Match>): Promise<void> => {
+    try {
+      // Map frontend camelCase to backend snake_case
+      const dbUpdate: any = {};
+      if (updateData.status) dbUpdate.status = updateData.status;
+      if (updateData.parentAccepted !== undefined) dbUpdate.parent_accepted = updateData.parentAccepted;
+      if (updateData.surrogateAccepted !== undefined) dbUpdate.surrogate_accepted = updateData.surrogateAccepted;
+      if (updateData.parentDeclined !== undefined) dbUpdate.parent_declined = updateData.parentDeclined;
+      if (updateData.surrogateDeclined !== undefined) dbUpdate.surrogate_declined = updateData.surrogateDeclined;
+      if (updateData.agencyNotes !== undefined) dbUpdate.agency_notes = updateData.agencyNotes;
+      if (updateData.matchedAt) dbUpdate.matched_at = updateData.matchedAt;
+
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .update(dbUpdate)
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating match:', error);
       throw error;
     }
   },

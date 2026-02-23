@@ -8,6 +8,7 @@ interface ButtonProps {
   color?: 'green' | 'red' | 'blue';
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
+  isLoading?: boolean;
   className?: string;
   type?: 'button' | 'submit' | 'reset';
 }
@@ -19,6 +20,7 @@ export const Button: React.FC<ButtonProps> = ({
   color,
   onClick,
   disabled = false,
+  isLoading = false,
   className = '',
   type = 'button',
 }) => {
@@ -66,9 +68,10 @@ export const Button: React.FC<ButtonProps> = ({
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || isLoading}
       className={`${baseClasses} ${getVariantClasses()} ${sizeClasses[size]} ${disabledClasses} ${className}`}
     >
+      {isLoading && <i className="ri-loader-4-line animate-spin mr-2"></i>}
       {children}
     </button>
   );

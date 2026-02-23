@@ -87,6 +87,10 @@ export interface Match {
   matchScore?: number;
   matchCriteria?: Record<string, unknown>;
   agencyNotes?: string;
+  parentAccepted?: boolean;
+  surrogateAccepted?: boolean;
+  parentDeclined?: boolean;
+  surrogateDeclined?: boolean;
   // Denormalized
   intendedParentData?: User;
   gestationalCarrierData?: User;

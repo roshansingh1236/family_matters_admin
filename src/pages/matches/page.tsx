@@ -211,7 +211,7 @@ const MatchesPage: React.FC = () => {
             </div>
           ) : (
             /* Matches Grid */
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {filteredMatches.map((match) => (
                 <Card key={match.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedMatch(match)}>
                   <div className="flex items-start justify-between mb-4">
@@ -259,6 +259,29 @@ const MatchesPage: React.FC = () => {
                         <p className="text-sm text-gray-600 dark:text-gray-400">role: {match.intendedParentData?.role}</p>
                         <p className="text-sm text-gray-600 dark:text-gray-400">email: {match.intendedParentData?.email}</p>
                       </div>
+                    </div>
+
+                    <div className="flex gap-4 border-t border-gray-100 dark:border-gray-700 pt-3 mt-2">
+                       <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-gray-500 uppercase">IP:</span>
+                          {match.parentAccepted ? (
+                            <Badge color="green" size="sm"><i className="ri-checkbox-circle-fill mr-1"></i>Accepted</Badge>
+                          ) : match.parentDeclined ? (
+                            <Badge color="red" size="sm"><i className="ri-close-circle-fill mr-1"></i>Declined</Badge>
+                          ) : (
+                            <Badge color="gray" size="sm">Pending</Badge>
+                          )}
+                       </div>
+                       <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-gray-500 uppercase">GC:</span>
+                          {match.surrogateAccepted ? (
+                            <Badge color="green" size="sm"><i className="ri-checkbox-circle-fill mr-1"></i>Accepted</Badge>
+                          ) : match.surrogateDeclined ? (
+                            <Badge color="red" size="sm"><i className="ri-close-circle-fill mr-1"></i>Declined</Badge>
+                          ) : (
+                            <Badge color="gray" size="sm">Pending</Badge>
+                          )}
+                       </div>
                     </div>
                   </div>
 
@@ -335,6 +358,43 @@ const MatchesPage: React.FC = () => {
                         <div className="space-y-2">
                           <p className="text-gray-900 dark:text-white font-medium">{getFullName(selectedMatch.intendedParentData) || "Pending IP"}</p>
                           <p className="text-sm text-gray-600 dark:text-gray-400">ID: {selectedMatch.intendedParentId?.slice(0, 8) || "N/A"}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <h4 className="font-semibold text-gray-900 dark:text-white mb-4">Acceptance Status</h4>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">Intended Parent</p>
+                            <p className="text-sm text-gray-500">Decision from the intended parents</p>
+                          </div>
+                          <div>
+                            {selectedMatch.parentAccepted ? (
+                              <Badge color="green"><i className="ri-checkbox-circle-fill mr-1"></i>Accepted</Badge>
+                            ) : selectedMatch.parentDeclined ? (
+                              <Badge color="red"><i className="ri-close-circle-fill mr-1"></i>Declined</Badge>
+                            ) : (
+                              <Badge color="gray">Pending</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 pt-4">
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">Gestational Carrier</p>
+                            <p className="text-sm text-gray-500">Decision from the surrogate</p>
+                          </div>
+                          <div>
+                            {selectedMatch.surrogateAccepted ? (
+                              <Badge color="green"><i className="ri-checkbox-circle-fill mr-1"></i>Accepted</Badge>
+                            ) : selectedMatch.surrogateDeclined ? (
+                              <Badge color="red"><i className="ri-close-circle-fill mr-1"></i>Declined</Badge>
+                            ) : (
+                              <Badge color="gray">Pending</Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
