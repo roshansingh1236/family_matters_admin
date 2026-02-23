@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { User, UserRole, MatchStatus } from "@/types";
 import { X, Plus, Eye, Loader2, AlertCircle, Check, Calendar } from "lucide-react";
+import ProfileDetailDialog from "./ProfileDetailDialog";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -26,7 +26,6 @@ interface CreateMatchDialogProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   // ── Role logic ──────────────────────────────────────────────────────────────
@@ -51,6 +50,8 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const [previewUser, setPreviewUser] = useState<{ id: string; role: any } | null>(null);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const selectedUser = options.find((u) => u.id === selectedId);
@@ -308,7 +309,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                               title="View profile"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/profile-preview/${u.id}`);
+                                setPreviewUser({ id: u.id, role: u.role });
                               }}
                               className="text-gray-400 hover:text-blue-600 dark:text-white/40 dark:hover:text-white transition-colors p-1 rounded"
                             >
@@ -423,6 +424,14 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
             </div>
           </div>
         </div>
+      )}
+      {/* Profile Detail Dialog */}
+      {previewUser && (
+        <ProfileDetailDialog
+          userId={previewUser.id}
+          role={previewUser.role}
+          onClose={() => setPreviewUser(null)}
+        />
       )}
     </>
   );
