@@ -45,23 +45,13 @@ const MatchesPage: React.FC = () => {
   };
 
   // Handle status change for a match
-  const handleStatusChange = async (newMatchStatus: string) => {
+  const handleStatusChange = async (newMatchStatus: MatchStatus) => {
     if (!selectedMatch?.id) return;
 
     setIsUpdatingMatchStatus(true);
 
     try {
-      const { data, error } = await supabase
-        .from('matches')
-        .update({ status: newMatchStatus })
-        .eq('id', selectedMatch.id)
-        .select();
-
-      console.log("Selected Match ID:", selectedMatch.id);
-      console.log("UPDATE RESULT:", data);
-      console.log("UPDATE ERROR:", error);
-
-      if (error) throw error;
+      await matchService.updateMatchStatus(selectedMatch.id, newMatchStatus);
 
       // Update selectedMatch locally
       setSelectedMatch(prev =>
@@ -86,6 +76,7 @@ const MatchesPage: React.FC = () => {
       setIsUpdatingMatchStatus(false);
     }
   };
+
 
   // Fetch matches and check admin status on component mount
   useEffect(() => {
@@ -125,9 +116,17 @@ const MatchesPage: React.FC = () => {
     }
   };
 
+  // Helper to get derived status (fallback for DB inconsistencies)
+  const getDerivedStatus = (match: Match): MatchStatus | string => {
+    if (match.parentDeclined || match.surrogateDeclined) {
+      return 'Cancelled';
+    }
+    return match.status;
+  };
+
   const filteredMatches = activeTab === 'All' 
     ? matches 
-    : matches.filter(match => match.status === activeTab);
+    : matches.filter(match => getDerivedStatus(match) === activeTab);
 
   const getStatusBadge = (status: MatchStatus | string) => {
     switch (status) {
@@ -179,10 +178,6 @@ const MatchesPage: React.FC = () => {
           <div className="mb-6">
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit flex-wrap">
               {matchStatuses.map((status) => {
-                 const count = status.id === 'All' 
-                    ? matches.length 
-                    : matches.filter(m => m.status === status.id).length;
-                 
                  return (
                   <button
                     key={status.id}
@@ -193,7 +188,11 @@ const MatchesPage: React.FC = () => {
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                     }`}
                   >
-                    {status.label} ({count})
+                    {status.label} ({
+                      status.id === 'All' 
+                        ? matches.length 
+                        : matches.filter(m => getDerivedStatus(m) === status.id).length
+                    })
                   </button>
                 );
               })}
@@ -211,7 +210,7 @@ const MatchesPage: React.FC = () => {
             </div>
           ) : (
             /* Matches Grid */
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredMatches.map((match) => (
                 <Card key={match.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedMatch(match)}>
                   <div className="flex items-start justify-between mb-4">
@@ -226,7 +225,7 @@ const MatchesPage: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    {getStatusBadge(match.status)}
+                    {getStatusBadge(getDerivedStatus(match))}
                   </div>
 
                   <div className="space-y-4 mb-4">
@@ -323,17 +322,17 @@ const MatchesPage: React.FC = () => {
                             <i className="ri-donut-chart-line text-base text-white/90"></i>
                             <span className="font-medium mr-1">Status:</span>
                             <select
-                              value={selectedMatch.status}
-                              onChange={(e) => handleStatusChange(e.target.value)}
-                              disabled={isUpdatingMatchStatus}
-                              className="bg-transparent border-none text-white focus:ring-0 cursor-pointer py-0 pl-0 pr-8 font-semibold [&>option]:text-gray-900 [&>option]:bg-white"
-                            >
-                              {MATCH_STATUSES.map((status) => (
-                                <option key={status} value={status}>
-                                  {status}
-                                </option>
-                              ))}
-                            </select>
+                                value={getDerivedStatus(selectedMatch)}
+                                onChange={(e) => handleStatusChange(e.target.value as MatchStatus)}
+                                disabled={isUpdatingMatchStatus}
+                                className="bg-transparent border-none text-white focus:ring-0 cursor-pointer py-0 pl-0 pr-8 font-semibold [&>option]:text-gray-900 [&>option]:bg-white"
+                              >
+                                {MATCH_STATUSES.map((status) => (
+                                  <option key={status} value={status}>
+                                    {status}
+                                  </option>
+                                ))}
+                              </select>
                           </div>
                       </div>
                     </div>
@@ -366,7 +365,7 @@ const MatchesPage: React.FC = () => {
                       <h4 className="font-semibold text-gray-900 dark:text-white mb-4">Acceptance Status</h4>
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <div>
+                          <div className="flex-1">
                             <p className="font-medium text-gray-900 dark:text-white">Intended Parent</p>
                             <p className="text-sm text-gray-500">Decision from the intended parents</p>
                           </div>
@@ -382,7 +381,7 @@ const MatchesPage: React.FC = () => {
                         </div>
 
                         <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 pt-4">
-                          <div>
+                          <div className="flex-1">
                             <p className="font-medium text-gray-900 dark:text-white">Gestational Carrier</p>
                             <p className="text-sm text-gray-500">Decision from the surrogate</p>
                           </div>

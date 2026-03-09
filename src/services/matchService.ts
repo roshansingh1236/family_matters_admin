@@ -113,6 +113,8 @@ export const matchService = {
     try {
       // Map frontend camelCase to backend snake_case
       const dbUpdate: any = {};
+      
+      // Handle individual field updates
       if (updateData.status) dbUpdate.status = updateData.status;
       if (updateData.parentAccepted !== undefined) dbUpdate.parent_accepted = updateData.parentAccepted;
       if (updateData.surrogateAccepted !== undefined) dbUpdate.surrogate_accepted = updateData.surrogateAccepted;
@@ -120,6 +122,12 @@ export const matchService = {
       if (updateData.surrogateDeclined !== undefined) dbUpdate.surrogate_declined = updateData.surrogateDeclined;
       if (updateData.agencyNotes !== undefined) dbUpdate.agency_notes = updateData.agencyNotes;
       if (updateData.matchedAt) dbUpdate.matched_at = updateData.matchedAt;
+
+      // Automatic Cancellation Logic:
+      // If anyone declines the match, set the status to 'Cancelled'
+      if (updateData.parentDeclined === true || updateData.surrogateDeclined === true) {
+        dbUpdate.status = 'Cancelled';
+      }
 
       const { error } = await supabase
         .from(TABLE_NAME)

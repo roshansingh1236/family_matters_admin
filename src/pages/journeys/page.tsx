@@ -44,6 +44,11 @@ const JourneysPage: React.FC = () => {
   const [surrogatePreview, setSurrogatePreview] = useState<MatchUserPreview | null>(null);
   const [parentPreview, setParentPreview] = useState<MatchUserPreview | null>(null);
 
+  // Details for the currently selected journey
+  const [detailSurrogate, setDetailSurrogate] = useState<MatchUserPreview | null>(null);
+  const [detailParent, setDetailParent] = useState<MatchUserPreview | null>(null);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+
   const adminId = user?.id || "";
 
   const stages: JourneyStatus[] = [
@@ -140,10 +145,12 @@ const JourneysPage: React.FC = () => {
 
   const fetchUserPreview = async (
     id: string,
-    role: "Surrogate" | "Intended Parent"
+    role: "Surrogate" | "Intended Parent",
+    isForDetail: boolean = false
   ) => {
     if (!id) return;
     try {
+      if (isForDetail) setIsDetailsLoading(true);
       const { data, error: fetchError } = await supabase
         .from('users')
         .select('*')
@@ -154,15 +161,34 @@ const JourneysPage: React.FC = () => {
       if (!data) return;
       
       const preview = buildUserPreview(data.id, role, data as any);
-      if (role === "Surrogate") {
-        setSurrogatePreview(preview);
+      if (isForDetail) {
+        if (role === "Surrogate") {
+          setDetailSurrogate(preview);
+        } else {
+          setDetailParent(preview);
+        }
       } else {
-        setParentPreview(preview);
+        if (role === "Surrogate") {
+          setSurrogatePreview(preview);
+        } else {
+          setParentPreview(preview);
+        }
       }
     } catch (e) {
       console.error("Failed to load user preview", e);
+    } finally {
+      if (isForDetail) setIsDetailsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedJourney) {
+      setDetailSurrogate(null);
+      setDetailParent(null);
+      fetchUserPreview(selectedJourney.gestationalCarrierId, "Surrogate", true);
+      fetchUserPreview(selectedJourney.intendedParentId, "Intended Parent", true);
+    }
+  }, [selectedJourney]);
 
   const handleCreateJourney = async () => {
     if (!newJourneyData.gestationalCarrierId || !newJourneyData.intendedParentId) {
@@ -446,7 +472,7 @@ const JourneysPage: React.FC = () => {
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                      Journey Details
+                      Journey #{selectedJourney.caseNumber}
                     </h2>
                     <button
                       onClick={() => setSelectedJourney(null)}
@@ -458,27 +484,99 @@ const JourneysPage: React.FC = () => {
 
                   <div className="space-y-6">
                     {/* Case Info */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl space-y-4">
+                    <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Surrogate Profile */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900 flex items-center justify-center">
+                              <i className="ri-user-heart-line text-pink-600 dark:text-pink-300"></i>
+                            </div>
+                            <h4 className="font-semibold text-gray-900 dark:text-white">
+                              Surrogate
+                            </h4>
+                          </div>
+                          
+                          {isDetailsLoading && !detailSurrogate ? (
+                            <div className="animate-pulse flex space-x-4">
+                              <div className="flex-1 space-y-2 py-1">
+                                <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
+                                <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
+                              </div>
+                            </div>
+                          ) : detailSurrogate ? (
+                            <div className="pl-10">
+                              <p className="text-lg font-medium text-gray-900 dark:text-white">
+                                {detailSurrogate.name}
+                              </p>
+                              {detailSurrogate.email && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                  <i className="ri-mail-line"></i> {detailSurrogate.email}
+                                </p>
+                              )}
+                              {detailSurrogate.location && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                  <i className="ri-map-pin-line"></i> {detailSurrogate.location}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-gray-400 mt-2 font-mono uppercase tracking-wider">
+                                ID: {detailSurrogate.id}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="pl-10 text-gray-500 italic">Not found ({selectedJourney.gestationalCarrierId})</p>
+                          )}
+                        </div>
+
+                        {/* Parent Profile */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                              <i className="ri-parent-line text-blue-600 dark:text-blue-300"></i>
+                            </div>
+                            <h4 className="font-semibold text-gray-900 dark:text-white">
+                              Intended Parent
+                            </h4>
+                          </div>
+
+                          {isDetailsLoading && !detailParent ? (
+                            <div className="animate-pulse flex space-x-4">
+                              <div className="flex-1 space-y-2 py-1">
+                                <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
+                                <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
+                              </div>
+                            </div>
+                          ) : detailParent ? (
+                            <div className="pl-10">
+                              <p className="text-lg font-medium text-gray-900 dark:text-white">
+                                {detailParent.name}
+                              </p>
+                              {detailParent.email && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                  <i className="ri-mail-line"></i> {detailParent.email}
+                                </p>
+                              )}
+                              {detailParent.location && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                                  <i className="ri-map-pin-line"></i> {detailParent.location}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-gray-400 mt-2 font-mono uppercase tracking-wider">
+                                ID: {detailParent.id}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="pl-10 text-gray-500 italic">Not found ({selectedJourney.intendedParentId})</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <hr className="border-gray-200 dark:border-gray-700" />
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-                            Surrogate ID
-                          </h4>
-                          <p className="text-gray-600 dark:text-gray-300">
-                            {selectedJourney.gestationalCarrierId}
-                          </p>
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-                            Parent ID
-                          </h4>
-                          <p className="text-gray-600 dark:text-gray-300">
-                            {selectedJourney.intendedParentId}
-                          </p>
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-                            Status
+                          <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                            Current Status
                           </h4>
                           <Badge
                             color={getStatusColor(selectedJourney.status)}
@@ -487,10 +585,10 @@ const JourneysPage: React.FC = () => {
                           </Badge>
                         </div>
                         <div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
-                            Started
+                          <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                            Journey Started
                           </h4>
-                          <p className="text-gray-600 dark:text-gray-300">
+                          <p className="text-gray-900 dark:text-white font-medium">
                             {formatDate(selectedJourney.createdAt)}
                           </p>
                         </div>
