@@ -108,7 +108,7 @@ const MedicalPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
@@ -116,19 +116,19 @@ const MedicalPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-6">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Medical</h1>
-              <p className="text-gray-600 dark:text-gray-400">Manage health records and medications.</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Medical</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage health records and medications.</p>
             </div>
-            <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+            <div className="flex gap-2 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg">
                 <button 
                     onClick={() => setActiveTab('records')}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'records' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600' : 'text-gray-600'}`}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'records' ? 'bg-white dark:bg-white/5 shadow-sm text-blue-600' : 'text-gray-600'}`}
                 >
                     Records
                 </button>
                 <button 
                      onClick={() => setActiveTab('medications')}
-                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'medications' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600' : 'text-gray-600'}`}
+                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'medications' ? 'bg-white dark:bg-white/5 shadow-sm text-blue-600' : 'text-gray-600'}`}
                 >
                     Medications
                 </button>
@@ -148,7 +148,7 @@ const MedicalPage: React.FC = () => {
                       <Card key={record.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedRecord(record)}>
                           <div className="flex justify-between items-start">
                               <div className="flex gap-4">
-                                  <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                  <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-rose-500 dark:text-rose-400">
                                       <i className="ri-file-list-3-line text-xl"></i>
                                   </div>
                                   <div>
@@ -193,7 +193,7 @@ const MedicalPage: React.FC = () => {
                             <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1">{med.name}</h3>
                             <p className="text-sm text-gray-500 mb-4">{med.dosage} • {med.frequency}</p>
                             
-                            <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg mb-4">
+                            <div className="text-sm text-gray-600 dark:text-gray-400 bg-rose-50/50 dark:bg-white/5 p-3 rounded-lg mb-4">
                                 <div className="flex justify-between mb-1">
                                     <span>Start:</span>
                                     <span className="font-medium">{med.startDate}</span>
@@ -236,7 +236,7 @@ const MedicalPage: React.FC = () => {
            {/* Record Detail View Modal */}
            {selectedRecord && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                  <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-xl">
+                  <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full p-6 shadow-xl">
                       <div className="flex justify-between items-start mb-6">
                            <div>
                                <h2 className="text-2xl font-bold dark:text-white">{selectedRecord.title}</h2>
@@ -246,7 +246,7 @@ const MedicalPage: React.FC = () => {
                       </div>
                       
                       <div className="space-y-4 mb-8">
-                          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                          <div className="p-4 bg-rose-50/40 dark:bg-white/5 rounded-lg">
                               <h4 className="font-semibold mb-2 dark:text-white">Details</h4>
                               <p className="dark:text-gray-300"><span className="font-medium">Type:</span> {selectedRecord.type}</p>
                               <p className="dark:text-gray-300"><span className="font-medium">Doctor:</span> {selectedRecord.doctor}</p>
@@ -270,32 +270,32 @@ const MedicalPage: React.FC = () => {
           {/* Medication Modal */}
           {showMedModal && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                   <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-xl">
+                   <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full p-6 shadow-xl">
                       <h2 className="text-xl font-bold mb-4 dark:text-white">{medForm.id ? 'Edit Medication' : 'Add Medication'}</h2>
                       <form onSubmit={handleSaveMedication} className="space-y-4">
-                          <input type="text" placeholder="Medication Name" required className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          <input type="text" placeholder="Medication Name" required className="w-full p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                  value={medForm.name} onChange={e => setMedForm({...medForm, name: e.target.value})} />
                           <div className="grid grid-cols-2 gap-4">
-                              <input type="text" placeholder="Dosage (e.g. 10mg)" required className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              <input type="text" placeholder="Dosage (e.g. 10mg)" required className="p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                      value={medForm.dosage} onChange={e => setMedForm({...medForm, dosage: e.target.value})} />
-                              <input type="text" placeholder="Frequency (e.g. Daily)" required className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              <input type="text" placeholder="Frequency (e.g. Daily)" required className="p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                      value={medForm.frequency} onChange={e => setMedForm({...medForm, frequency: e.target.value})} />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                               <div>
                                   <label className="text-xs text-gray-500">Start Date</label>
-                                  <input type="date" required className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                  <input type="date" required className="w-full p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                          value={medForm.startDate} onChange={e => setMedForm({...medForm, startDate: e.target.value})} />
                               </div>
                               <div>
                                   <label className="text-xs text-gray-500">End Date (Optional)</label>
-                                  <input type="date" className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                  <input type="date" className="w-full p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                          value={medForm.endDate || ''} onChange={e => setMedForm({...medForm, endDate: e.target.value})} />
                               </div>
                           </div>
                           <div>
                               <label className="text-xs text-gray-500">Status</label>
-                              <select className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              <select className="w-full p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                       value={medForm.status} onChange={e => setMedForm({...medForm, status: e.target.value as any})}>
                                   <option>Active</option><option>Completed</option><option>Discontinued</option>
                               </select>

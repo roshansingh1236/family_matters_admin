@@ -66,7 +66,7 @@ const InfoRow = ({ icon, label, value }: { icon: string; label: string; value?: 
   if (!value) return null;
   return (
     <div className="flex items-start gap-3">
-      <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 mt-0.5">
+      <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-[#15111f] flex items-center justify-center shrink-0 mt-0.5">
         <i className={`${icon} text-gray-500 dark:text-gray-400 text-sm`} />
       </div>
       <div>
@@ -80,7 +80,7 @@ const InfoRow = ({ icon, label, value }: { icon: string; label: string; value?: 
 // ─── Section ──────────────────────────────────────────────────────────────────
 
 const Section = ({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) => (
-  <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 space-y-4">
+  <div className="bg-white dark:bg-[#0e0b1a] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 space-y-4">
     <div className="flex items-center gap-2 mb-1">
       <i className={`${icon} text-blue-500 text-base`} />
       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">{title}</h3>
@@ -183,7 +183,7 @@ export default function ProfilePreviewPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex h-screen bg-gray-50 dark:bg-[#0e0b1a]">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header />
@@ -197,7 +197,7 @@ export default function ProfilePreviewPage() {
 
   if (error || !user) {
     return (
-      <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex h-screen bg-gray-50 dark:bg-[#0e0b1a]">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header />
@@ -210,7 +210,7 @@ export default function ProfilePreviewPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-gray-50 dark:bg-[#0e0b1a]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
@@ -288,7 +288,7 @@ export default function ProfilePreviewPage() {
                 {images.slice(0, 3).map((url, i) => (
                   <div
                     key={url}
-                    className={`overflow-hidden rounded-2xl bg-gray-200 dark:bg-gray-800 shadow-lg ${i === 0 && images.length >= 3 ? 'row-span-2' : ''}`}
+                    className={`overflow-hidden rounded-2xl bg-gray-200 dark:bg-[#15111f] shadow-lg ${i === 0 && images.length >= 3 ? 'row-span-2' : ''}`}
                     style={{ aspectRatio: i === 0 && images.length >= 3 ? '1/1.4' : '1/1' }}
                   >
                     <img src={url} alt="" className="w-full h-full object-cover" />

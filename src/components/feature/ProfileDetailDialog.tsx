@@ -18,7 +18,7 @@ const ProfileDetailDialog: React.FC<ProfileDetailDialogProps> = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="w-full max-w-6xl max-h-[90vh] overflow-hidden bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex flex-col animate-in zoom-in-95 duration-200"
+        className="w-full max-w-6xl max-h-[90vh] overflow-hidden bg-white dark:bg-[#0e0b1a] rounded-3xl shadow-2xl flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-1 overflow-y-auto">

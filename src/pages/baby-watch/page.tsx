@@ -148,18 +148,18 @@ const BabyWatchPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
+          <div className="mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Baby Watch</h1>
-                <p className="text-gray-600 dark:text-gray-400">Medical updates and ultrasound tracking.</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Baby Watch</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Medical updates and ultrasound tracking.</p>
               </div>
               <Button color="blue" onClick={handleOpenNewModal}>
                 <i className="ri-add-line mr-2"></i>
@@ -173,7 +173,7 @@ const BabyWatchPage: React.FC = () => {
             <select
               value={selectedCase}
               onChange={(e) => setSelectedCase(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm hover:shadow-md"
+              className="px-4 py-2 rounded-xl border border-gray-200/50 dark:border-white/5/50 bg-white/80 dark:bg-[#15111f]/80 backdrop-blur-md text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-all shadow-sm hover:shadow-md"
             >
               <option value="all">All Cases ({updates.length})</option>
               {cases.map(c => (
@@ -197,7 +197,7 @@ const BabyWatchPage: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredUpdates.length === 0 ? (
-                <div className="col-span-full text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                <div className="col-span-full text-center py-12 bg-white dark:bg-[#15111f] rounded-2xl border border-dashed border-gray-300 dark:border-white/5">
                   <i className="ri-heart-pulse-line text-4xl text-gray-400 mb-2"></i>
                   <p className="text-gray-500 dark:text-gray-400">No updates found.</p>
                 </div>
@@ -206,11 +206,11 @@ const BabyWatchPage: React.FC = () => {
                   <Card 
                     key={update.id} 
                     padding="none"
-                    className="group hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden border-0 bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10 hover:-translate-y-1 flex flex-col"
+                    className="group hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden border-0 bg-white/70 dark:bg-[#15111f]/70 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10 hover:-translate-y-1 flex flex-col"
                     onClick={() => setSelectedUpdate(update)}
                   >
                     {update.imageUrl && (
-                      <div className="w-full h-56 bg-gray-100 dark:bg-gray-900 overflow-hidden relative">
+                      <div className="w-full h-56 bg-gray-100 dark:bg-[#0e0b1a] overflow-hidden relative">
                         <img 
                           src={update.imageUrl} 
                           alt="Ultrasound" 
@@ -222,7 +222,7 @@ const BabyWatchPage: React.FC = () => {
                     
                     <div className="p-6 space-y-4 flex-1 flex flex-col">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                        <span className="text-sm font-medium text-rose-500 dark:text-rose-400">
                           {update.gestationalAge}
                         </span>
                         {update.sharedWithParents && (
@@ -232,7 +232,7 @@ const BabyWatchPage: React.FC = () => {
 
                       <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-rose-500 dark:text-rose-400">
                             <i className="ri-calendar-line"></i>
                           </div>
                           <span>{update.date}</span>
@@ -279,7 +279,7 @@ const BabyWatchPage: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2">
                     {/* Left: Image */}
-                    <div className="bg-gray-100 dark:bg-gray-800">
+                    <div className="bg-gray-100 dark:bg-[#15111f]">
                       {selectedUpdate.imageUrl ? (
                         <img 
                           src={selectedUpdate.imageUrl} 
@@ -298,7 +298,7 @@ const BabyWatchPage: React.FC = () => {
                     <div className="p-8 space-y-8">
                       <div>
                         <div className="flex items-center gap-3 mb-2">
-                          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold uppercase tracking-wider">
+                          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-rose-500 dark:text-rose-400 rounded-full text-xs font-bold uppercase tracking-wider">
                             Medical Update
                           </span>
                           {selectedUpdate.sharedWithParents && (
@@ -311,25 +311,25 @@ const BabyWatchPage: React.FC = () => {
                       </div>
 
                       <div className="grid grid-cols-2 gap-6">
-                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                        <div className="p-4 rounded-2xl bg-rose-50/40 dark:bg-white/5 border border-gray-100 dark:border-white/5">
                           <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
                             <i className="ri-calendar-line text-blue-500"></i> Date
                           </p>
                           <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUpdate.date}</p>
                         </div>
-                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                        <div className="p-4 rounded-2xl bg-rose-50/40 dark:bg-white/5 border border-gray-100 dark:border-white/5">
                           <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
                             <i className="ri-scales-line text-pink-500"></i> Weight
                           </p>
                           <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUpdate.weight || 'N/A'}</p>
                         </div>
-                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                        <div className="p-4 rounded-2xl bg-rose-50/40 dark:bg-white/5 border border-gray-100 dark:border-white/5">
                           <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
                             <i className="ri-heart-pulse-line text-red-500"></i> Heart Rate
                           </p>
                           <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUpdate.heartRate || 'N/A'}</p>
                         </div>
-                        <div className="p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                        <div className="p-4 rounded-2xl bg-rose-50/40 dark:bg-white/5 border border-gray-100 dark:border-white/5">
                           <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
                             <i className="ri-user-line text-purple-500"></i> Surrogate
                           </p>
@@ -392,7 +392,7 @@ const BabyWatchPage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Ultrasound Image
                       </label>
-                      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center">
+                      <div className="border-2 border-dashed border-gray-300 dark:border-white/10 rounded-lg p-4 text-center">
                         {imagePreview ? (
                           <div className="relative">
                             <img src={imagePreview} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
@@ -449,7 +449,7 @@ const BabyWatchPage: React.FC = () => {
                               surrogateName: selectedCaseObj?.surrogateName || ''
                             });
                           }}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                         >
                           <option value="">Select Case</option>
                           {cases.map(c => (
@@ -465,7 +465,7 @@ const BabyWatchPage: React.FC = () => {
                           required
                           value={formData.date}
                           onChange={e => setFormData({ ...formData, date: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                         />
                       </div>
                     </div>
@@ -480,7 +480,7 @@ const BabyWatchPage: React.FC = () => {
                           required
                           value={formData.gestationalAge}
                           onChange={e => setFormData({ ...formData, gestationalAge: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                           placeholder="e.g. 12 Weeks"
                         />
                       </div>
@@ -491,7 +491,7 @@ const BabyWatchPage: React.FC = () => {
                           type="text"
                           value={formData.weight}
                           onChange={e => setFormData({ ...formData, weight: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                           placeholder="e.g. 50g"
                         />
                       </div>
@@ -502,7 +502,7 @@ const BabyWatchPage: React.FC = () => {
                           type="text"
                           value={formData.heartRate}
                           onChange={e => setFormData({ ...formData, heartRate: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                           placeholder="e.g. 150 bpm"
                         />
                       </div>
@@ -515,7 +515,7 @@ const BabyWatchPage: React.FC = () => {
                         value={formData.medicalNotes}
                         onChange={e => setFormData({ ...formData, medicalNotes: e.target.value })}
                         rows={4}
-                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
                         placeholder="Everything looks great! Baby is developing well..."
                       ></textarea>
                     </div>
@@ -526,7 +526,7 @@ const BabyWatchPage: React.FC = () => {
                         id="shared"
                         checked={formData.sharedWithParents}
                         onChange={e => setFormData({ ...formData, sharedWithParents: e.target.checked })}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-rose-500"
                       />
                       <label htmlFor="shared" className="text-sm text-gray-700 dark:text-gray-300">
                         Share with parents

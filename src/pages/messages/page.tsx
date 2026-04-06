@@ -35,7 +35,7 @@ const getAvatarColor = (name: string) => {
 
 
 const MessagesPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -140,7 +140,8 @@ const MessagesPage: React.FC = () => {
         selectedConversation.id!,
         adminId,
         messageText.trim(),
-        mediaData
+        mediaData,
+        (profile?.full_name as string) || 'Admin'
       );
       
       setMessageText('');
@@ -308,12 +309,11 @@ const MessagesPage: React.FC = () => {
                 </div>
               </div>
               <Button 
-                color="blue" 
                 onClick={() => setShowNewConversation(true)}
-                className="shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 transition-all duration-300 scale-105 active:scale-95"
+                className="btn-brand scale-105 active:scale-95 px-6 py-2.5 rounded-2xl"
               >
-                <i className="ri-add-line mr-2 text-lg"></i>
-                <span className="font-semibold">Start Chat</span>
+                <i className="ri-add-line mr-2 text-xl"></i>
+                <span className="font-bold tracking-wide text-white">Start Chat</span>
               </Button>
             </div>
 
@@ -330,7 +330,7 @@ const MessagesPage: React.FC = () => {
               <div className="w-80 lg:w-96 flex-shrink-0 bg-white/70 dark:bg-slate-800/50 backdrop-blur-xl rounded-[2rem] border border-white/20 dark:border-slate-700/50 shadow-2xl flex flex-col overflow-hidden transition-all duration-500 hover:shadow-blue-500/5">
                 <div className="p-6 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between">
                   <h2 className="font-bold text-slate-900 dark:text-white text-lg flex items-center gap-2">
-                    <i className="ri-chat-history-line text-blue-500"></i>
+                    <i className="ri-chat-history-line text-rose-500"></i>
                     Conversations
                   </h2>
                   <span className="text-xs font-bold px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-500">
@@ -341,8 +341,8 @@ const MessagesPage: React.FC = () => {
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
                   {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-48 gap-3">
-                      <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Loading Chats</p>
+                      <div className="w-8 h-8 border-4 border-rose-500/30 border-t-rose-500 rounded-full animate-spin"></div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Loading Chats</p>
                     </div>
                   ) : conversations.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-slate-50/50 dark:bg-slate-900/20 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
@@ -352,7 +352,7 @@ const MessagesPage: React.FC = () => {
                       <p className="text-slate-500 dark:text-slate-400 font-medium">No active connections</p>
                       <button 
                         onClick={() => setShowNewConversation(true)}
-                        className="mt-4 text-blue-500 text-sm font-bold hover:underline"
+                        className="mt-4 text-rose-500 text-sm font-bold hover:underline"
                       >
                         Start your first chat
                       </button>
@@ -365,9 +365,9 @@ const MessagesPage: React.FC = () => {
                         <button
                           key={conv.id}
                           onClick={() => loadConversation(conv)}
-                          className={`w-full p-4 rounded-2xl transition-all duration-300 text-left group relative overflow-hidden ${
+                          className={`w-full p-4 rounded-2xl transition-all duration-500 text-left group relative overflow-hidden ${
                             isSelected 
-                              ? 'bg-blue-500 dark:bg-blue-600 shadow-lg shadow-blue-500/20' 
+                              ? 'bg-gradient-to-br from-[#f83a5e] via-[#ec4899] to-[#a855f7] shadow-xl shadow-rose-500/30' 
                               : 'hover:bg-white dark:hover:bg-slate-700/50'
                           }`}
                         >
@@ -385,12 +385,12 @@ const MessagesPage: React.FC = () => {
                                 <span className={`font-bold truncate ${isSelected ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
                                   {otherName}
                                 </span>
-                                <span className={`text-[10px] font-bold uppercase tracking-tighter ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-tighter ${isSelected ? 'text-rose-100' : 'text-slate-400'}`}>
                                   {formatTime(new Date(conv.lastMessageTime))}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between gap-2">
-                                <p className={`text-xs truncate ${isSelected ? 'text-blue-50' : 'text-slate-500 dark:text-slate-400'}`}>
+                                <p className={`text-xs truncate ${isSelected ? 'text-rose-50' : 'text-slate-500 dark:text-slate-400'}`}>
                                   {conv.lastMessage || 'Sent a secure message'}
                                 </p>
                                 {conv.unreadCount[adminId] > 0 && (
@@ -445,7 +445,7 @@ const MessagesPage: React.FC = () => {
                               onClick={() => { /* View Profile logic */ }}
                               className="w-full text-left px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl flex items-center gap-3 transition-colors"
                             >
-                              <i className="ri-user-settings-line text-lg text-blue-500"></i> View Profile
+                              <i className="ri-user-settings-line text-lg text-rose-500"></i> View Profile
                             </button>
                             <button 
                               onClick={handleClearChat}
@@ -491,8 +491,8 @@ const MessagesPage: React.FC = () => {
                               <div className={`group relative max-w-[80%] md:max-w-[70%] ${isAdmin ? 'items-end' : 'items-start'}`}>
                                 
                                 {repliedMessage && (
-                                  <div className={`mb-1 px-3 py-1.5 rounded-xl text-[11px] border-l-4 border-blue-500 bg-slate-100 dark:bg-slate-800 text-slate-500 max-w-full truncate`}>
-                                    <span className="font-bold block text-blue-500 mb-0.5">{repliedMessage.senderName}</span>
+                                  <div className={`mb-1 px-3 py-1.5 rounded-xl text-[11px] border-l-4 border-rose-500 bg-slate-100 dark:bg-slate-800 text-slate-500 max-w-full truncate`}>
+                                    <span className="font-bold block text-rose-500 mb-0.5">{repliedMessage.senderName}</span>
                                     {repliedMessage.text || 'Media attachment'}
                                   </div>
                                 )}
@@ -500,7 +500,7 @@ const MessagesPage: React.FC = () => {
                                 <div
                                   className={`rounded-2xl shadow-sm transition-all duration-300 relative ${
                                     isAdmin
-                                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-tr-none shadow-blue-500/10 hover:shadow-blue-500/20'
+                                      ? 'bg-gradient-to-br from-[#f83a5e] to-[#ec4899] text-white rounded-tr-none shadow-rose-500/10 hover:shadow-rose-500/20'
                                       : 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white rounded-tl-none border border-white/50 dark:border-slate-600/50 hover:border-blue-200 dark:hover:border-blue-900'
                                   }`}
                                 >
@@ -570,9 +570,9 @@ const MessagesPage: React.FC = () => {
                         {replyTo && (
                           <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 animate-in slide-in-from-bottom-2 duration-200">
                             <div className="flex items-center gap-3 overflow-hidden">
-                              <Reply size={16} className="text-blue-500 flex-shrink-0" />
+                              <Reply size={16} className="text-rose-500 flex-shrink-0" />
                               <div className="min-w-0">
-                                <span className="text-[10px] font-bold text-blue-500 uppercase block">Replying to {replyTo.senderName}</span>
+                                <span className="text-[10px] font-bold text-rose-500 uppercase block">Replying to {replyTo.senderName}</span>
                                 <p className="text-xs text-slate-600 dark:text-slate-400 truncate">{replyTo.text || 'Media'}</p>
                               </div>
                             </div>
@@ -602,13 +602,13 @@ const MessagesPage: React.FC = () => {
                             onChange={(e) => setMessageText(e.target.value)}
                             placeholder={isUploading ? "Uploading media..." : "Type a message..."}
                             disabled={isUploading}
-                            className="w-full pl-6 pr-14 py-4 rounded-[1.5rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all duration-300 shadow-inner"
+                            className="w-full pl-6 pr-14 py-4 rounded-[1.5rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-rose-500/20 focus:border-rose-400 transition-all duration-500 shadow-inner"
                           />
                           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 text-slate-400">
                             <button 
                               type="button" 
                               onClick={() => fileInputRef.current?.click()}
-                              className="hover:text-blue-500 transition-colors p-1"
+                              className="hover:text-rose-500 transition-colors p-1"
                             >
                               <Paperclip size={20} />
                             </button>
@@ -621,7 +621,7 @@ const MessagesPage: React.FC = () => {
                             <button 
                               type="button" 
                               onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                              className={`hover:text-blue-500 transition-colors p-1 emoji-trigger ${showEmojiPicker ? 'text-blue-500' : ''}`}
+                              className={`hover:text-rose-500 transition-colors p-1 emoji-trigger ${showEmojiPicker ? 'text-rose-500' : ''}`}
                             >
                               <Smile size={20} />
                             </button>
@@ -649,7 +649,7 @@ const MessagesPage: React.FC = () => {
                           disabled={(!messageText.trim() && !selectedMedia) || isUploading}
                           className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${
                             (messageText.trim() || selectedMedia) && !isUploading
-                              ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 scale-100 border-none'
+                              ? 'btn-brand shadow-rose-500/20 scale-100 border-none'
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-400 scale-95 border border-slate-200 dark:border-slate-700 cursor-not-allowed'
                           }`}
                         >
@@ -666,7 +666,7 @@ const MessagesPage: React.FC = () => {
                 ) : (
                   <div className="flex-1 flex items-center justify-center bg-slate-50/30 dark:bg-slate-900/10">
                     <div className="max-w-xs text-center animate-in fade-in zoom-in duration-700">
-                      <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-blue-500/20 rotate-12">
+                      <div className="w-24 h-24 bg-gradient-to-br from-[#f83a5e] to-[#ec4899] rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-rose-500/20 rotate-12">
                         <i className="ri-message-3-fill text-5xl text-white -rotate-12"></i>
                       </div>
                       <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">Select Chat</h3>
@@ -675,7 +675,7 @@ const MessagesPage: React.FC = () => {
                       </p>
                       <button 
                         onClick={() => setShowNewConversation(true)}
-                        className="mt-8 px-6 py-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 text-sm font-bold text-blue-500 hover:shadow-md transition-all active:scale-95"
+                        className="mt-8 px-6 py-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 text-sm font-bold text-rose-500 hover:shadow-md transition-all active:scale-95"
                       >
                         Start New Journey
                       </button>
@@ -689,23 +689,23 @@ const MessagesPage: React.FC = () => {
           {/* New Conversation Modal - Updated Styling */}
           {showNewConversation && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-              <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] max-w-md w-full shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-300">
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl rounded-[2.5rem] max-w-md w-full shadow-2xl border border-white/20 overflow-visible relative z-10 animate-in zoom-in-95 duration-300">
                 <div className="p-8">
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">New Chat</h2>
-                      <p className="text-sm text-slate-500 font-medium">Connect with a community member</p>
+                      <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-none mb-1">New Chat</h2>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Connect with member</p>
                     </div>
                     <button
                       onClick={() => setShowNewConversation(false)}
-                      className="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-xl hover:bg-slate-200 transition-colors"
+                      className="w-12 h-12 flex items-center justify-center bg-slate-100 dark:bg-white/5 rounded-2xl hover:bg-rose-500 hover:text-white transition-all duration-300 shadow-sm group"
                     >
-                      <i className="ri-close-line text-xl text-slate-600 dark:text-gray-300"></i>
+                      <i className="ri-close-line text-2xl group-hover:rotate-90 transition-transform"></i>
                     </button>
                   </div>
 
-                  <div className="space-y-8">
-                    <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-700">
+                  <div className="space-y-8 relative">
+                    <div className="bg-slate-50/50 dark:bg-slate-900/50 p-6 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-inner relative z-50">
                       <SearchableDropdown
                         label="Select Resident"
                         options={users}
@@ -719,14 +719,13 @@ const MessagesPage: React.FC = () => {
                     <div className="flex gap-4">
                       <Button
                         variant="outline"
-                        className="flex-1 h-14 rounded-2xl font-bold border-2 hover:bg-slate-50"
+                        className="flex-1 h-14 rounded-2xl font-bold border-2 hover:bg-slate-100 dark:hover:bg-white/5 transition-all text-slate-600 dark:text-slate-300"
                         onClick={() => setShowNewConversation(false)}
                       >
                         Maybe Later
                       </Button>
                       <Button
-                        color="blue"
-                        className="flex-1 h-14 rounded-2xl font-bold shadow-lg shadow-blue-500/20"
+                        className="btn-brand flex-1 h-14 rounded-2xl font-bold shadow-xl shadow-rose-500/20 hover:shadow-rose-500/40 transform hover:-translate-y-1 transition-all"
                         onClick={handleCreateConversation}
                         disabled={!selectedUserId}
                       >

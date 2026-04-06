@@ -162,18 +162,18 @@ const TasksPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
+          <div className="mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Tasks</h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage and track tasks for users.</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tasks</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage and track tasks for users.</p>
               </div>
               <Button color="blue" onClick={handleOpenNewModal}>
                 <i className="ri-add-line mr-2"></i>
@@ -185,14 +185,14 @@ const TasksPage: React.FC = () => {
           {/* Filters */}
           <div className="mb-6 flex flex-wrap gap-4 items-center">
             {/* Status Tabs */}
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+            <div className="flex space-x-1 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg">
               {(['all', 'pending', 'completed'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
                     activeTab === tab
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
@@ -231,7 +231,7 @@ const TasksPage: React.FC = () => {
           ) : (
             <div className="space-y-4">
               {filteredTasks.length === 0 ? (
-                <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                <div className="text-center py-12 bg-white dark:bg-[#15111f] rounded-2xl border border-dashed border-gray-300 dark:border-white/5">
                   <i className="ri-task-line text-4xl text-gray-400 mb-2"></i>
                   <p className="text-gray-500 dark:text-gray-400">No tasks found.</p>
                 </div>
@@ -255,7 +255,7 @@ const TasksPage: React.FC = () => {
                           className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
                             task.isCompleted
                               ? 'bg-green-500 border-green-500'
-                              : 'border-gray-300 dark:border-gray-600 hover:border-green-500'
+                              : 'border-gray-300 dark:border-white/10 hover:border-green-500'
                           }`}
                         >
                           {task.isCompleted && (
@@ -305,7 +305,7 @@ const TasksPage: React.FC = () => {
           {/* Task Detail Modal */}
           {selectedTask && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Task Details</h2>
@@ -327,7 +327,7 @@ const TasksPage: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl space-y-4">
+                    <div className="bg-rose-50/50 dark:bg-white/5 p-6 rounded-xl space-y-4">
                       <div>
                         <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Description</h4>
                         <p className="text-gray-600 dark:text-gray-300">{selectedTask.description}</p>
@@ -385,7 +385,7 @@ const TasksPage: React.FC = () => {
           {/* Create/Edit Modal */}
           {showModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
                 <form onSubmit={handleSubmit} className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -408,7 +408,7 @@ const TasksPage: React.FC = () => {
                         required
                         value={formData.title}
                         onChange={e => setFormData({ ...formData, title: e.target.value })}
-                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                         placeholder="e.g. Upload Medical Records"
                       />
                     </div>
@@ -420,7 +420,7 @@ const TasksPage: React.FC = () => {
                         value={formData.description}
                         onChange={e => setFormData({ ...formData, description: e.target.value })}
                         rows={3}
-                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
                         placeholder="Please upload your vaccination records..."
                       ></textarea>
                     </div>
@@ -445,7 +445,7 @@ const TasksPage: React.FC = () => {
                           required
                           value={formData.dueDate}
                           onChange={e => setFormData({ ...formData, dueDate: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                         />
                       </div>
                     </div>
@@ -457,7 +457,7 @@ const TasksPage: React.FC = () => {
                           id="completed"
                           checked={formData.isCompleted}
                           onChange={e => setFormData({ ...formData, isCompleted: e.target.checked })}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-rose-500"
                         />
                         <label htmlFor="completed" className="text-sm text-gray-700 dark:text-gray-300">
                           Mark as completed

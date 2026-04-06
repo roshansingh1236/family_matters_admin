@@ -45,8 +45,8 @@ const AboutSection: React.FC<AboutSectionProps> = ({
 
   if (!data || Object.values(data).every(v => !v)) {
       return (
-          <div className="flex flex-col items-center justify-center p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
-              <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full mb-3">
+          <div className="flex flex-col items-center justify-center p-8 text-center bg-gray-50 dark:bg-[#15111f]/50 rounded-2xl border border-dashed border-gray-300 dark:border-white/5">
+              <div className="bg-gray-100 dark:bg-[#15111f] p-4 rounded-full mb-3">
                   <i className="ri-user-smile-line text-3xl text-gray-400"></i>
               </div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No About Info</h3>
@@ -80,7 +80,7 @@ const AboutSection: React.FC<AboutSectionProps> = ({
   const StatItem = ({ icon, label, value, className }: { icon: string, label: string, value?: string, className?: string }) => {
       if (!value) return null;
       return (
-          <div className={`p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50 flex items-start gap-4 ${className}`}>
+          <div className={`p-4 rounded-xl bg-gray-50 dark:bg-[#15111f]/50 border border-gray-100 dark:border-white/5/50 flex items-start gap-4 ${className}`}>
               <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-white dark:bg-gray-700 flex items-center justify-center text-primary-500 shadow-sm">
                   <i className={`${icon} text-xl`}></i>
               </div>
@@ -106,12 +106,12 @@ const AboutSection: React.FC<AboutSectionProps> = ({
           {/* Quick tags row */}
            <div className="flex flex-wrap gap-2 mt-2">
               {age && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-300">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 dark:bg-[#15111f] text-xs font-medium text-gray-600 dark:text-gray-300">
                       <i className="ri-cake-line"></i> {age} years
                   </span>
               )}
               {height && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-300">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 dark:bg-[#15111f] text-xs font-medium text-gray-600 dark:text-gray-300">
                       <i className="ri-ruler-line"></i> {height}
                   </span>
               )}

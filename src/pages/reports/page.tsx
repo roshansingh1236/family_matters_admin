@@ -109,24 +109,24 @@ const ReportsPage: React.FC = () => {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
+          <div className="mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Reports & Analytics</h1>
-                <p className="text-gray-600 dark:text-gray-400">Comprehensive insights into your surrogacy program performance.</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Reports & Analytics</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Comprehensive insights into your surrogacy program performance.</p>
               </div>
               <div className="flex gap-3">
                 <select 
                   value={selectedPeriod}
                   onChange={(e) => setSelectedPeriod(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white pr-8"
+                  className="px-4 py-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-[#15111f] text-gray-900 dark:text-white pr-8"
                 >
                   {periods.map((period) => (
                     <option key={period.id} value={period.id}>{period.label}</option>
@@ -142,14 +142,14 @@ const ReportsPage: React.FC = () => {
 
           {/* Report Type Tabs */}
           <div className="mb-6">
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+            <div className="flex space-x-1 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
               {reportTypes.map((type) => (
                 <button
                   key={type.id}
                   onClick={() => setSelectedReport(type.id)}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer flex items-center gap-2 ${
                     selectedReport === type.id
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
@@ -183,7 +183,7 @@ const ReportsPage: React.FC = () => {
                           'bg-purple-100 dark:bg-purple-900'
                         }`}>
                           <i className={`${stat.icon} text-xl ${
-                            stat.color === 'blue' ? 'text-blue-600 dark:text-blue-400' :
+                            stat.color === 'blue' ? 'text-rose-500 dark:text-rose-400' :
                             stat.color === 'green' ? 'text-green-600 dark:text-green-400' :
                             stat.color === 'pink' ? 'text-pink-600 dark:text-pink-400' :
                             'text-purple-600 dark:text-purple-400'
@@ -202,7 +202,7 @@ const ReportsPage: React.FC = () => {
               <div className="p-6">
                 <div className="text-center py-12">
                   <i className="ri-money-dollar-circle-line text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Financial Reports</h3>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Financial Reports</h3>
                   <p className="text-gray-600 dark:text-gray-400 mb-6">
                     Detailed financial analytics including revenue, expenses, and profit margins.
                   </p>
@@ -220,7 +220,7 @@ const ReportsPage: React.FC = () => {
               <div className="p-6">
                 <div className="text-center py-12">
                   <i className="ri-health-book-line text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Medical Reports</h3>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Medical Reports</h3>
                   <p className="text-gray-600 dark:text-gray-400 mb-6">
                     Medical outcomes, success rates, and health statistics.
                   </p>
@@ -238,7 +238,7 @@ const ReportsPage: React.FC = () => {
               <div className="p-6">
                 <div className="text-center py-12">
                   <i className="ri-bar-chart-line text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Performance Reports</h3>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Performance Reports</h3>
                   <p className="text-gray-600 dark:text-gray-400 mb-6">
                     Team performance metrics, efficiency ratings, and productivity analysis.
                   </p>

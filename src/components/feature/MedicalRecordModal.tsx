@@ -75,7 +75,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-200">
+      <div className="bg-white dark:bg-[#15111f] rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-200">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold dark:text-white">
@@ -83,7 +83,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
             </h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer transition-colors"
             >
               <i className="ri-close-line text-2xl text-gray-500"></i>
             </button>
@@ -101,7 +101,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
                   type="text"
                   placeholder="e.g. Initial Screening"
                   required
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                   value={recordForm.title || ''}
                   onChange={e => setRecordForm({ ...recordForm, title: e.target.value })}
                 />
@@ -111,7 +111,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
                   <select
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                     value={recordForm.type}
                     onChange={e => setRecordForm({ ...recordForm, type: e.target.value as any })}
                   >
@@ -128,7 +128,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
                   <input
                     type="date"
                     required
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                     value={recordForm.date || ''}
                     onChange={e => setRecordForm({ ...recordForm, date: e.target.value })}
                   />
@@ -141,7 +141,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
                   <input
                     type="text"
                     placeholder="Enter physician name"
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                     value={recordForm.doctor || ''}
                     onChange={e => setRecordForm({ ...recordForm, doctor: e.target.value })}
                   />
@@ -151,7 +151,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
                   <input
                     type="text"
                     placeholder="Medical center/Clinic"
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                     value={recordForm.facility || ''}
                     onChange={e => setRecordForm({ ...recordForm, facility: e.target.value })}
                   />
@@ -162,18 +162,18 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Summary / Notes</label>
                 <textarea
                   placeholder="Additional details about the visit or findings..."
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
                   rows={3}
                   value={recordForm.summary || ''}
                   onChange={e => setRecordForm({ ...recordForm, summary: e.target.value })}
                 ></textarea>
               </div>
 
-              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-lg">
                 <input
                   type="checkbox"
                   id="share-parents"
-                  className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  className="w-5 h-5 rounded text-blue-600 focus:ring-rose-500 cursor-pointer"
                   checked={recordForm.sharedWithParents}
                   onChange={e => setRecordForm({ ...recordForm, sharedWithParents: e.target.checked })}
                 />
@@ -185,7 +185,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
             </div>
 
             {/* Integrated Medication Section */}
-            <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+            <div className="pt-4 border-t border-gray-100 dark:border-white/5">
               <button
                 type="button"
                 onClick={() => setShowAddMedication(!showAddMedication)}

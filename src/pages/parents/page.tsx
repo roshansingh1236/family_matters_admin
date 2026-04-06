@@ -66,16 +66,23 @@ const ParentsPage: React.FC = () => {
 
       if (err) throw err;
       
-      const mappedData: User[] = (data || []).map(u => ({
-        id: u.id,
-        ...u,
-        profileCompleted: u.profile_completed || u.profileCompleted,
-        form2Completed: u.form2_completed || u.form2Completed || u.form_2_completed,
-        formData: u.form_data || u.formData || u.formdata,
-        form2Data: u.form2_data || u.form2Data || u.form2data,
-        updatedAt: u.updated_at,
-        createdAt: u.created_at
-      }));
+      const mappedData: User[] = (data || []).map(u => {
+        const formData = u.form_data || u.formData || u.formdata || {};
+        return {
+          id: u.id,
+          ...u,
+          profileCompleted: u.profile_completed || u.profileCompleted,
+          form2Completed: u.form2_completed || u.form2Completed || u.form_2_completed,
+          formData: formData,
+          form2Data: u.form2_data || u.form2Data || u.form2data,
+          // Extract parent2 and other nested data from form_data
+          parent1: u.parent1 || formData?.parent1 || null,
+          parent2: u.parent2 || formData?.parent2 || null,
+          surrogateRelated: u.surrogateRelated || formData?.surrogate_related || formData?.surrogateRelated || null,
+          updatedAt: u.updated_at,
+          createdAt: u.created_at
+        };
+      });
       
       setParents(mappedData);
       setIsLoading(false);
@@ -193,8 +200,11 @@ const ParentsPage: React.FC = () => {
     return ((parent.form2Data as Record<string, unknown> | undefined)?.budget as string | undefined) ?? 'Not provided';
   };
 
+  // Per spec: IP is eligible to match only if Accepted to Program
+  const isEligibleToMatch = (parent: User): boolean => parent.status === 'Accepted to Program';
+
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -203,15 +213,15 @@ const ParentsPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Intended Parents</h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage all intended parents and their journey progress.</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Intended Parents</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all intended parents and their journey progress.</p>
               </div>
-              <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+              <div className="flex bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
                 <button
                   onClick={() => setViewStyle('grid')}
                   className={`p-2 rounded-md transition-colors cursor-pointer ${
                     viewStyle === 'grid'
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                   title="Grid View"
@@ -222,7 +232,7 @@ const ParentsPage: React.FC = () => {
                   onClick={() => setViewStyle('table')}
                   className={`p-2 rounded-md transition-colors cursor-pointer ${
                     viewStyle === 'table'
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                   title="Table View"
@@ -234,14 +244,14 @@ const ParentsPage: React.FC = () => {
 
           {/* Status Tabs */}
           <div className="mb-6 overflow-x-auto">
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+            <div className="flex space-x-1 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
               {statusDefinitions.map((status) => (
                 <button
                   key={status.id}
                   onClick={() => setActiveTab(status.id)}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
                     activeTab === status.id
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
@@ -261,7 +271,7 @@ const ParentsPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, index) => (
                 <Card key={index} className="animate-pulse">
-                  <div className="h-48 w-full rounded-lg bg-gray-100 dark:bg-gray-800" />
+                  <div className="h-48 w-full rounded-lg bg-gray-100 dark:bg-[#15111f]" />
                 </Card>
               ))}
             </div>
@@ -289,24 +299,33 @@ const ParentsPage: React.FC = () => {
                             <p className="text-sm text-gray-600 dark:text-gray-400 break-all">ID: {parent.id}</p>
                           </div>
                         </div>
-                        {getStatusBadge(parent)}
+                        <div className="flex flex-col items-end gap-1">
+                          {getStatusBadge(parent)}
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            isEligibleToMatch(parent)
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                              : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400'
+                          }`}>
+                            {isEligibleToMatch(parent) ? '✓ Eligible to Match' : '✗ Not Eligible'}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="space-y-2 mb-4">
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Email:</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Email:</span>
                           <span className="text-gray-900 dark:text-white break-words text-right">{parent.email ?? '—'}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Location:</span>
                           <span className="text-gray-900 dark:text-white text-right">{getLocation(parent)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Timeline:</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Timeline:</span>
                           <span className="text-gray-900 dark:text-white text-right">{getTimeline(parent)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Budget:</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Budget:</span>
                           <span className="text-gray-900 dark:text-white text-right">{getBudget(parent)}</span>
                         </div>
                       </div>
@@ -331,7 +350,7 @@ const ParentsPage: React.FC = () => {
                 <Card className="overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                      <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs uppercase">
+                      <thead className="bg-rose-50/50 dark:bg-white/5 text-gray-600 dark:text-gray-400 text-xs uppercase">
                         <tr>
                           <th className="px-6 py-3 font-semibold">Name</th>
                           <th className="px-6 py-3 font-semibold">Status</th>
@@ -396,7 +415,7 @@ const ParentsPage: React.FC = () => {
           {/* Parent Detail Modal */}
           {selectedParent && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Intended Parents Profile</h2>
@@ -414,7 +433,7 @@ const ParentsPage: React.FC = () => {
                         <i className="ri-parent-line text-purple-600 dark:text-purple-400 text-2xl"></i>
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{getDisplayName(selectedParent)}</h3>
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white">{getDisplayName(selectedParent)}</h3>
                         <p className="text-gray-600 dark:text-gray-400 break-all mb-2">Parent ID: {selectedParent.id}</p>
                         
                         {/* Status Dropdown */}
@@ -424,7 +443,7 @@ const ParentsPage: React.FC = () => {
                             <select
                               value={selectedParent.status || ''}
                               onChange={(e) => handleStatusUpdate(selectedParent.id, e.target.value as UserStatus)}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white py-1 pl-2 pr-8"
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-white/5 dark:border-white/10 dark:text-white py-1 pl-2 pr-8"
                             >
                               <option value="">Select Status</option>
                               {IP_STATUSES.map(status => (
@@ -457,7 +476,11 @@ const ParentsPage: React.FC = () => {
                     />
                     <DataSection
                       title="Form 2 Responses"
-                      data={(selectedParent.form2Data as Record<string, unknown>) ?? null}
+                      data={
+                        (selectedParent.form2Data as Record<string, unknown>) ??
+                        ((selectedParent.formData as Record<string, unknown>)?.fertility as Record<string, unknown>) ??
+                        null
+                      }
                       emptyMessage="Form 2 has not been completed."
                     />
                     <DataSection

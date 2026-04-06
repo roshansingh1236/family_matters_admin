@@ -5,71 +5,86 @@ import Header from "../../components/feature/Header";
 import Card from "../../components/base/Card";
 import Button from "../../components/base/Button";
 import Badge from "../../components/base/Badge";
-import { journeyService } from "../../services/journeyService";
-import type { Journey, JourneyStatus } from "../../types";
-import UserSelector from "../../components/feature/UserSelector";
+import { journeyService, JOURNEY_STAGES } from "../../services/journeyService";
+import type { Journey, JourneyStatus, JourneyStage } from "../../types";
 import { useAuth } from "../../contexts/AuthContext";
+import Toast from "../../components/base/Toast";
+import ConfirmationDialog from "../../components/base/ConfirmationDialog";
+import { canViewFinancials } from "../../utils/permissions";
 
-// Helper type for UI preview
-type MatchUserPreview = {
+// Helper type for user preview
+type UserPreview = {
   id: string;
   name: string;
   email: string;
   role: string;
-  status?: string;
-  profileCompleted?: boolean;
-  form2Completed?: boolean;
   location?: string;
-  readinessLabel: string;
-  readinessColor: "green" | "yellow" | "red" | "blue" | "gray";
 };
 
 const JourneysPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [journeys, setJourneys] = useState<Journey[]>([]);
-  const [selectedStatus, setSelectedStatus] = useState<JourneyStatus | 'All'>('All');
+  const [selectedStageFilter, setSelectedStageFilter] = useState<JourneyStage | JourneyStatus | 'All'>('All');
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [progressNotes, setProgressNotes] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // For creating new journey manually
-  const [newJourneyData, setNewJourneyData] = useState({
-    gestationalCarrierId: "",
-    intendedParentId: "",
-    notes: "",
-  });
-  const [surrogatePreview, setSurrogatePreview] = useState<MatchUserPreview | null>(null);
-  const [parentPreview, setParentPreview] = useState<MatchUserPreview | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Details for the currently selected journey
-  const [detailSurrogate, setDetailSurrogate] = useState<MatchUserPreview | null>(null);
-  const [detailParent, setDetailParent] = useState<MatchUserPreview | null>(null);
+  // Detail view state
+  const [detailSurrogate, setDetailSurrogate] = useState<UserPreview | null>(null);
+  const [detailParent, setDetailParent] = useState<UserPreview | null>(null);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
 
-  const adminId = user?.id || "";
+  // Tab state
+  const [detailTab, setDetailTab] = useState<'overview' | 'medical' | 'legal' | 'trust' | 'milestones' | 'delivery'>('overview');
 
-  const stages: JourneyStatus[] = [
-    "Medical Screening",
-    "Legal",
-    "Embryo Transfer",
-    "Pregnancy",
-    "Birth",
-    "Completed",
-    // "Cancelled" - usually not a linear stage
-  ];
+  // Medical tab form state
+  const [medicalClinic, setMedicalClinic] = useState('');
+  const [medicalNotes, setMedicalNotes] = useState('');
+  const [medicalStatus, setMedicalStatus] = useState('');
+  const [isSavingMedical, setIsSavingMedical] = useState(false);
+
+  // Legal tab form state
+  const [contractStatus, setContractStatus] = useState('');
+  const [legalAttorney, setLegalAttorney] = useState('');
+  const [legalNotes, setLegalNotes] = useState('');
+  const [isSavingLegal, setIsSavingLegal] = useState(false);
+
+  // Milestone tab form state
+  const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
+  const [newMilestoneDate, setNewMilestoneDate] = useState('');
+  const [newMilestoneType, setNewMilestoneType] = useState('medical');
+  const [isAddingMilestone, setIsAddingMilestone] = useState(false);
+
+  // Trust & Reimbursements tab form state
+  const [trustFundingAmount, setTrustFundingAmount] = useState('');
+  const [trustFundingDate, setTrustFundingDate] = useState('');
+  const [reimbursementNotes, setReimbursementNotes] = useState('');
+  const [trustStatus, setTrustStatus] = useState('');
+  const [isSavingTrust, setIsSavingTrust] = useState(false);
+
+  // Delivery tab form state
+  const [eddInput, setEddInput] = useState('');
+  const [deliveryHospital, setDeliveryHospital] = useState('');
+  const [postpartumNotesInput, setPostpartumNotesInput] = useState('');
+  const [isSavingDelivery, setIsSavingDelivery] = useState(false);
+
+  // Delivery date input
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [deliveryDateInput, setDeliveryDateInput] = useState('');
+
+  const [showDeleteJourneyDialog, setShowDeleteJourneyDialog] = useState(false);
+  const [isDeletingJourney, setIsDeletingJourney] = useState(false);
 
   const fetchJourneys = async () => {
     setIsLoading(true);
     try {
       const data = await journeyService.getAllJourneys();
       setJourneys(Array.isArray(data) ? data : []);
-      setError(null);
     } catch (err) {
       console.error(err);
-      setError("Failed to load journeys");
+      setToast({ message: 'Failed to load journeys', type: 'error' });
       setJourneys([]);
     } finally {
       setIsLoading(false);
@@ -80,104 +95,34 @@ const JourneysPage: React.FC = () => {
     fetchJourneys();
   }, []);
 
-  // Helper to build preview (reused logic from milestones)
-  const buildUserPreview = (
-    id: string,
-    role: "Surrogate" | "Intended Parent",
-    data: Record<string, unknown>
-  ): MatchUserPreview => {
-    const formData = data.formData as Record<string, unknown> | undefined;
-    const firstName =
-      (formData?.firstName as string | undefined) ||
-      (data.firstName as string | undefined) ||
-      "";
-    const lastName =
-      (formData?.lastName as string | undefined) ||
-      (data.lastName as string | undefined) ||
-      "";
-    const name =
-      [firstName, lastName].filter(Boolean).join(" ") ||
-      ((data.email as string | undefined) ?? "Unknown user");
-    const city = (formData?.city as string | undefined) || "";
-    const state = (formData?.state as string | undefined) || "";
-    const location = [city, state].filter(Boolean).join(", ");
-    const status = (data.status as string | undefined) || undefined;
-    const profileCompleted = Boolean(data.profileCompleted);
-    const form2Completed = Boolean(data.form2Completed);
+  // ─── Build user preview ────────────────────────────────────────────────────
+  const buildUserPreview = (data: any, role: string): UserPreview => {
+    const formData = data.formData || {};
+    const firstName = formData.firstName || data.first_name || data.firstName || '';
+    const lastName = formData.lastName || data.last_name || data.lastName || '';
+    const name = [firstName, lastName].filter(Boolean).join(' ') || data.email || 'Unknown';
+    const city = formData.city || '';
+    const state = formData.state || '';
+    const location = [city, state].filter(Boolean).join(', ');
 
-    let readinessLabel = "";
-    let readinessColor: MatchUserPreview["readinessColor"] = "gray";
-
-    if (role === "Surrogate") {
-      if (status === "Pregnant") {
-        readinessLabel = "Not eligible: pregnant";
-        readinessColor = "red";
-      } else if (!profileCompleted || !form2Completed) {
-        readinessLabel = "Needs screening";
-        readinessColor = "yellow";
-      } else {
-        readinessLabel = "Ready";
-        readinessColor = "green";
-      }
-    } else {
-      if (!profileCompleted) {
-        readinessLabel = "Complete intake first";
-        readinessColor = "yellow";
-      } else {
-        readinessLabel = "Ready";
-        readinessColor = "green";
-      }
-    }
-
-    return {
-      id,
-      name,
-      email: (data.email as string | undefined) || "",
-      role,
-      status,
-      profileCompleted,
-      form2Completed,
-      location,
-      readinessLabel,
-      readinessColor,
-    };
+    return { id: data.id, name, email: data.email || '', role, location };
   };
 
-  const fetchUserPreview = async (
-    id: string,
-    role: "Surrogate" | "Intended Parent",
-    isForDetail: boolean = false
-  ) => {
+  const fetchUserPreview = async (id: string, role: string) => {
     if (!id) return;
     try {
-      if (isForDetail) setIsDetailsLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', id)
-        .single();
-        
-      if (fetchError) throw fetchError;
+      setIsDetailsLoading(true);
+      const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
+      if (error) throw error;
       if (!data) return;
-      
-      const preview = buildUserPreview(data.id, role, data as any);
-      if (isForDetail) {
-        if (role === "Surrogate") {
-          setDetailSurrogate(preview);
-        } else {
-          setDetailParent(preview);
-        }
-      } else {
-        if (role === "Surrogate") {
-          setSurrogatePreview(preview);
-        } else {
-          setParentPreview(preview);
-        }
-      }
+
+      const preview = buildUserPreview(data, role);
+      if (role === 'Surrogate') setDetailSurrogate(preview);
+      else setDetailParent(preview);
     } catch (e) {
-      console.error("Failed to load user preview", e);
+      console.error('Failed to load user preview', e);
     } finally {
-      if (isForDetail) setIsDetailsLoading(false);
+      setIsDetailsLoading(false);
     }
   };
 
@@ -185,180 +130,351 @@ const JourneysPage: React.FC = () => {
     if (selectedJourney) {
       setDetailSurrogate(null);
       setDetailParent(null);
-      fetchUserPreview(selectedJourney.gestationalCarrierId, "Surrogate", true);
-      fetchUserPreview(selectedJourney.intendedParentId, "Intended Parent", true);
+      setDetailTab('overview');
+      fetchUserPreview(selectedJourney.gestationalCarrierId, 'Surrogate');
+      fetchUserPreview(selectedJourney.intendedParentId, 'Intended Parent');
+
+      // Load saved data into form fields
+      const med = (selectedJourney.medicalRecords as any) || {};
+      setMedicalClinic(med.clinicName || '');
+      setMedicalNotes(med.notes || '');
+      setMedicalStatus(med.status || '');
+
+      const legal = (selectedJourney.legalAgreements as any) || {};
+      setContractStatus(legal.contractStatus || '');
+      setLegalAttorney(legal.attorney || '');
+      setLegalNotes(legal.notes || '');
+
+      const delivery = (selectedJourney.legalAgreements as any) || {};
+      setEddInput(selectedJourney.estimatedDeliveryDate || '');
+      setDeliveryHospital(delivery.hospital || '');
+      setPostpartumNotesInput(
+        typeof selectedJourney.postpartumNotes === 'string'
+          ? selectedJourney.postpartumNotes
+          : '',
+      );
+
+      const trust = (selectedJourney.journeyNotes as any)?.trust || {};
+      setTrustFundingAmount(trust.fundingAmount || '');
+      setTrustFundingDate(trust.fundingDate || '');
+      setReimbursementNotes(trust.reimbursementNotes || '');
+      setTrustStatus(trust.status || '');
     }
   }, [selectedJourney]);
 
-  const handleCreateJourney = async () => {
-    if (!newJourneyData.gestationalCarrierId || !newJourneyData.intendedParentId) {
-      setError("Please select both surrogate and parent");
-      return;
-    }
-
-    try {
-      // In a real flow, checking for existing match or creating one would be ideal.
-      // Here we assume we are jumpstarting a journey.
-      // We generate a dummy matchId or use one if we had match selection.
-      const dummyMatchId = crypto.randomUUID(); 
-
-      await journeyService.createJourney({
-        matchId: dummyMatchId,
-        gestationalCarrierId: newJourneyData.gestationalCarrierId,
-        intendedParentId: newJourneyData.intendedParentId,
-        caseManagerId: adminId,
-        caseNumber: `CASE-${Date.now().toString().slice(-6)}`,
-        status: "Medical Screening",
-        milestones: [],
-        documents: [],
-        payments: [],
-        journeyNotes: { initial: newJourneyData.notes }
-      });
-
-      await fetchJourneys();
-      setShowCreateModal(false);
-      setNewJourneyData({
-        gestationalCarrierId: "",
-        intendedParentId: "",
-        notes: "",
-      });
-      setSurrogatePreview(null);
-      setParentPreview(null);
-      setError(null);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to create journey");
-    }
-  };
-
-  const filteredJourneys =
-    selectedStatus === "All"
-      ? journeys
-      : journeys.filter((j) => j.status === selectedStatus);
-
-  const getStatusColor = (status: JourneyStatus | string): "blue" | "green" | "red" | "yellow" => {
-    switch (status) {
-      case "Medical Screening":
-      case "Legal":
-        return "blue";
-      case "Embryo Transfer":
-      case "Pregnancy":
-      case "Birth":
-      case "Completed":
-        return "green";
-      case "Cancelled":
-        return "red";
-      default:
-        return "blue";
-    }
-  };
-
-  const getStatusProgress = (status: JourneyStatus | string): number => {
-    const s = status as JourneyStatus;
-    const index = stages.indexOf(s);
-    if (index === -1) {
-       if (status === "Cancelled") return 100; // or 0
-       return 0;
-    }
-    return Math.round(((index + 1) / stages.length) * 100);
-  };
-
-  const getNextStage = (current: JourneyStatus | string): JourneyStatus | null => {
-      const idx = stages.indexOf(current as JourneyStatus);
-      if (idx !== -1 && idx < stages.length - 1) {
-          return stages[idx + 1];
-      }
-      return null;
-  };
-
+  // ─── Stage Progression ─────────────────────────────────────────────────────
   const handleProgressStage = async () => {
     if (!selectedJourney) return;
 
     try {
-      const nextStage = getNextStage(selectedJourney.status);
+      const nextStage = journeyService.getNextStage(selectedJourney.stage);
       if (!nextStage) {
-        setError("Journey is already at the final stage");
+        setToast({ message: 'Journey is at the final stage', type: 'error' });
         return;
       }
 
-      await journeyService.updateJourneyStatus(selectedJourney.id, nextStage);
+      const prev = (selectedJourney.journeyNotes || {}) as Record<string, unknown>;
+      const notes: Record<string, unknown> = { ...prev };
+      const trimmed = progressNotes.trim();
+      if (trimmed) {
+        const existing = typeof notes.client_notes === 'string' ? (notes.client_notes as string) : '';
+        const line = `[${new Date().toLocaleDateString()}] ${trimmed}`;
+        notes.client_notes = existing ? `${existing}\n\n${line}` : line;
+        await journeyService.updateJourneyNotes(selectedJourney.id, notes);
+      }
 
+      await journeyService.updateJourneyStage(selectedJourney.id, nextStage);
       await fetchJourneys();
       setShowProgressModal(false);
       setSelectedJourney(null);
-      setProgressNotes("");
+      setProgressNotes('');
+      setToast({ message: `Progressed to "${nextStage}"`, type: 'success' });
     } catch (err) {
       console.error(err);
-      setError("Failed to progress journey");
+      setToast({ message: 'Failed to progress journey', type: 'error' });
     }
   };
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+  // ─── Record Delivery ──────────────────────────────────────────────────────
+  const handleRecordDelivery = async () => {
+    if (!selectedJourney || !deliveryDateInput) return;
+
+    try {
+      await journeyService.updateDeliveryDate(selectedJourney.id, deliveryDateInput);
+      await fetchJourneys();
+      setShowDeliveryModal(false);
+      setDeliveryDateInput('');
+      setToast({ message: 'Delivery date recorded!', type: 'success' });
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'Failed to record delivery', type: 'error' });
+    }
   };
 
+  // ─── Journey Status Actions ────────────────────────────────────────────────
+  const handleCompleteJourney = async () => {
+    if (!selectedJourney) return;
+    try {
+      await journeyService.updateJourneyStatus(selectedJourney.id, 'Completed');
+      await fetchJourneys();
+      setSelectedJourney(null);
+      setToast({ message: 'Journey completed!', type: 'success' });
+    } catch (err) {
+      setToast({ message: 'Failed to complete journey', type: 'error' });
+    }
+  };
+
+  const handleCancelJourney = async () => {
+    if (!selectedJourney) return;
+    try {
+      await journeyService.updateJourneyStatus(selectedJourney.id, 'Cancelled');
+      await fetchJourneys();
+      setSelectedJourney(null);
+      setToast({ message: 'Journey cancelled', type: 'success' });
+    } catch (err) {
+      setToast({ message: 'Failed to cancel journey', type: 'error' });
+    }
+  };
+
+  const handleConfirmDeleteJourney = async () => {
+    if (!selectedJourney?.id) return;
+    setIsDeletingJourney(true);
+    try {
+      await journeyService.deleteJourney(selectedJourney.id);
+      setJourneys(prev => prev.filter(j => j.id !== selectedJourney.id));
+      setSelectedJourney(null);
+      setShowDeleteJourneyDialog(false);
+      setToast({ message: 'Journey deleted successfully.', type: 'success' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete journey';
+      setToast({ message, type: 'error' });
+    } finally {
+      setIsDeletingJourney(false);
+    }
+  };
+
+  // ─── Tab Save Handlers ────────────────────────────────────────────────────
+  const handleSaveMedical = async () => {
+    if (!selectedJourney) return;
+    setIsSavingMedical(true);
+    try {
+      await journeyService.updateMedicalRecords(selectedJourney.id, {
+        clinicName: medicalClinic,
+        notes: medicalNotes,
+        status: medicalStatus,
+        updatedAt: new Date().toISOString(),
+      });
+      await fetchJourneys();
+      setToast({ message: 'Medical records saved', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save medical records', type: 'error' });
+    } finally {
+      setIsSavingMedical(false);
+    }
+  };
+
+  const handleSaveLegal = async () => {
+    if (!selectedJourney) return;
+    setIsSavingLegal(true);
+    try {
+      await journeyService.updateLegalAgreements(selectedJourney.id, {
+        contractStatus,
+        attorney: legalAttorney,
+        notes: legalNotes,
+        updatedAt: new Date().toISOString(),
+      });
+      await fetchJourneys();
+      setToast({ message: 'Legal information saved', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save legal information', type: 'error' });
+    } finally {
+      setIsSavingLegal(false);
+    }
+  };
+
+  const handleAddMilestone = async () => {
+    if (!selectedJourney || !newMilestoneTitle || !newMilestoneDate) return;
+    setIsAddingMilestone(true);
+    try {
+      const milestone = {
+        id: Date.now().toString(),
+        title: newMilestoneTitle,
+        date: newMilestoneDate,
+        type: newMilestoneType,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      await journeyService.updateMilestone(selectedJourney.id, milestone as any);
+      await fetchJourneys();
+      setNewMilestoneTitle('');
+      setNewMilestoneDate('');
+      setNewMilestoneType('medical');
+      setToast({ message: 'Milestone added', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to add milestone', type: 'error' });
+    } finally {
+      setIsAddingMilestone(false);
+    }
+  };
+
+  const handleSaveTrust = async () => {
+    if (!selectedJourney) return;
+    setIsSavingTrust(true);
+    try {
+      const existingNotes = (selectedJourney.journeyNotes as any) || {};
+      await journeyService.updateJourneyNotes(selectedJourney.id, {
+        ...existingNotes,
+        trust: {
+          fundingAmount: trustFundingAmount,
+          fundingDate: trustFundingDate,
+          reimbursementNotes,
+          status: trustStatus,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      await fetchJourneys();
+      setToast({ message: 'Trust & reimbursement info saved', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save trust information', type: 'error' });
+    } finally {
+      setIsSavingTrust(false);
+    }
+  };
+
+  const handleSaveDelivery = async () => {
+    if (!selectedJourney) return;
+    setIsSavingDelivery(true);
+    try {
+      if (eddInput) {
+        await journeyService.updateEstimatedDeliveryDate(selectedJourney.id, eddInput);
+      }
+      if (postpartumNotesInput !== undefined) {
+        await journeyService.updatePostpartumNotes(selectedJourney.id, postpartumNotesInput);
+      }
+      // Save hospital to legal_agreements for now (or we could add a dedicated field)
+      const existingLegal = (selectedJourney.legalAgreements as any) || {};
+      await journeyService.updateLegalAgreements(selectedJourney.id, {
+        ...existingLegal,
+        hospital: deliveryHospital,
+      });
+      await fetchJourneys();
+      setToast({ message: 'Delivery info saved', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save delivery info', type: 'error' });
+    } finally {
+      setIsSavingDelivery(false);
+    }
+  };
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const filteredJourneys = (() => {
+    if (selectedStageFilter === 'All') return journeys;
+    if (selectedStageFilter === 'Completed') return journeys.filter(j => j.status === 'Completed');
+    if (selectedStageFilter === 'Cancelled') return journeys.filter(j => j.status === 'Cancelled');
+    // Otherwise filter by stage within active journeys
+    return journeys.filter(j => j.status === 'Active' && j.stage === selectedStageFilter);
+  })();
+
+  const getStageColor = (stage: string): 'blue' | 'green' | 'red' | 'yellow' | 'teal' | 'orange' => {
+    switch (stage) {
+      case 'Medical Screening': return 'blue';
+      case 'Legal': return 'yellow';
+      case 'Embryo Transfer': return 'teal';
+      case 'Pregnancy': return 'green';
+      case 'Birth': return 'orange';
+      case 'Postpartum': return 'green';
+      default: return 'blue';
+    }
+  };
+
+  const getStatusColor = (status: string): 'green' | 'red' | 'blue' => {
+    switch (status) {
+      case 'Active': return 'green';
+      case 'Completed': return 'blue';
+      case 'Cancelled': return 'red';
+      default: return 'blue';
+    }
+  };
+
+  const stageProgress = (stage: string): number => journeyService.getStageProgress(stage);
+
+  const allFilters = [
+    { id: 'All' as const, label: 'All' },
+    ...JOURNEY_STAGES.map(s => ({ id: s as JourneyStage, label: s })),
+    { id: 'Completed' as JourneyStatus, label: 'Completed' },
+    { id: 'Cancelled' as JourneyStatus, label: 'Cancelled' },
+  ];
+
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
 
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
+          <div className="mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                  Journeys
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Journey stage management and tracking.
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Journeys</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Operational case tracking. Journeys are created when a match becomes Active.
                 </p>
               </div>
-              <Button color="blue" onClick={() => setShowCreateModal(true)}>
-                <i className="ri-add-line mr-2"></i>
-                New Journey
-              </Button>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="mb-6 grid grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-[#15111f] rounded-2xl p-4 border border-rose-100/60 dark:border-white/5">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Total Journeys</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{journeys.length}</p>
+            </div>
+            <div className="bg-white dark:bg-[#15111f] rounded-2xl p-4 border border-rose-100/60 dark:border-white/5">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Active</p>
+              <p className="text-2xl font-bold text-green-600">{journeys.filter(j => j.status === 'Active').length}</p>
+            </div>
+            <div className="bg-white dark:bg-[#15111f] rounded-2xl p-4 border border-rose-100/60 dark:border-white/5">
+              <p className="text-sm text-gray-500 dark:text-gray-400">In Pregnancy</p>
+              <p className="text-2xl font-bold text-blue-600">{journeys.filter(j => j.stage === 'Pregnancy' && j.status === 'Active').length}</p>
+            </div>
+            <div className="bg-white dark:bg-[#15111f] rounded-2xl p-4 border border-rose-100/60 dark:border-white/5">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Completed</p>
+              <p className="text-2xl font-bold text-teal-600">{journeys.filter(j => j.status === 'Completed').length}</p>
             </div>
           </div>
 
           {/* Stage Filter Tabs */}
           <div className="mb-6 flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedStatus("All")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedStatus === "All"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-              }`}
-            >
-              All ({journeys.length})
-            </button>
-            {stages.map((stage) => (
-              <button
-                key={stage}
-                onClick={() => setSelectedStatus(stage)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  selectedStatus === stage
-                    ? "bg-blue-600 text-white"
-                    : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                }`}
-              >
-                {stage} ({journeys.filter((j) => j.status === stage).length})
-              </button>
-            ))}
-          </div>
+            {allFilters.map((filter) => {
+              const count = filter.id === 'All'
+                ? journeys.length
+                : filter.id === 'Completed'
+                ? journeys.filter(j => j.status === 'Completed').length
+                : filter.id === 'Cancelled'
+                ? journeys.filter(j => j.status === 'Cancelled').length
+                : journeys.filter(j => j.status === 'Active' && j.stage === filter.id).length;
 
-          {error && (
-            <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg">
-              {error}
-            </div>
-          )}
+              return (
+                <button
+                  key={filter.id}
+                  onClick={() => setSelectedStageFilter(filter.id)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    selectedStageFilter === filter.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white dark:bg-[#15111f] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {filter.label} ({count})
+                </button>
+              );
+            })}
+          </div>
 
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
@@ -367,11 +483,10 @@ const JourneysPage: React.FC = () => {
           ) : (
             <div className="space-y-4">
               {filteredJourneys.length === 0 ? (
-                <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                <div className="text-center py-12 bg-white dark:bg-[#15111f] rounded-2xl border border-dashed border-gray-300 dark:border-white/5">
                   <i className="ri-roadmap-line text-4xl text-gray-400 mb-2"></i>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    No journeys found.
-                  </p>
+                  <p className="text-gray-500 dark:text-gray-400">No journeys found.</p>
+                  <p className="text-sm text-gray-400 mt-1">Journeys are auto-created when a match becomes Active.</p>
                 </div>
               ) : (
                 filteredJourneys.map((journey) => (
@@ -385,79 +500,76 @@ const JourneysPage: React.FC = () => {
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                             {/* Ideally fetch names. Using IDs for now as per refactor plan */}
-                             Journey #{journey.caseNumber}
+                            Journey #{journey.caseNumber}
                           </h3>
                           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                             Started {formatDate(journey.createdAt)}
                           </p>
                         </div>
-                        <Badge color={getStatusColor(journey.status)}>
-                          {journey.status}
-                        </Badge>
+                        <div className="flex gap-2">
+                          <Badge color={getStatusColor(journey.status) as any}>{journey.status}</Badge>
+                          {journey.status === 'Active' && (
+                            <Badge color={getStageColor(journey.stage) as any}>{journey.stage}</Badge>
+                          )}
+                        </div>
                       </div>
 
                       {/* Progress Bar */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Journey Progress
-                          </span>
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            {getStatusProgress(journey.status)}%
-                          </span>
+                      {journey.status === 'Active' && (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Stage Progress
+                            </span>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                              {stageProgress(journey.stage)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-white/5 rounded-full h-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                              style={{ width: `${stageProgress(journey.stage)}%` }}
+                            ></div>
+                          </div>
                         </div>
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                            style={{
-                              width: `${getStatusProgress(journey.status)}%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
+                      )}
 
                       {/* Stage Timeline */}
                       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                        {stages.map((stage, index) => {
-                          const currentStage = journey.status as JourneyStatus;
-                          const currentIndex = stages.indexOf(currentStage);
-                          const thisIndex = stages.indexOf(stage);
-                          
-                          const isPast = thisIndex < currentIndex;
-                          const isCurrent = thisIndex === currentIndex;
+                        {JOURNEY_STAGES.map((stage, index) => {
+                          const currentIndex = JOURNEY_STAGES.indexOf(journey.stage as JourneyStage);
+                          const isPast = index < currentIndex;
+                          const isCurrent = index === currentIndex && journey.status === 'Active';
 
                           return (
                             <div key={stage} className="flex items-center">
                               <div
                                 className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-medium ${
                                   isPast
-                                    ? "bg-green-500 text-white"
+                                    ? 'bg-green-500 text-white'
                                     : isCurrent
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-200 dark:bg-white/5 text-gray-500 dark:text-gray-400'
                                 }`}
                                 title={stage}
                               >
-                                {isPast ? (
-                                  <i className="ri-check-line"></i>
-                                ) : (
-                                  index + 1
-                                )}
+                                {isPast ? <i className="ri-check-line"></i> : index + 1}
                               </div>
-                              {index < stages.length - 1 && (
-                                <div
-                                  className={`w-8 h-0.5 ${
-                                    isPast
-                                      ? "bg-green-500"
-                                      : "bg-gray-200 dark:bg-gray-700"
-                                  }`}
-                                ></div>
+                              {index < JOURNEY_STAGES.length - 1 && (
+                                <div className={`w-8 h-0.5 ${isPast ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
                               )}
                             </div>
                           );
                         })}
                       </div>
+
+                      {/* Delivery info */}
+                      {journey.deliveryDate && (
+                        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                          <i className="ri-heart-pulse-line"></i>
+                          <span>Delivered on {formatDate(journey.deliveryDate)}</span>
+                        </div>
+                      )}
                     </div>
                   </Card>
                 ))
@@ -465,15 +577,24 @@ const JourneysPage: React.FC = () => {
             </div>
           )}
 
-          {/* Journey Detail Modal */}
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {/* JOURNEY DETAIL MODAL                                               */}
+          {/* ═══════════════════════════════════════════════════════════════════ */}
           {selectedJourney && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
                 <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                      Journey #{selectedJourney.caseNumber}
-                    </h2>
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        Journey #{selectedJourney.caseNumber}
+                      </h2>
+                      <Badge color={getStatusColor(selectedJourney.status) as any}>{selectedJourney.status}</Badge>
+                      {selectedJourney.status === 'Active' && (
+                        <Badge color={getStageColor(selectedJourney.stage) as any}>{selectedJourney.stage}</Badge>
+                      )}
+                    </div>
                     <button
                       onClick={() => setSelectedJourney(null)}
                       className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -482,159 +603,476 @@ const JourneysPage: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="space-y-6">
-                    {/* Case Info */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Surrogate Profile */}
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900 flex items-center justify-center">
-                              <i className="ri-user-heart-line text-pink-600 dark:text-pink-300"></i>
+                  {/* Tab Navigation */}
+                  <div className="flex border-b border-rose-100/60 dark:border-white/5 mb-6 overflow-x-auto">
+                    {[
+                      { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line', restricted: false },
+                      { id: 'medical', label: 'Medical', icon: 'ri-heart-pulse-line', restricted: false },
+                      { id: 'legal', label: 'Legal', icon: 'ri-file-text-line', restricted: false },
+                      ...(canViewFinancials(profile?.role as string) ? [{ id: 'trust', label: 'Trust & Funds', icon: 'ri-safe-line', restricted: true }] : []),
+                      { id: 'milestones', label: 'Milestones', icon: 'ri-flag-line', restricted: false },
+                      { id: 'delivery', label: 'Delivery', icon: 'ri-heart-3-line', restricted: false },
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setDetailTab(tab.id as any)}
+                        className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                          detailTab === tab.id
+                            ? 'border-rose-500 text-rose-500 dark:text-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                        }`}
+                      >
+                        <i className={`${tab.icon} mr-1.5`}></i>
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ── OVERVIEW TAB ─────────────────────────────────────────── */}
+                  {detailTab === 'overview' && (
+                    <div className="space-y-6">
+                      <div className="bg-rose-50/50 dark:bg-white/5 p-6 rounded-xl space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Surrogate */}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900 flex items-center justify-center">
+                                <i className="ri-user-heart-line text-pink-600 dark:text-pink-300"></i>
+                              </div>
+                              <h4 className="font-semibold text-gray-900 dark:text-white">Surrogate</h4>
                             </div>
-                            <h4 className="font-semibold text-gray-900 dark:text-white">
-                              Surrogate
-                            </h4>
-                          </div>
-                          
-                          {isDetailsLoading && !detailSurrogate ? (
-                            <div className="animate-pulse flex space-x-4">
-                              <div className="flex-1 space-y-2 py-1">
+                            {isDetailsLoading && !detailSurrogate ? (
+                              <div className="animate-pulse pl-10 space-y-2">
                                 <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
                                 <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
                               </div>
+                            ) : detailSurrogate ? (
+                              <div className="pl-10">
+                                <p className="text-lg font-medium text-gray-900 dark:text-white">{detailSurrogate.name}</p>
+                                {detailSurrogate.email && <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1"><i className="ri-mail-line"></i> {detailSurrogate.email}</p>}
+                                {detailSurrogate.location && <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1"><i className="ri-map-pin-line"></i> {detailSurrogate.location}</p>}
+                              </div>
+                            ) : <p className="pl-10 text-gray-500 italic">Not found</p>}
+                          </div>
+                          {/* Intended Parent */}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                                <i className="ri-parent-line text-blue-600 dark:text-blue-300"></i>
+                              </div>
+                              <h4 className="font-semibold text-gray-900 dark:text-white">Intended Parent</h4>
                             </div>
-                          ) : detailSurrogate ? (
-                            <div className="pl-10">
-                              <p className="text-lg font-medium text-gray-900 dark:text-white">
-                                {detailSurrogate.name}
-                              </p>
-                              {detailSurrogate.email && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
-                                  <i className="ri-mail-line"></i> {detailSurrogate.email}
-                                </p>
-                              )}
-                              {detailSurrogate.location && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
-                                  <i className="ri-map-pin-line"></i> {detailSurrogate.location}
-                                </p>
-                              )}
-                              <p className="text-[10px] text-gray-400 mt-2 font-mono uppercase tracking-wider">
-                                ID: {detailSurrogate.id}
-                              </p>
+                            {isDetailsLoading && !detailParent ? (
+                              <div className="animate-pulse pl-10 space-y-2">
+                                <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
+                                <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
+                              </div>
+                            ) : detailParent ? (
+                              <div className="pl-10">
+                                <p className="text-lg font-medium text-gray-900 dark:text-white">{detailParent.name}</p>
+                                {detailParent.email && <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1"><i className="ri-mail-line"></i> {detailParent.email}</p>}
+                                {detailParent.location && <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1"><i className="ri-map-pin-line"></i> {detailParent.location}</p>}
+                              </div>
+                            ) : <p className="pl-10 text-gray-500 italic">Not found</p>}
+                          </div>
+                        </div>
+                        <hr className="border-rose-100/60 dark:border-white/5" />
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Started</h4>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">{formatDate(selectedJourney.createdAt)}</p>
+                          </div>
+                          {selectedJourney.estimatedDeliveryDate && (
+                            <div>
+                              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">EDD</h4>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">{formatDate(selectedJourney.estimatedDeliveryDate)}</p>
                             </div>
-                          ) : (
-                            <p className="pl-10 text-gray-500 italic">Not found ({selectedJourney.gestationalCarrierId})</p>
+                          )}
+                          {selectedJourney.deliveryDate && (
+                            <div>
+                              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Delivered</h4>
+                              <p className="text-sm font-medium text-green-600">{formatDate(selectedJourney.deliveryDate)}</p>
+                            </div>
                           )}
                         </div>
-
-                        {/* Parent Profile */}
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                              <i className="ri-parent-line text-blue-600 dark:text-blue-300"></i>
-                            </div>
-                            <h4 className="font-semibold text-gray-900 dark:text-white">
-                              Intended Parent
-                            </h4>
+                        {selectedJourney.deliveryDate && (
+                          <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center gap-2 text-green-700 dark:text-green-300">
+                            <i className="ri-heart-pulse-line text-lg"></i>
+                            <span className="font-medium">Baby delivered on {formatDate(selectedJourney.deliveryDate)}</span>
                           </div>
-
-                          {isDetailsLoading && !detailParent ? (
-                            <div className="animate-pulse flex space-x-4">
-                              <div className="flex-1 space-y-2 py-1">
-                                <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
-                                <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
-                              </div>
-                            </div>
-                          ) : detailParent ? (
-                            <div className="pl-10">
-                              <p className="text-lg font-medium text-gray-900 dark:text-white">
-                                {detailParent.name}
-                              </p>
-                              {detailParent.email && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
-                                  <i className="ri-mail-line"></i> {detailParent.email}
-                                </p>
-                              )}
-                              {detailParent.location && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
-                                  <i className="ri-map-pin-line"></i> {detailParent.location}
-                                </p>
-                              )}
-                              <p className="text-[10px] text-gray-400 mt-2 font-mono uppercase tracking-wider">
-                                ID: {detailParent.id}
-                              </p>
-                            </div>
-                          ) : (
-                            <p className="pl-10 text-gray-500 italic">Not found ({selectedJourney.intendedParentId})</p>
-                          )}
+                        )}
+                        <div className="flex items-center gap-3 p-3 rounded-lg border border-rose-100/60 dark:border-white/5">
+                          <i className="ri-links-line text-lg text-blue-500"></i>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">Linked Match</p>
+                            <p className="text-xs text-gray-500">Match ID: {selectedJourney.matchId?.slice(0, 8) || 'N/A'}</p>
+                          </div>
                         </div>
                       </div>
 
-                      <hr className="border-gray-200 dark:border-gray-700" />
+                      {/* Stage Actions */}
+                      {selectedJourney.status === 'Active' && (
+                        <div className="flex flex-wrap gap-3">
+                          {journeyService.getNextStage(selectedJourney.stage) ? (
+                            <Button color="blue" className="flex-1" onClick={() => setShowProgressModal(true)}>
+                              <i className="ri-arrow-right-line mr-2"></i>
+                              Progress to {journeyService.getNextStage(selectedJourney.stage)}
+                            </Button>
+                          ) : (
+                            <div className="flex-1 p-3 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg text-center font-medium text-sm">
+                              <i className="ri-check-double-line mr-2"></i>Final stage reached
+                            </div>
+                          )}
+                          {(selectedJourney.stage === 'Birth' || selectedJourney.stage === 'Postpartum') && !selectedJourney.deliveryDate && (
+                            <Button color="green" onClick={() => { setDeliveryDateInput(''); setShowDeliveryModal(true); }}>
+                              <i className="ri-heart-pulse-line mr-2"></i>Record Delivery Date
+                            </Button>
+                          )}
+                          <Button color="red" variant="outline" onClick={handleCancelJourney}>
+                            <i className="ri-close-circle-line mr-2"></i>Cancel Journey
+                          </Button>
+                        </div>
+                      )}
+                      {selectedJourney.status === 'Active' && selectedJourney.stage === 'Postpartum' && selectedJourney.deliveryDate && (
+                        <Button color="teal" className="w-full" onClick={handleCompleteJourney}>
+                          <i className="ri-checkbox-circle-line mr-2"></i>Complete Journey
+                        </Button>
+                      )}
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                            Current Status
-                          </h4>
-                          <Badge
-                            color={getStatusColor(selectedJourney.status)}
-                          >
-                            {selectedJourney.status}
-                          </Badge>
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                            Journey Started
-                          </h4>
-                          <p className="text-gray-900 dark:text-white font-medium">
-                            {formatDate(selectedJourney.createdAt)}
-                          </p>
-                        </div>
+                      <div className="pt-4 border-t border-rose-100/60 dark:border-white/5">
+                        <Button
+                          color="red"
+                          variant="outline"
+                          className="w-full sm:w-auto"
+                          onClick={() => setShowDeleteJourneyDialog(true)}
+                        >
+                          <i className="ri-delete-bin-line mr-2"></i>
+                          Delete journey
+                        </Button>
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          Removes this journey and related tasks, appointments, payments, and conversations. The match remains; its journey link is cleared.
+                        </p>
                       </div>
                     </div>
+                  )}
 
-                    {/* Actions */}
-                    <div className="flex gap-3 pt-2">
-                      {getNextStage(selectedJourney.status) ? (
-                        <Button
-                          color="blue"
-                          className="flex-1"
-                          onClick={() => {
-                            setShowProgressModal(true);
-                          }}
+                  {/* ── MEDICAL TAB ──────────────────────────────────────────── */}
+                  {detailTab === 'medical' && (
+                    <div className="space-y-5">
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-700 dark:text-blue-300">
+                        <i className="ri-information-line mr-1"></i>
+                        Post-match medical tracking. Pre-screen records are managed on the GC profile.
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Clinic / Provider Name</label>
+                        <input
+                          type="text"
+                          value={medicalClinic}
+                          onChange={e => setMedicalClinic(e.target.value)}
+                          placeholder="e.g. Pacific Fertility Center"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Medical Status</label>
+                        <select
+                          value={medicalStatus}
+                          onChange={e => setMedicalStatus(e.target.value)}
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                         >
-                          <i className="ri-arrow-right-line mr-2"></i>
-                          Progress to{" "}
-                          {getNextStage(selectedJourney.status)}
-                        </Button>
-                      ) : (
-                        <div className="flex-1 p-3 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg text-center font-medium">
-                          <i className="ri-check-double-line mr-2"></i>
-                          Journey Completed
+                          <option value="">Select status...</option>
+                          <option value="Pre-Screening">Pre-Screening</option>
+                          <option value="Cycle Monitoring">Cycle Monitoring</option>
+                          <option value="Embryo Transfer Scheduled">Embryo Transfer Scheduled</option>
+                          <option value="Beta Testing">Beta Testing</option>
+                          <option value="Confirmed Pregnant">Confirmed Pregnant</option>
+                          <option value="Ongoing Prenatal Care">Ongoing Prenatal Care</option>
+                          <option value="Post-Delivery">Post-Delivery</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Medical Notes</label>
+                        <textarea
+                          value={medicalNotes}
+                          onChange={e => setMedicalNotes(e.target.value)}
+                          rows={5}
+                          placeholder="Clinic appointments, test results, cycle notes, embryo transfer details..."
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
+                        />
+                      </div>
+                      <Button color="blue" className="w-full" onClick={handleSaveMedical} disabled={isSavingMedical}>
+                        {isSavingMedical ? <><i className="ri-loader-4-line animate-spin mr-2"></i>Saving...</> : <><i className="ri-save-line mr-2"></i>Save Medical Records</>}
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* ── LEGAL TAB ─────────────────────────────────────────────── */}
+                  {detailTab === 'legal' && (
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contract Status</label>
+                        <select
+                          value={contractStatus}
+                          onChange={e => setContractStatus(e.target.value)}
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                        >
+                          <option value="">Select status...</option>
+                          <option value="Not Started">Not Started</option>
+                          <option value="Draft in Review">Draft in Review</option>
+                          <option value="Sent for Signatures">Sent for Signatures</option>
+                          <option value="GC Signed">GC Signed</option>
+                          <option value="IP Signed">IP Signed</option>
+                          <option value="Fully Executed">Fully Executed</option>
+                          <option value="Amendments Needed">Amendments Needed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Attorney / Law Firm</label>
+                        <input
+                          type="text"
+                          value={legalAttorney}
+                          onChange={e => setLegalAttorney(e.target.value)}
+                          placeholder="e.g. Smith & Associates"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Legal Notes</label>
+                        <textarea
+                          value={legalNotes}
+                          onChange={e => setLegalNotes(e.target.value)}
+                          rows={5}
+                          placeholder="Contract milestones, attorney correspondence, outstanding items..."
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
+                        />
+                      </div>
+                      <Button color="blue" className="w-full" onClick={handleSaveLegal} disabled={isSavingLegal}>
+                        {isSavingLegal ? <><i className="ri-loader-4-line animate-spin mr-2"></i>Saving...</> : <><i className="ri-save-line mr-2"></i>Save Legal Information</>}
+                      </Button>
+                      {selectedJourney.legalAgreements && (contractStatus || legalNotes) && (
+                        <div className="p-4 bg-rose-50/50 dark:bg-white/5 rounded-lg">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Last Saved</p>
+                          {contractStatus && <p className="text-sm text-gray-700 dark:text-gray-300">Contract: <span className="font-medium">{contractStatus}</span></p>}
+                          {legalAttorney && <p className="text-sm text-gray-700 dark:text-gray-300">Attorney: {legalAttorney}</p>}
                         </div>
                       )}
                     </div>
-                  </div>
+                  )}
+
+                  {/* ── TRUST & REIMBURSEMENTS TAB ───────────────────────────────── */}
+                  {detailTab === 'trust' && (
+                    canViewFinancials(profile?.role as string) ? (
+                      <div className="space-y-5">
+                        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-sm text-amber-700 dark:text-amber-300">
+                          <i className="ri-lock-line mr-1"></i>
+                          Restricted — visible to Admin and Finance roles only.
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trust Funding Status</label>
+                            <select
+                              value={trustStatus}
+                              onChange={e => setTrustStatus(e.target.value)}
+                              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                            >
+                              <option value="">Select status...</option>
+                              <option value="Not Funded">Not Funded</option>
+                              <option value="Partially Funded">Partially Funded</option>
+                              <option value="Fully Funded">Fully Funded</option>
+                              <option value="Funds Released">Funds Released</option>
+                              <option value="Escrow Closed">Escrow Closed</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trust Funding Date</label>
+                            <input
+                              type="date"
+                              value={trustFundingDate}
+                              onChange={e => setTrustFundingDate(e.target.value)}
+                              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trust Funding Amount ($)</label>
+                          <input
+                            type="text"
+                            value={trustFundingAmount}
+                            onChange={e => setTrustFundingAmount(e.target.value)}
+                            placeholder="e.g. 45,000"
+                            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reimbursement Notes</label>
+                          <textarea
+                            value={reimbursementNotes}
+                            onChange={e => setReimbursementNotes(e.target.value)}
+                            rows={4}
+                            placeholder="Outstanding reimbursements, disbursement history, escrow instructions..."
+                            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
+                          />
+                        </div>
+                        <Button color="blue" className="w-full" onClick={handleSaveTrust} disabled={isSavingTrust}>
+                          {isSavingTrust ? <><i className="ri-loader-4-line animate-spin mr-2"></i>Saving...</> : <><i className="ri-save-line mr-2"></i>Save Trust & Reimbursement Info</>}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                        <i className="ri-lock-line text-3xl mb-2"></i>
+                        <p>You do not have permission to view financial data.</p>
+                      </div>
+                    )
+                  )}
+
+                  {/* ── MILESTONES TAB ─────────────────────────────────────────── */}
+                  {detailTab === 'milestones' && (
+                    <div className="space-y-6">
+                      {/* Existing milestones */}
+                      {(() => {
+                        const notes = (selectedJourney.journeyNotes as any) || {};
+                        const milestones: any[] = notes.milestones || [];
+                        return milestones.length > 0 ? (
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Milestones ({milestones.length})</h4>
+                            {milestones.map((m: any) => (
+                              <div key={m.id} className="flex items-start gap-3 p-3 bg-rose-50/50 dark:bg-white/5 rounded-lg">
+                                <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${m.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white">{m.title}</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">{m.type} • {formatDate(m.date)}</p>
+                                </div>
+                                <Badge color={m.status === 'completed' ? 'green' : 'blue'}>{m.status}</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-gray-500 dark:text-gray-400 border border-dashed border-gray-300 dark:border-white/5 rounded-lg">
+                            <i className="ri-flag-line text-3xl mb-2"></i>
+                            <p className="text-sm">No milestones yet</p>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Add milestone form */}
+                      <div className="border border-rose-100/60 dark:border-white/5 rounded-xl p-4 space-y-4">
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Add Milestone</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
+                            <select
+                              value={newMilestoneType}
+                              onChange={e => setNewMilestoneType(e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-rose-500 outline-none"
+                            >
+                              <option value="medical">Medical</option>
+                              <option value="legal">Legal</option>
+                              <option value="pregnancy">Pregnancy</option>
+                              <option value="delivery">Delivery</option>
+                              <option value="financial">Financial</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Date</label>
+                            <input
+                              type="date"
+                              value={newMilestoneDate}
+                              onChange={e => setNewMilestoneDate(e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-rose-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Title</label>
+                          <input
+                            type="text"
+                            value={newMilestoneTitle}
+                            onChange={e => setNewMilestoneTitle(e.target.value)}
+                            placeholder="e.g. Embryo transfer completed, Contract signed..."
+                            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-rose-500 outline-none"
+                          />
+                        </div>
+                        <Button
+                          color="blue"
+                          className="w-full"
+                          onClick={handleAddMilestone}
+                          disabled={!newMilestoneTitle || !newMilestoneDate || isAddingMilestone}
+                        >
+                          {isAddingMilestone ? <><i className="ri-loader-4-line animate-spin mr-2"></i>Adding...</> : <><i className="ri-add-line mr-2"></i>Add Milestone</>}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── DELIVERY & POSTPARTUM TAB ─────────────────────────────── */}
+                  {detailTab === 'delivery' && (
+                    <div className="space-y-5">
+                      {selectedJourney.deliveryDate && (
+                        <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center gap-3 text-green-700 dark:text-green-300">
+                          <i className="ri-heart-pulse-line text-xl"></i>
+                          <div>
+                            <p className="font-semibold">Baby Delivered</p>
+                            <p className="text-sm">{formatDate(selectedJourney.deliveryDate)}</p>
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estimated Delivery Date (EDD)</label>
+                        <input
+                          type="date"
+                          value={eddInput}
+                          onChange={e => setEddInput(e.target.value)}
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Delivery Hospital / Location</label>
+                        <input
+                          type="text"
+                          value={deliveryHospital}
+                          onChange={e => setDeliveryHospital(e.target.value)}
+                          placeholder="e.g. Cedars-Sinai Medical Center"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Postpartum Notes</label>
+                        <textarea
+                          value={postpartumNotesInput}
+                          onChange={e => setPostpartumNotesInput(e.target.value)}
+                          rows={4}
+                          placeholder="Postpartum recovery notes, follow-up appointments, GC wellbeing..."
+                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
+                        />
+                      </div>
+                      <Button color="blue" className="w-full" onClick={handleSaveDelivery} disabled={isSavingDelivery}>
+                        {isSavingDelivery ? <><i className="ri-loader-4-line animate-spin mr-2"></i>Saving...</> : <><i className="ri-save-line mr-2"></i>Save Delivery Info</>}
+                      </Button>
+                      {!selectedJourney.deliveryDate && (selectedJourney.stage === 'Birth' || selectedJourney.stage === 'Postpartum') && (
+                        <div className="border-t border-rose-100/60 dark:border-white/5 pt-4">
+                          <Button color="green" className="w-full" onClick={() => { setDeliveryDateInput(''); setShowDeliveryModal(true); }}>
+                            <i className="ri-heart-pulse-line mr-2"></i>Record Actual Delivery Date
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Progress Confirmation Modal */}
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {/* PROGRESS STAGE MODAL                                               */}
+          {/* ═══════════════════════════════════════════════════════════════════ */}
           {showProgressModal && selectedJourney && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60] backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full shadow-2xl">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-md w-full shadow-2xl">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                      Progress Stage
-                    </h2>
-                    <button
-                      onClick={() => setShowProgressModal(false)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    >
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Progress Stage</h2>
+                    <button onClick={() => setShowProgressModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
                       <i className="ri-close-line text-xl text-gray-600 dark:text-gray-400"></i>
                     </button>
                   </div>
@@ -642,46 +1080,27 @@ const JourneysPage: React.FC = () => {
                   <div className="space-y-4">
                     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                       <p className="text-sm text-gray-700 dark:text-gray-300">
-                        Progress journey from{" "}
-                        <span className="font-semibold">
-                          {selectedJourney.status}
-                        </span>{" "}
-                        to{" "}
-                        <span className="font-semibold">
-                          {getNextStage(selectedJourney.status)}
-                        </span>
-                        ?
+                        Progress from <span className="font-semibold">{selectedJourney.stage}</span> to{' '}
+                        <span className="font-semibold">{journeyService.getNextStage(selectedJourney.stage)}</span>?
                       </p>
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Completion Notes (Optional)
+                        Notes for intended parent & surrogate (optional)
                       </label>
                       <textarea
                         value={progressNotes}
                         onChange={(e) => setProgressNotes(e.target.value)}
                         rows={3}
-                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                        placeholder="Add any notes about this stage completion..."
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
+                        placeholder="Shown in the mobile app under journey updates when you progress a stage..."
                       ></textarea>
                     </div>
 
                     <div className="flex gap-3">
-                      <Button
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() => setShowProgressModal(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        color="blue"
-                        className="flex-1"
-                        onClick={handleProgressStage}
-                      >
-                        Confirm Progress
-                      </Button>
+                      <Button variant="outline" className="flex-1" onClick={() => setShowProgressModal(false)}>Cancel</Button>
+                      <Button color="blue" className="flex-1" onClick={handleProgressStage}>Confirm Progress</Button>
                     </div>
                   </div>
                 </div>
@@ -689,149 +1108,47 @@ const JourneysPage: React.FC = () => {
             </div>
           )}
 
-          {/* Create Journey Modal */}
-          {showCreateModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-xl max-w-3xl w-full shadow-2xl">
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {/* DELIVERY DATE MODAL                                                */}
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {showDeliveryModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60] backdrop-blur-sm">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-md w-full shadow-2xl">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                      Create New Journey
-                    </h2>
-                    <button
-                      onClick={() => setShowCreateModal(false)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    >
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Record Delivery</h2>
+                    <button onClick={() => setShowDeliveryModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
                       <i className="ri-close-line text-xl text-gray-600 dark:text-gray-400"></i>
                     </button>
                   </div>
 
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/40 p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900 flex items-center justify-center">
-                              <i className="ri-user-heart-line text-pink-600 dark:text-pink-300"></i>
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                Surrogate
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                Gestational carrier profile
-                              </p>
-                            </div>
-                          </div>
-                          {surrogatePreview && (
-                            <Badge
-                              color={surrogatePreview.readinessColor}
-                              size="sm"
-                            >
-                              {surrogatePreview.readinessLabel}
-                            </Badge>
-                          )}
-                        </div>
-                        <UserSelector
-                          value={newJourneyData.gestationalCarrierId}
-                          onChange={(id) => {
-                            setNewJourneyData({ ...newJourneyData, gestationalCarrierId: id });
-                            if (!id) {
-                              setSurrogatePreview(null);
-                            }
-                          }}
-                          onSelect={(user) => {
-                            setNewJourneyData({
-                              ...newJourneyData,
-                              gestationalCarrierId: user.id
-                            });
-                            fetchUserPreview(user.id, "Surrogate");
-                          }}
-                          role="Surrogate"
-                          label="Select Surrogate"
-                          placeholder="Choose a surrogate..."
-                          required
-                        />
-                         {/* Surrogate Preview UI ... simplified from milestones */}
-                         {surrogatePreview && <div className="mt-2 text-sm">{surrogatePreview.name}</div>}
-                      </div>
-                      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/40 p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                              <i className="ri-parent-line text-blue-600 dark:text-blue-300"></i>
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                Intended Parent
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                IP profile
-                              </p>
-                            </div>
-                          </div>
-                          {parentPreview && (
-                            <Badge
-                              color={parentPreview.readinessColor}
-                              size="sm"
-                            >
-                              {parentPreview.readinessLabel}
-                            </Badge>
-                          )}
-                        </div>
-                        <UserSelector
-                          value={newJourneyData.intendedParentId}
-                          onChange={(id) => {
-                            setNewJourneyData({ ...newJourneyData, intendedParentId: id });
-                            if (!id) {
-                              setParentPreview(null);
-                            }
-                          }}
-                          onSelect={(user) => {
-                            setNewJourneyData({
-                              ...newJourneyData,
-                              intendedParentId: user.id
-                            });
-                            fetchUserPreview(user.id, "Intended Parent");
-                          }}
-                          role="Intended Parent"
-                          label="Select Parent"
-                          placeholder="Choose a parent..."
-                          required
-                        />
-                        {parentPreview && <div className="mt-2 text-sm">{parentPreview.name}</div>}
-                      </div>
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg text-sm text-green-700 dark:text-green-300">
+                      <i className="ri-heart-pulse-line mr-1"></i>
+                      Recording the delivery date will also update the match status.
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Initial Notes
+                        Delivery Date <span className="text-red-500">*</span>
                       </label>
-                      <textarea
-                        value={newJourneyData.notes}
-                        onChange={(e) =>
-                          setNewJourneyData({ ...newJourneyData, notes: e.target.value })
-                        }
-                        rows={3}
-                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none transition-all"
-                        placeholder="Add any initial notes or details about this journey..."
-                      ></textarea>
+                      <input
+                        type="date"
+                        value={deliveryDateInput}
+                        onChange={(e) => setDeliveryDateInput(e.target.value)}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                      />
                     </div>
 
-                    <div className="flex gap-3 pt-2">
+                    <div className="flex gap-3">
+                      <Button variant="outline" className="flex-1" onClick={() => setShowDeliveryModal(false)}>Cancel</Button>
                       <Button
-                        variant="outline"
+                        color="green"
                         className="flex-1"
-                        onClick={() => setShowCreateModal(false)}
+                        onClick={handleRecordDelivery}
+                        disabled={!deliveryDateInput}
                       >
-                        Cancel
-                      </Button>
-                      <Button
-                        color="blue"
-                        className="flex-1"
-                        onClick={handleCreateJourney}
-                      >
-                         Create Journey
+                        Record Delivery
                       </Button>
                     </div>
                   </div>
@@ -841,6 +1158,26 @@ const JourneysPage: React.FC = () => {
           )}
         </main>
       </div>
+
+      <ConfirmationDialog
+        isOpen={showDeleteJourneyDialog && !!selectedJourney}
+        onClose={() => !isDeletingJourney && setShowDeleteJourneyDialog(false)}
+        onConfirm={() => {
+          void handleConfirmDeleteJourney();
+        }}
+        title="Delete journey?"
+        message={
+          selectedJourney?.matchId
+            ? 'This will permanently delete this journey and related records (tasks, appointments, payments, agency financials, documents, conversations, etc.). The linked match will stay, but its journey link will be cleared. This cannot be undone.'
+            : 'This will permanently delete this journey and related records. This cannot be undone.'
+        }
+        confirmLabel="Delete journey"
+        isDestructive
+      />
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
     </div>
   );
 };

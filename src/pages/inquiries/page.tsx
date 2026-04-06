@@ -6,12 +6,14 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import { inquiryService } from '../../services/inquiryService';
+import RecordInquiryDialog from '../../components/feature/RecordInquiryDialog';
 import type { User } from '../../types';
 
 const InquiriesPage: React.FC = () => {
   const [inquiries, setInquiries] = useState<User[]>([]);
   const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('table');
   const [isLoading, setIsLoading] = useState(true);
+  const [isRecordDialogOpen, setIsRecordDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchInquiries();
@@ -51,7 +53,7 @@ const InquiriesPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
@@ -59,16 +61,16 @@ const InquiriesPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">New Inquiries</h1>
-              <p className="text-gray-600 dark:text-gray-400">Manage incoming Intended Parent leads.</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">New Inquiries</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage incoming Intended Parent leads.</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+              <div className="flex bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg">
                 <button
                   onClick={() => setViewStyle('grid')}
                   className={`p-2 rounded-md transition-colors cursor-pointer ${
                     viewStyle === 'grid'
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                   title="Grid View"
@@ -79,7 +81,7 @@ const InquiriesPage: React.FC = () => {
                   onClick={() => setViewStyle('table')}
                   className={`p-2 rounded-md transition-colors cursor-pointer ${
                     viewStyle === 'table'
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                   title="Table View"
@@ -91,13 +93,17 @@ const InquiriesPage: React.FC = () => {
                 <i className="ri-refresh-line mr-2"></i>
                 Refresh
               </Button>
+              <Button onClick={() => setIsRecordDialogOpen(true)}>
+                <i className="ri-phone-line mr-2"></i>
+                Record Inquiry
+              </Button>
             </div>
           </div>
 
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-48 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />
+                <div key={i} className="h-48 bg-gray-100 dark:bg-[#15111f] rounded-xl animate-pulse" />
               ))}
             </div>
           ) : inquiries.length === 0 ? (
@@ -111,7 +117,7 @@ const InquiriesPage: React.FC = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                        <i className="ri-user-follow-line text-blue-600 dark:text-blue-400"></i>
+                        <i className="ri-user-follow-line text-rose-500 dark:text-rose-400"></i>
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">
@@ -175,7 +181,7 @@ const InquiriesPage: React.FC = () => {
             <Card>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs uppercase">
+                  <thead className="bg-rose-50/50 dark:bg-white/5 text-gray-600 dark:text-gray-400 text-xs uppercase">
                     <tr>
                       <th className="px-6 py-3 font-semibold">Name</th>
                       <th className="px-6 py-3 font-semibold">Email</th>
@@ -234,6 +240,12 @@ const InquiriesPage: React.FC = () => {
               </div>
             </Card>
           )}
+
+          <RecordInquiryDialog
+            isOpen={isRecordDialogOpen}
+            onClose={() => setIsRecordDialogOpen(false)}
+            onSuccess={fetchInquiries}
+          />
         </main>
       </div>
     </div>

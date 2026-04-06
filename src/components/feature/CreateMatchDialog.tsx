@@ -101,9 +101,9 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
 
       let query = supabase
         .from("users")
-        .select("id, role, email, first_name, last_name, status", { count: "exact" })
+        .select("id, role, email, first_name, last_name, status, medical_screening_status", { count: "exact" })
         .eq("role", oppositeRole)
-        .in("status", ["Available", "To be Matched", "Rematch"]);
+        .eq("status", "Accepted to Program");
 
       if (debouncedSearch) {
         query = query.or(
@@ -204,25 +204,59 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
 
   // ── Shared input classes ─────────────────────────────────────────────────────
   const inputCls =
-    "w-full px-3 py-2 text-sm rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-transparent bg-white dark:bg-black border border-gray-200 dark:border-white/10";
+    "w-full px-3 py-2 text-sm rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-transparent bg-white dark:bg-black border border-rose-100/60 dark:border-white/10";
+
+  const isDisabled = user.status !== "Accepted to Program";
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
       {/* ── Trigger Button ── */}
-      <button
-        onClick={() => setOpen(true)}
-        disabled={!["To be Matched", "Rematch", "Available"].includes(user.status as string)}
-        title={
-          !["To be Matched", "Rematch", "Available"].includes(user.status as string)
-            ? `Status must be "To be Matched" or "Rematch" to create a match (current: ${user.status})`
-            : "Create a new match"
-        }
-        className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white text-sm font-medium rounded-lg transition-opacity disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
-      >
-        <Plus size={16} />
-        Create a Match
-      </button>
+      <div className="relative group/trigger inline-flex">
+        <button
+          onClick={() => !isDisabled && setOpen(true)}
+          disabled={isDisabled}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-rose-500 via-pink-500 to-purple-600 hover:opacity-90 text-white text-sm font-semibold rounded-xl transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-rose-500/20"
+        >
+          <Plus size={16} />
+          Create a Match
+        </button>
+
+        {/* Styled tooltip — only shown when disabled */}
+        {isDisabled && (
+          <div className="
+            absolute top-full right-0 mt-2.5 z-50
+            w-64 px-3.5 py-3 rounded-2xl
+            bg-gray-900 dark:bg-[#1a1530] border border-white/10
+            shadow-xl shadow-black/30
+            opacity-0 group-hover/trigger:opacity-100 pointer-events-none
+            transition-all duration-200 -translate-y-1 group-hover/trigger:translate-y-0
+          ">
+            {/* Arrow */}
+            <span className="absolute bottom-full right-6 border-[6px] border-transparent border-b-gray-900 dark:border-b-[#1a1530]" />
+
+            <div className="flex items-start gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i className="ri-lock-line text-amber-400 text-sm"></i>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white leading-snug mb-1">Match creation locked</p>
+                <p className="text-[11px] text-white/60 leading-relaxed">
+                  Status must be{" "}
+                  <span className="text-emerald-400 font-semibold">"Accepted to Program"</span>{" "}
+                  to create a match.
+                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="text-[10px] text-white/40">Current status:</span>
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
+                    {user.status ?? "Not set"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ── Dialog ── */}
       {open && (
@@ -238,10 +272,10 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
           />
 
           {/* Panel */}
-          <div className="relative z-10 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <div className="relative z-10 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden bg-white dark:bg-[#15111f] border border-rose-100/60 dark:border-white/5">
 
             {/* ── Header ── */}
-            <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700">
+            <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-white/5">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Create a Match</h2>
                 <p className="text-sm text-gray-500 dark:text-white/70 mt-0.5">
@@ -267,10 +301,10 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                   {listLabel} <span className="text-red-500 dark:text-red-300">*</span>
                 </label>
                 <p className="text-xs text-gray-500 dark:text-white/50 mb-2">
-                  Only users with status{" "}
-                  <span className="font-medium text-gray-700 dark:text-white/80">"Available"</span>,{" "}
-                  <span className="font-medium text-gray-700 dark:text-white/80">"To be Matched"</span> or{" "}
-                  <span className="font-medium text-gray-700 dark:text-white/80">"Rematch"</span> can be selected.
+                  {isIntendedParent
+                    ? <>Showing surrogates with status <span className="font-medium text-gray-700 dark:text-white/80">"Accepted to Program"</span>.</>
+                    : <>Showing intended parents with status <span className="font-medium text-gray-700 dark:text-white/80">"Accepted to Program"</span>.</>
+                  }
                 </p>
 
                 {/* Search */}
@@ -308,7 +342,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                       : `No ${isIntendedParent ? "surrogates" : "intended parents"} found.`}
                   </p>
                 ) : (
-                  <div className="bg-gray-50 dark:bg-black rounded-xl divide-y divide-gray-100 dark:divide-white/5 max-h-56 overflow-y-auto border border-gray-200 dark:border-white/10">
+                  <div className="bg-gray-50 dark:bg-black rounded-xl divide-y divide-gray-100 dark:divide-white/5 max-h-56 overflow-y-auto border border-rose-100/60 dark:border-white/10">
                     {options.map((u) => {
                       const isSelected = selectedId === u.id;
                       return (
@@ -452,11 +486,11 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
             </div>
 
             {/* ── Footer ── */}
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-black/20">
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-black/20">
               <button
                 onClick={handleClose}
                 disabled={submitting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-white bg-white dark:bg-black/30 border border-gray-200 dark:border-white/20 rounded-lg hover:bg-gray-50 dark:hover:bg-black/50 transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-white bg-white dark:bg-black/30 border border-rose-100/60 dark:border-white/20 rounded-lg hover:bg-gray-50 dark:hover:bg-black/50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>

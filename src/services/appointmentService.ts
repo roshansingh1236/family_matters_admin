@@ -21,6 +21,29 @@ export interface Appointment {
 
 const TABLE_NAME = 'appointments';
 
+/** DB CHECK: status IN ('Scheduled', 'Completed', 'Cancelled') — UI uses lowercase */
+function toDbStatus(status?: string): string {
+  const s = (status || '').toLowerCase();
+  if (s === 'completed') return 'Completed';
+  if (s === 'cancelled' || s === 'canceled') return 'Cancelled';
+  return 'Scheduled';
+}
+
+function fromDbStatus(status?: string | null): string {
+  const s = (status || '').toLowerCase();
+  if (s === 'completed') return 'completed';
+  if (s === 'cancelled' || s === 'canceled') return 'cancelled';
+  if (s === 'scheduled') return 'scheduled';
+  return 'scheduled';
+}
+
+/** Associated user is stored as user_id; UI lists participants — merge so both show up */
+function mergeParticipantIds(row: { participants?: string[] | null; user_id?: string | null }): string[] {
+  const fromCol = Array.isArray(row.participants) ? row.participants.filter(Boolean) : [];
+  const uid = row.user_id;
+  return [...new Set([...fromCol, ...(uid ? [uid] : [])])];
+}
+
 export const appointmentService = {
   // Fetch all appointments
   getAllAppointments: async (): Promise<Appointment[]> => {
@@ -38,11 +61,11 @@ export const appointmentService = {
           date: a.date ? a.date.split('T')[0] : '',
           time: a.date ? new Date(a.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
           location: a.location,
-          status: a.status,
+          status: fromDbStatus(a.status),
           notes: a.description,
           caseId: a.journey_id,
           userId: a.user_id,
-          participants: a.participants || []
+          participants: mergeParticipantIds(a)
       })) as Appointment[];
     } catch (error) {
       console.error('Error fetching appointments:', error);
@@ -55,17 +78,22 @@ export const appointmentService = {
     try {
       const timestamp = appointment.time ? `${appointment.date}T${appointment.time}` : appointment.date;
       
+      const participantIds = Array.isArray(appointment.participants)
+        ? [...new Set(appointment.participants.filter(Boolean))]
+        : [];
+      const primaryUserId = appointment.userId || participantIds[0] || null;
+
       const { data, error } = await supabase
         .from(TABLE_NAME)
         .insert({
-          journey_id: appointment.caseId,
-          user_id: appointment.userId,
+          journey_id: appointment.caseId || null,
+          user_id: primaryUserId,
           title: appointment.title,
           description: appointment.notes,
           date: new Date(timestamp).toISOString(),
           location: appointment.location,
           type: appointment.type,
-          status: appointment.status
+          status: toDbStatus(appointment.status)
         })
         .select('id')
         .single();
@@ -85,8 +113,11 @@ export const appointmentService = {
       if (updates.title) mappedUpdates.title = updates.title;
       if (updates.notes) mappedUpdates.description = updates.notes;
       if (updates.location) mappedUpdates.location = updates.location;
-      if (updates.status) mappedUpdates.status = updates.status;
+      if (updates.status) mappedUpdates.status = toDbStatus(updates.status);
       if (updates.type) mappedUpdates.type = updates.type;
+      if (updates.userId !== undefined) {
+        mappedUpdates.user_id = updates.userId || null;
+      }
       
       if (updates.date || updates.time) {
           const d = updates.date || new Date().toISOString().split('T')[0];
@@ -137,9 +168,10 @@ export const appointmentService = {
           type: a.type,
           date: a.date ? a.date.split('T')[0] : '',
           location: a.location,
-          status: a.status,
+          status: fromDbStatus(a.status),
           caseId: a.journey_id,
-          userId: a.user_id
+          userId: a.user_id,
+          participants: mergeParticipantIds(a)
       })) as Appointment[];
     } catch (error) {
       console.error('Error fetching appointments by type:', error);

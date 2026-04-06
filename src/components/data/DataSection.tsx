@@ -84,7 +84,7 @@ const renderEntries = (data: Record<string, unknown>, depth = 0): React.ReactNod
   }
 
   return (
-    <div className={`space-y-3 ${depth > 0 ? 'pl-4 border-l border-gray-200 dark:border-gray-700' : ''}`}>
+    <div className={`space-y-3 ${depth > 0 ? 'pl-4 border-l border-rose-100/60 dark:border-white/5' : ''}`}>
       {entries.map(([key, value]) => {
         const label = formatLabel(key);
 

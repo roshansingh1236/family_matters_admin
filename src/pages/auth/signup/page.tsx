@@ -96,7 +96,7 @@ const SignupPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-rose-50/40 dark:bg-[#0e0b1a] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="w-16 h-16 bg-blue-600 dark:bg-blue-500 rounded-xl flex items-center justify-center">
@@ -112,7 +112,7 @@ const SignupPage: React.FC = () => {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow-xl rounded-xl sm:px-10 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-[#15111f] py-8 px-4 shadow-xl rounded-xl sm:px-10 border border-rose-100/60 dark:border-white/5">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {submitError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-400">
@@ -132,7 +132,7 @@ const SignupPage: React.FC = () => {
                     required
                     value={formData.firstName}
                     onChange={handleInputChange}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-rose-500 focus:border-rose-500 dark:bg-white/5 dark:text-white text-sm"
                     placeholder="First name"
                   />
                   {errors.firstName && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.firstName}</p>}
@@ -151,7 +151,7 @@ const SignupPage: React.FC = () => {
                     required
                     value={formData.lastName}
                     onChange={handleInputChange}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-rose-500 focus:border-rose-500 dark:bg-white/5 dark:text-white text-sm"
                     placeholder="Last name"
                   />
                   {errors.lastName && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.lastName}</p>}
@@ -172,7 +172,7 @@ const SignupPage: React.FC = () => {
                   required
                   value={formData.email}
                   onChange={handleInputChange}
-                  className="appearance-none block w-full px-3 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                  className="appearance-none block w-full px-3 py-2 pl-10 border border-gray-300 dark:border-white/10 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-rose-500 focus:border-rose-500 dark:bg-white/5 dark:text-white text-sm"
                   placeholder="Enter your email"
                 />
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -192,7 +192,7 @@ const SignupPage: React.FC = () => {
                   name="role"
                   value={formData.role}
                   onChange={handleInputChange}
-                  className="appearance-none block w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                  className="appearance-none block w-full px-3 py-2 pr-8 border border-gray-300 dark:border-white/10 rounded-lg focus:outline-none focus:ring-rose-500 focus:border-rose-500 dark:bg-white/5 dark:text-white text-sm"
                 >
                   <option value="admin">Administrator</option>
                   <option value="coordinator">Program Coordinator</option>
@@ -214,7 +214,7 @@ const SignupPage: React.FC = () => {
                   required
                   value={formData.password}
                   onChange={handleInputChange}
-                  className="appearance-none block w-full px-3 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                  className="appearance-none block w-full px-3 py-2 pl-10 border border-gray-300 dark:border-white/10 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-rose-500 focus:border-rose-500 dark:bg-white/5 dark:text-white text-sm"
                   placeholder="Create a password"
                 />
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -236,7 +236,7 @@ const SignupPage: React.FC = () => {
                   required
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  className="appearance-none block w-full px-3 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                  className="appearance-none block w-full px-3 py-2 pl-10 border border-gray-300 dark:border-white/10 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-rose-500 focus:border-rose-500 dark:bg-white/5 dark:text-white text-sm"
                   placeholder="Confirm your password"
                 />
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -253,15 +253,15 @@ const SignupPage: React.FC = () => {
                 type="checkbox"
                 checked={formData.agreeToTerms}
                 onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                className="h-4 w-4 text-blue-600 focus:ring-rose-500 border-gray-300 dark:border-white/10 rounded dark:bg-gray-700"
               />
               <label htmlFor="agreeToTerms" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                 I agree to the{' '}
-                <Link to="/terms" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
+                <Link to="/terms" className="text-rose-500 dark:text-rose-400 hover:text-blue-500 dark:hover:text-blue-300">
                   Terms of Service
                 </Link>{' '}
                 and{' '}
-                <Link to="/privacy" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
+                <Link to="/privacy" className="text-rose-500 dark:text-rose-400 hover:text-blue-500 dark:hover:text-blue-300">
                   Privacy Policy
                 </Link>
               </label>
@@ -272,7 +272,7 @@ const SignupPage: React.FC = () => {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-800"
+                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-800"
               >
                 {isLoading ? (
                   <>
@@ -291,10 +291,10 @@ const SignupPage: React.FC = () => {
             <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+                  <div className="w-full border-t border-gray-300 dark:border-white/10" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                  <span className="px-2 bg-white dark:bg-[#15111f] text-gray-500 dark:text-gray-400">
                     Already have an account?
                   </span>
                 </div>
@@ -303,7 +303,7 @@ const SignupPage: React.FC = () => {
               <div className="mt-6">
                 <Link
                   to="/auth/login"
-                  className="w-full flex justify-center py-2.5 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800"
+                  className="w-full flex justify-center py-2.5 px-4 border border-gray-300 dark:border-white/10 rounded-lg shadow-sm bg-white dark:bg-white/5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 dark:focus:ring-offset-gray-800"
                 >
                   <i className="ri-login-box-line mr-2"></i>
                   Sign in instead

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { supabase } from '../../lib/supabase';
 import MultiSearchableDropdown from '../base/MultiSearchableDropdown';
 
 interface MultiUserSelectorProps {
@@ -22,9 +21,9 @@ const MultiUserSelector: React.FC<MultiUserSelectorProps> = ({
   value,
   onChange,
   role,
-  label = "Select Participants",
-  placeholder = "Search participants...",
-  required = false
+  label = 'Select Participants',
+  placeholder = 'Search participants...',
+  required = false,
 }) => {
   const [options, setOptions] = useState<UserOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,42 +31,34 @@ const MultiUserSelector: React.FC<MultiUserSelectorProps> = ({
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const usersRef = collection(db, 'users');
-        const rolesToFetch = role ? [role] : ['Surrogate', 'Intended Parent'];
-        
-        const q = query(
-          usersRef, 
-          where('role', 'in', rolesToFetch)
-        );
-        
-        const querySnapshot = await getDocs(q);
-        const users: UserOption[] = querySnapshot.docs.map(doc => {
-          const data = doc.data();
-          
-          let name = '';
-          if (data.formData) {
-            name = [data.formData.firstName, data.formData.lastName].filter(Boolean).join(' ');
-          }
-          if (!name && data.parent1?.name) {
-            name = data.parent1.name;
-          }
-          if (!name) {
-            name = [data.firstName, data.lastName].filter(Boolean).join(' ');
-          }
-          if (!name) {
-            name = data.email || 'Unknown User';
-          }
+        const roles = role ? [role] : ['Surrogate', 'Intended Parent'];
+
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, full_name, email, role, form_data')
+          .in('role', roles);
+
+        if (error) throw error;
+
+        const users: UserOption[] = (data ?? []).map((row) => {
+          const formData = row.form_data as Record<string, string> | null;
+          let name =
+            [formData?.firstName, formData?.lastName].filter(Boolean).join(' ') ||
+            row.full_name ||
+            [row.first_name, row.last_name].filter(Boolean).join(' ') ||
+            row.email ||
+            'Unknown User';
 
           return {
-            id: doc.id,
-            name: `${name} (${data.role})`,
-            role: data.role
+            id: row.id,
+            name: `${name} (${row.role})`,
+            role: row.role,
           };
         });
 
         setOptions(users.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (error) {
-        console.error("Error fetching users for multi-selector:", error);
+        console.error('Error fetching users for multi-selector:', error);
       } finally {
         setIsLoading(false);
       }

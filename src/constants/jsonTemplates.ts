@@ -154,3 +154,93 @@ export const SURROGATE_INFECTIOUS_DISEASE_TEMPLATE = {
 export const SURROGATE_PSYCH_CLEARANCE_TEMPLATE = {
   mentalHealthClearanceDoc: ''
 };
+
+// Matches Flutter form_data.surrogate_profile (SurrogacyForm / form1.dart)
+export const SURROGATE_INTAKE_TEMPLATE = {
+  // Basic Info
+  name: '', email: '', address: '', phone: '', height: '', weight: '', age: '', dob: '', bloodType: '',
+  // COVID-19
+  receivedVaccination: '', openToVaccination: '',
+  // Background
+  ethnicity: '', religion: '', languages: '', relationshipStatus: '', yearsTogether: '',
+  // Transportation
+  hasTransportation: '', canTravelForIVF: '', hasFlexibleSchedule: '',
+  // Family
+  hasCustody: '', householdMembers: '',
+  // Education & Employment
+  educationLevel: '', hasCollegeDegree: '', collegeDetails: '',
+  isEmployed: '', occupation: '', workHours: '', jobDuties: '',
+  partnerEmployed: '', partnerOccupation: '', partnerWorkHours: '', partnerJobDuties: '',
+  // Reproductive (Flutter form2.dart uses menstrualFlow; form1 uses cycleFlow)
+  regularCycles: '', cycleFlow: '', menstrualFlow: '', lastPapSmear: '', papSmearResults: '',
+  onBirthControl: '', birthControlType: '', isBreastfeeding: '',
+  mentalHealth: '', usedTHC: '', postpartumDepression: '', bedrest: '',
+  hepatitisBVaccination: '', rhogamInjection: '', fertilityTreatments: '',
+  hadMiscarriage: '', miscarriageDetails: '', childrenBirthed: '', surrogacyChildren: '',
+  // OB History – Pregnancy 1
+  pregnancy1Name: '', pregnancy1Gender: '', pregnancy1DOB: '', pregnancy1Weight: '',
+  pregnancy1Delivery: '', pregnancy1GestationalAge: '', pregnancy1Complications: '',
+  pregnancy1OBGYN: '', pregnancy1Hospital: '',
+  // OB History – Pregnancy 2
+  pregnancy2Name: '', pregnancy2Gender: '', pregnancy2DOB: '', pregnancy2Weight: '',
+  pregnancy2Delivery: '', pregnancy2GestationalAge: '', pregnancy2Complications: '',
+  pregnancy2OBGYN: '', pregnancy2Hospital: '', pregnancy2Surrogacy: '',
+  // OB History – Pregnancy 3
+  pregnancy3Name: '', pregnancy3Gender: '', pregnancy3DOB: '', pregnancy3Weight: '',
+  pregnancy3Delivery: '', pregnancy3GestationalAge: '', pregnancy3Complications: '',
+  pregnancy3OBGYN: '', pregnancy3Hospital: '', pregnancy3Surrogacy: '',
+  additionalPregnancyInfo: '',
+  // About Me
+  favoriteFood: '', favoriteColor: '', favoriteFlower: '', favoriteMovie: '',
+  relaxation: '', relationshipDescription: '', childrenRelationship: '',
+  hobbies: '', personality: '', childhoodMemory: '',
+  surrogacyReasons: '', surrogacyExcitement: '',
+  // Journey Preferences
+  mainSupport: '', spouseSupport: '', childrenSupport: '',
+  parentsSupport: '', friendsSupport: '', coworkersSupport: '',
+  understandsAppointments: '', duringRelationship: '', afterRelationship: '',
+  allowOBAppointments: '', allowDeliveryRoom: '', helpCoupleWithChildren: '',
+  helpSameSexCouple: '', helpSingleParent: '', fetusesWilling: '',
+  reduceTripletsToTwins: '', reduceTwinsToSingleton: '',
+  terminateIfNecessary: '', terminateDownSyndrome: '', amniocentesis: '',
+  agreeToFetalTesting: '', messageToParents: ''
+};
+
+// Matches Flutter form_data.parent1 and form_data.parent2 (IntendedParentsSignUpForm / form1.dart + form2.dart)
+export const IP_PARENT_FORM_TEMPLATE = {
+  name: '', address: '', dob: '', occupation: '', language: '', religion: '',
+  communication_preference: '', relationship_status: '', number_of_children: 0,
+  relationship_duration: '', relationship_description: '', children_feelings: '',
+  relationship_with_children: '', family_friends_opinion: '',
+  favorite_food: '', favorite_color: '', favorite_movie_show: '',
+  relaxation_method: '', hobbies_interests: '', personality_description: '',
+  about_yourself: '', difficult_decision_reason: '',
+  attend_ob_appointments: false, attend_delivery_room: false
+};
+
+// Matches Flutter form_data.medical_reports (medical_reports_form.dart)
+export const IP_MEDICAL_REPORTS_TEMPLATE = {
+  ivf_evaluation_summary: '', ovarian_reserve_amh: '', semen_analysis: '', diagnosis: '',
+  hiv_result: '', hbs_ag_result: '', hcv_result: '', vdrl_result: '', cmv_result: '',
+  fertility_report_files_count: 0, disease_screening_files_count: 0, embryo_records_files_count: 0
+};
+
+// Matches Flutter form_data.surrogate_related (surrogate_related_question.dart)
+export const IP_SURROGATE_RELATED_TEMPLATE = {
+  past_surrogate_experience: '', need_for_surrogate_assistance: '',
+  surrogate_selection_criteria: '', pregnancy_relationship: '',
+  additional_info_for_surrogate: '', worked_with_surrogate_before: false,
+  contact_after_birth: false, tell_child_about_surrogate: false,
+  introduce_surrogate_to_children: false
+};
+
+// Matches Flutter form_data.fertility (frequent_question.dart)
+export const IP_FERTILITY_QUESTIONS_TEMPLATE = {
+  working_with_fertility_doctor: '', fertility_doctor: '', egg_provider: '',
+  willing_to_consider_egg_donor: '', selected_egg_donor: '', egg_donor_age: '',
+  egg_donor_proven_doctor: '', egg_donor_is_known: '',
+  intended_father_providing_sperm: '', using_frozen_embryos: '',
+  embryos_frozen_date: '', number_of_embryos: '',
+  pgd_pgs_tested: '', pgd_pgs_testing_info: '', embryos_to_transfer: '',
+  abort_or_reduce_pregnancy: '', abnormality_definition: '', fertility_history_info: ''
+};

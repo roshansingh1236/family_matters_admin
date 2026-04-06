@@ -26,6 +26,7 @@ import FinancialsPage from '../pages/financials/page';
 import LandingPage from '../pages/landing/page';
 import ScreeningPage from '../pages/screening/page';
 import ProfilePreviewPage from '../components/feature/ProfilePreviewPage';
+import AuditPage from '../pages/audit/page';
 
 const routes: RouteObject[] = [
   {
@@ -131,6 +132,10 @@ const routes: RouteObject[] = [
   {
     path: '/profile-preview/:id',
     element: <ProfilePreviewPage />,
+  },
+  {
+    path: '/audit',
+    element: <AuditPage />,
   }
 ];
 

@@ -9,6 +9,10 @@ import Badge from '../../components/base/Badge';
 import DataSection from '../../components/data/DataSection';
 import type { User, UserStatus } from '../../types';
 import { GC_STATUSES } from '../../types';
+import {
+  resolveSurrogateAdditionalProfile,
+  resolveSurrogateIntakeProfile
+} from '../../utils/surrogateFormData';
 
 const statusDefinitions = [
   {
@@ -66,17 +70,24 @@ const SurrogatesPage: React.FC = () => {
 
       if (err) throw err;
       
-      const mappedData: User[] = (data || []).map(u => ({
-        id: u.id,
-        ...u,
-        profileCompleted: u.profile_completed || u.profileCompleted,
-        form2Completed: u.form2_completed || u.form2Completed || u.form_2_completed,
-        formData: u.form_data || u.formData || u.formdata,
-        form2: u.form2,
-        form2Data: u.form2_data || u.form2Data || u.form2data,
-        updatedAt: u.updated_at,
-        createdAt: u.created_at
-      }));
+      const mappedData: User[] = (data || []).map(u => {
+        const fd = (u.form_data || u.formData || u.formdata || {}) as Record<string, unknown>;
+        const intake = resolveSurrogateIntakeProfile(fd, u as Record<string, unknown>);
+        const additional = resolveSurrogateAdditionalProfile(fd, u as Record<string, unknown>);
+        return {
+          id: u.id,
+          ...u,
+          profileCompleted: u.profile_completed || u.profileCompleted,
+          form2Completed: u.form2_completed || u.form2Completed || u.form_2_completed,
+          formData: fd,
+          form2: u.form2,
+          form2Data: u.form2_data || u.form2Data || u.form2data,
+          surrogateProfile: intake,
+          additionalProfile: additional,
+          updatedAt: u.updated_at,
+          createdAt: u.created_at
+        };
+      });
       
       setSurrogates(mappedData);
       setIsLoading(false);
@@ -183,6 +194,19 @@ const SurrogatesPage: React.FC = () => {
     return [city, state].filter(Boolean).join(', ') || 'Not specified';
   };
 
+  const getPhone = (surrogate: User) => {
+    const formData = surrogate.formData as Record<string, unknown> | undefined;
+    const raw =
+      formData?.phone ??
+      formData?.phoneNumber ??
+      formData?.phone_number ??
+      (surrogate as Record<string, unknown>).phone ??
+      (surrogate as Record<string, unknown>).phone_number ??
+      (surrogate as Record<string, unknown>).phoneNumber;
+    if (typeof raw === 'string' && raw.trim().length > 0) return raw.trim();
+    return '—';
+  };
+
   const getExperience = (surrogate: User) => {
     const form2 = (surrogate.form2 as Record<string, unknown> | undefined) ?? {};
     const pregnancies = (form2?.pregnancyHistory as Record<string, unknown> | undefined)?.total as string | undefined;
@@ -195,8 +219,16 @@ const SurrogatesPage: React.FC = () => {
     return availability ?? 'Not provided';
   };
 
+  // Per spec: derived read-only eligibility field
+  const isEligibleToMatch = (surrogate: User): boolean => {
+    if (surrogate.status !== 'Accepted to Program') return false;
+    const screening = (surrogate as any).medical_screening_status
+      || ((surrogate.formData as any)?.medical_screening_status);
+    return !screening || screening === 'Cleared';
+  };
+
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -205,15 +237,15 @@ const SurrogatesPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Surrogates Management</h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage all registered surrogates and their profiles.</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Surrogates Management</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all registered surrogates and their profiles.</p>
               </div>
-              <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+              <div className="flex bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
                 <button
                   onClick={() => setViewStyle('grid')}
                   className={`p-2 rounded-md transition-colors cursor-pointer ${
                     viewStyle === 'grid'
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                   title="Grid View"
@@ -224,7 +256,7 @@ const SurrogatesPage: React.FC = () => {
                   onClick={() => setViewStyle('table')}
                   className={`p-2 rounded-md transition-colors cursor-pointer ${
                     viewStyle === 'table'
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                   title="Table View"
@@ -236,14 +268,14 @@ const SurrogatesPage: React.FC = () => {
 
           {/* Status Tabs */}
           <div className="mb-6 overflow-x-auto">
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+            <div className="flex space-x-1 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
               {statusDefinitions.map((status) => (
                 <button
                   key={status.id}
                   onClick={() => setActiveTab(status.id)}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
                     activeTab === status.id
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
@@ -263,7 +295,7 @@ const SurrogatesPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, index) => (
                 <Card key={index} className="animate-pulse">
-                  <div className="h-48 w-full rounded-lg bg-gray-100 dark:bg-gray-800" />
+                  <div className="h-48 w-full rounded-lg bg-gray-100 dark:bg-[#15111f]" />
                 </Card>
               ))}
             </div>
@@ -291,24 +323,37 @@ const SurrogatesPage: React.FC = () => {
                             <p className="text-sm text-gray-600 dark:text-gray-400 break-all">ID: {surrogate.id}</p>
                           </div>
                         </div>
-                        {getStatusBadge(surrogate)}
+                        <div className="flex flex-col items-end gap-1">
+                          {getStatusBadge(surrogate)}
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            isEligibleToMatch(surrogate)
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                              : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400'
+                          }`}>
+                            {isEligibleToMatch(surrogate) ? '✓ Eligible to Match' : '✗ Not Eligible'}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="space-y-2 mb-4">
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Email:</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Email:</span>
                           <span className="text-gray-900 dark:text-white text-right break-words">{surrogate.email ?? '—'}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Phone:</span>
+                          <span className="text-gray-900 dark:text-white text-right break-words">{getPhone(surrogate)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Location:</span>
                           <span className="text-gray-900 dark:text-white text-right">{getLocation(surrogate)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Experience:</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Experience:</span>
                           <span className="text-gray-900 dark:text-white text-right">{getExperience(surrogate)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Availability:</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Availability:</span>
                           <span className="text-gray-900 dark:text-white text-right">{getAvailability(surrogate)}</span>
                         </div>
                       </div>
@@ -333,10 +378,11 @@ const SurrogatesPage: React.FC = () => {
                 <Card className="overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                      <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs uppercase">
+                      <thead className="bg-rose-50/50 dark:bg-white/5 text-gray-600 dark:text-gray-400 text-xs uppercase">
                         <tr>
                           <th className="px-6 py-3 font-semibold">Name</th>
                           <th className="px-6 py-3 font-semibold">Status</th>
+                          <th className="px-6 py-3 font-semibold">Phone</th>
                           <th className="px-6 py-3 font-semibold">Location</th>
                           <th className="px-6 py-3 font-semibold">Experience</th>
                           <th className="px-6 py-3 font-semibold text-right">Actions</th>
@@ -366,6 +412,9 @@ const SurrogatesPage: React.FC = () => {
                             </td>
                             <td className="px-6 py-4">
                               {getStatusBadge(surrogate)}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                              {getPhone(surrogate)}
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                               {getLocation(surrogate)}
@@ -398,7 +447,7 @@ const SurrogatesPage: React.FC = () => {
           {/* Surrogate Detail Modal */}
           {selectedSurrogate && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Surrogate Profile</h2>
@@ -416,7 +465,7 @@ const SurrogatesPage: React.FC = () => {
                         <i className="ri-user-heart-line text-pink-600 dark:text-pink-400 text-2xl"></i>
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{getDisplayName(selectedSurrogate)}</h3>
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white">{getDisplayName(selectedSurrogate)}</h3>
                         <p className="text-gray-600 dark:text-gray-400 break-all mb-2">Surrogate ID: {selectedSurrogate.id}</p>
                         
                         {/* Status Dropdown */}
@@ -426,7 +475,7 @@ const SurrogatesPage: React.FC = () => {
                             <select
                               value={selectedSurrogate.status || ''}
                               onChange={(e) => handleStatusUpdate(selectedSurrogate.id, e.target.value as UserStatus)}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white py-1 pl-2 pr-8"
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-white/5 dark:border-white/10 dark:text-white py-1 pl-2 pr-8"
                             >
                               <option value="">Select Status</option>
                               {GC_STATUSES.map(status => (
@@ -443,6 +492,7 @@ const SurrogatesPage: React.FC = () => {
                       title="Profile Overview"
                       data={{
                         Email: selectedSurrogate.email,
+                        Phone: getPhone(selectedSurrogate),
                         Role: selectedSurrogate.role,
                         'Profile Completed': selectedSurrogate.profileCompleted,
                         'Form 2 Completed': selectedSurrogate.form2Completed,
@@ -456,14 +506,23 @@ const SurrogatesPage: React.FC = () => {
                       emptyMessage="No form data available."
                     />
                     <DataSection
-                      title="Form 2 Responses"
-                      data={(selectedSurrogate.form2 as Record<string, unknown>) ?? null}
+                      title="Form 2 Responses (Education, Employment & Medical)"
+                      data={
+                        (selectedSurrogate.surrogateProfile as Record<string, unknown>) ??
+                        (selectedSurrogate.form2 as Record<string, unknown>) ??
+                        ((selectedSurrogate.formData as Record<string, unknown>)?.surrogate_profile as Record<string, unknown>) ??
+                        null
+                      }
                       emptyMessage="Form 2 has not been completed."
                     />
                     <DataSection
                       title="Additional Profile Data"
-                      data={(selectedSurrogate.form2Data as Record<string, unknown>) ?? null}
-                      emptyMessage="No additional data provided."
+                      data={
+                        (selectedSurrogate.additionalProfile as Record<string, unknown>) ??
+                        (selectedSurrogate.form2Data as Record<string, unknown>) ??
+                        null
+                      }
+                      emptyMessage="No additional data provided (mobile app stores extended intake under Form 2 / surrogate_profile; use gc_additional only if you add it)."
                     />
 
                     <div className="flex gap-3">

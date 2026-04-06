@@ -151,11 +151,11 @@ const AppointmentsPage: React.FC = () => {
   const getTypeColor = (type: string) => {
     const t = type ? type.toLowerCase() : 'other';
      switch (t) {
-      case 'consultation': return 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400';
+      case 'consultation': return 'bg-blue-100 dark:bg-blue-900 text-rose-500 dark:text-rose-400';
       case 'medical': return 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400';
       case 'legal': return 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400';
       case 'psychological': return 'bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400';
-      default: return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+      default: return 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400';
     }
   };
   
@@ -256,26 +256,26 @@ const AppointmentsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
+          <div className="mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Appointments</h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage all appointments and scheduling.</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Appointments</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all appointments and scheduling.</p>
               </div>
               <div className="flex gap-3">
-                <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <div className="flex bg-gray-100 dark:bg-[#15111f] rounded-lg p-1">
                   <button
                     onClick={() => setViewMode('list')}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                       viewMode === 'list'
-                        ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                        ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                         : 'text-gray-600 dark:text-gray-400'
                     }`}
                   >
@@ -286,7 +286,7 @@ const AppointmentsPage: React.FC = () => {
                     onClick={() => setViewMode('calendar')}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                       viewMode === 'calendar'
-                        ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                        ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                         : 'text-gray-600 dark:text-gray-400'
                     }`}
                   >
@@ -304,14 +304,14 @@ const AppointmentsPage: React.FC = () => {
 
           {/* Type Tabs - Only show in List view for now, or both */}
           <div className="mb-6">
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+            <div className="flex space-x-1 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
               {appointmentTypes.map((type) => (
                 <button
                   key={type.id}
                   onClick={() => setActiveTab(type.id)}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
                     activeTab === type.id
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
@@ -339,7 +339,7 @@ const AppointmentsPage: React.FC = () => {
             /* List View */
             <div className="space-y-4">
               {filteredAppointments.length === 0 ? (
-                <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                <div className="text-center py-12 bg-white dark:bg-[#15111f] rounded-2xl border border-dashed border-gray-300 dark:border-white/5">
                     <i className="ri-calendar-event-line text-4xl text-gray-400 mb-2"></i>
                     <p className="text-gray-500 dark:text-gray-400">No appointments found.</p>
                 </div>
@@ -388,7 +388,7 @@ const AppointmentsPage: React.FC = () => {
                     </button>
                     <button
                       onClick={() => setCurrentDate(new Date())}
-                      className="px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg cursor-pointer"
+                      className="px-3 py-2 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg cursor-pointer"
                     >
                       Today
                     </button>
@@ -402,9 +402,9 @@ const AppointmentsPage: React.FC = () => {
                 </div>
 
                 {/* Calendar Grid Header */}
-                <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700">
+                <div className="grid grid-cols-7 border-b border-rose-100/60 dark:border-white/5">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="p-4 text-center font-semibold text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0">
+                    <div key={day} className="p-4 text-center font-semibold text-gray-700 dark:text-gray-300 border-r border-rose-100/60 dark:border-white/5 last:border-r-0">
                       {day}
                     </div>
                   ))}
@@ -416,7 +416,7 @@ const AppointmentsPage: React.FC = () => {
                     const days = getDaysInMonth(currentDate);
                     
                     return days.map((day, index) => {
-                      if (!day) return <div key={`empty-${index}`} className="min-h-[120px] p-2 border-r border-b border-gray-200 dark:border-gray-700 last:border-r-0 bg-gray-50/50 dark:bg-gray-800/50"></div>;
+                      if (!day) return <div key={`empty-${index}`} className="min-h-[120px] p-2 border-r border-b border-rose-100/60 dark:border-white/5 last:border-r-0 bg-gray-50/50 dark:bg-[#15111f]/50"></div>;
                       
                       const monthStr = String(currentDate.getMonth() + 1).padStart(2, '0');
                       const dayStr = String(day).padStart(2, '0');
@@ -429,7 +429,7 @@ const AppointmentsPage: React.FC = () => {
                           currentDate.getFullYear() === new Date().getFullYear();
 
                       return (
-                        <div key={day} className="min-h-[120px] p-2 border-r border-b border-gray-200 dark:border-gray-700 last:border-r-0 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <div key={day} className="min-h-[120px] p-2 border-r border-b border-rose-100/60 dark:border-white/5 last:border-r-0 relative hover:bg-rose-50/60 dark:hover:bg-white/5 transition-colors">
                           <div className={`font-semibold mb-2 w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : 'text-gray-900 dark:text-white'}`}>
                             {day}
                           </div>
@@ -468,7 +468,7 @@ const AppointmentsPage: React.FC = () => {
           {/* Appointment Detail Modal */}
           {selectedAppointment && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Appointment Details</h2>
@@ -492,7 +492,7 @@ const AppointmentsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-rose-50/50 dark:bg-white/5 p-6 rounded-xl">
                       <div>
                         <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                             <i className="ri-time-line text-blue-500"></i> Schedule
@@ -566,7 +566,7 @@ const AppointmentsPage: React.FC = () => {
           {/* Create/Edit Modal */}
           {showModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
                  <form onSubmit={handleSubmit} className="p-6">
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -589,7 +589,7 @@ const AppointmentsPage: React.FC = () => {
                                 required
                                 value={formData.title} 
                                 onChange={e => setFormData({...formData, title: e.target.value})}
-                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                                 placeholder="e.g. Initial Consultation"
                             />
                         </div>
@@ -604,7 +604,7 @@ const AppointmentsPage: React.FC = () => {
                             <button 
                                 type="button"
                                 onClick={() => setShowMedicalModal(true)}
-                                className="w-full py-2 px-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
+                                className="w-full py-2 px-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-white/10 text-gray-500 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
                             >
                                 <i className="ri-health-book-line"></i>
                                 New Medical Record
@@ -619,7 +619,7 @@ const AppointmentsPage: React.FC = () => {
                                     required 
                                     value={formData.date} 
                                     onChange={e => setFormData({...formData, date: e.target.value})}
-                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                                 />
                             </div>
                             <div>
@@ -629,7 +629,7 @@ const AppointmentsPage: React.FC = () => {
                                     required
                                     value={formData.time} 
                                     onChange={e => setFormData({...formData, time: e.target.value})}
-                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                                 />
                             </div>
                          </div>
@@ -641,7 +641,7 @@ const AppointmentsPage: React.FC = () => {
                                     type="text" 
                                     value={formData.duration} 
                                     onChange={e => setFormData({...formData, duration: e.target.value})}
-                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                                     placeholder="e.g. 60 min"
                                 />
                             </div>
@@ -650,7 +650,7 @@ const AppointmentsPage: React.FC = () => {
                                 <select 
                                     value={formData.type}
                                     onChange={e => setFormData({...formData, type: e.target.value as any})}
-                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                                 >
                                     {appointmentTypes.filter(t => t.id !== 'all').map(t => (
                                         <option key={t.id} value={t.id}>{t.label}</option>
@@ -665,7 +665,7 @@ const AppointmentsPage: React.FC = () => {
                                 type="text"
                                 value={formData.location} 
                                 onChange={e => setFormData({...formData, location: e.target.value})}
-                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                                 placeholder="e.g. Clinic Room 1"
                             />
                         </div>
@@ -684,7 +684,7 @@ const AppointmentsPage: React.FC = () => {
                             <select 
                                 value={formData.status || ''}
                                 onChange={e => setFormData({...formData, status: e.target.value as any})}
-                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                             >
                                 <option value="scheduled">Scheduled</option>
                                 <option value="confirmed">Confirmed</option>
@@ -700,7 +700,7 @@ const AppointmentsPage: React.FC = () => {
                                 value={formData.notes || ''}
                                 onChange={e => setFormData({...formData, notes: e.target.value})}
                                 rows={3}
-                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
                                 placeholder="Add any detailed notes..."
                             ></textarea>
                         </div>

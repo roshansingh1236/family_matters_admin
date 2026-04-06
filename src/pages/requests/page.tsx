@@ -153,7 +153,7 @@ const RequestsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -162,8 +162,8 @@ const RequestsPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-6">
           <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Requests Management</h1>
-              <p className="text-gray-600 dark:text-gray-400">Manage all incoming surrogacy applications and requests.</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Requests Management</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all incoming surrogacy applications and requests.</p>
             </div>
             <button
               onClick={() => setIsRecordDialogOpen(true)}
@@ -182,7 +182,7 @@ const RequestsPage: React.FC = () => {
           />
 
           {/* Top Level Tabs */}
-          <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="mb-6 border-b border-rose-100/60 dark:border-white/5">
             <div className="flex space-x-8">
               <button
                 onClick={() => {
@@ -191,7 +191,7 @@ const RequestsPage: React.FC = () => {
                 }}
                 className={`pb-4 px-2 text-sm font-medium transition-colors cursor-pointer relative ${
                   inquiryType === 'online'
-                    ? 'text-blue-600 dark:text-blue-400'
+                    ? 'text-rose-500 dark:text-rose-400'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >
@@ -207,7 +207,7 @@ const RequestsPage: React.FC = () => {
                }}
                 className={`pb-4 px-2 text-sm font-medium transition-colors cursor-pointer relative ${
                   inquiryType === 'phone'
-                    ? 'text-blue-600 dark:text-blue-400'
+                    ? 'text-rose-500 dark:text-rose-400'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >
@@ -221,14 +221,14 @@ const RequestsPage: React.FC = () => {
 
           {/* Status Tabs */}
           <div className="mb-6">
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+            <div className="flex space-x-1 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
               {statusRetreived.map((status) => (
                 <button
                   key={status.value}
                   onClick={() => setActiveTab(status.value)}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
                     activeTab === status.value
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
@@ -242,7 +242,7 @@ const RequestsPage: React.FC = () => {
           {isLoading ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-64 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />
+                <div key={i} className="h-64 bg-gray-100 dark:bg-[#15111f] rounded-xl animate-pulse" />
               ))}
             </div>
           ) : (
@@ -252,7 +252,7 @@ const RequestsPage: React.FC = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                        <i className="ri-user-line text-blue-600 dark:text-blue-400 text-lg"></i>
+                        <i className="ri-user-line text-rose-500 dark:text-rose-400 text-lg"></i>
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">{request.applicantName}</h3>
@@ -264,19 +264,19 @@ const RequestsPage: React.FC = () => {
   
                   <div className="space-y-2 mb-4">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Age:</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Age:</span>
                       <span className="text-gray-900 dark:text-white">{request.age}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Location:</span>
                       <span className="text-gray-900 dark:text-white">{request.location}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Experience:</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Experience:</span>
                       <span className="text-gray-900 dark:text-white">{request.experience}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Submitted:</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Submitted:</span>
                       <span className="text-gray-900 dark:text-white">{request.submittedDate}</span>
                     </div>
                   </div>
@@ -305,7 +305,7 @@ const RequestsPage: React.FC = () => {
           {/* Request Detail Modal */}
           {selectedRequest && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Request Details</h2>
@@ -320,11 +320,11 @@ const RequestsPage: React.FC = () => {
                   <div className="space-y-6">
                     <div className="flex items-center gap-4">
                       <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                        <i className="ri-user-line text-blue-600 dark:text-blue-400 text-2xl"></i>
+                        <i className="ri-user-line text-rose-500 dark:text-rose-400 text-2xl"></i>
                       </div>
                       <div>
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{selectedRequest.applicantName}</h3>
-                        <p className="text-gray-600 dark:text-gray-400">{selectedRequest.type}</p>
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white">{selectedRequest.applicantName}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{selectedRequest.type}</p>
                         {getStatusBadge(selectedRequest.status)}
                       </div>
                     </div>
@@ -360,7 +360,7 @@ const RequestsPage: React.FC = () => {
                     {selectedRequest.message && (
                         <div>
                         <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Notes / Message</label>
-                        <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-3 rounded mt-2">{selectedRequest.message}</p>
+                        <p className="text-gray-900 dark:text-white bg-rose-50/40 dark:bg-[#0e0b1a] p-3 rounded mt-2">{selectedRequest.message}</p>
                         </div>
                     )}
 

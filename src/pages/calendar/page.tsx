@@ -232,11 +232,11 @@ const CalendarPage: React.FC = () => {
     const days = getDaysInMonth(currentDate);
     
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5">
         {/* Calendar Header */}
-        <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700">
+        <div className="grid grid-cols-7 border-b border-rose-100/60 dark:border-white/5">
           {daysOfWeek.map(day => (
-            <div key={day} className="p-4 text-center font-semibold text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 last:border-r-0">
+            <div key={day} className="p-4 text-center font-semibold text-gray-700 dark:text-gray-300 border-r border-rose-100/60 dark:border-white/5 last:border-r-0">
               {day}
             </div>
           ))}
@@ -247,7 +247,7 @@ const CalendarPage: React.FC = () => {
           {days.map((day, index) => (
             <div
               key={index}
-              className="min-h-[120px] p-2 border-r border-b border-gray-200 dark:border-gray-700 last:border-r-0 relative hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              className="min-h-[120px] p-2 border-r border-b border-rose-100/60 dark:border-white/5 last:border-r-0 relative hover:bg-rose-50/60 dark:hover:bg-white/5 transition-colors"
             >
               {day && (
                 <>
@@ -307,28 +307,28 @@ const CalendarPage: React.FC = () => {
   );
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
+          <div className="mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Calendar</h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage appointments and schedule events.</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Calendar</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage appointments and schedule events.</p>
               </div>
               <div className="flex gap-3">
-                <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <div className="flex bg-gray-100 dark:bg-[#15111f] rounded-lg p-1">
                   {(['month', 'week', 'day'] as const).map(mode => (
                     <button
                       key={mode}
                       onClick={() => setViewMode(mode)}
                       className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer capitalize ${
                         viewMode === mode
-                          ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                          ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                           : 'text-gray-600 dark:text-gray-400'
                       }`}
                     >
@@ -376,7 +376,7 @@ const CalendarPage: React.FC = () => {
                     </button>
                     <button
                       onClick={() => setCurrentDate(new Date())}
-                      className="px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg cursor-pointer"
+                      className="px-3 py-2 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg cursor-pointer"
                     >
                       Today
                     </button>
@@ -394,16 +394,16 @@ const CalendarPage: React.FC = () => {
                 {viewMode === 'week' && (
                   <div className="text-center py-12">
                     <i className="ri-calendar-line text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Week View</h3>
-                    <p className="text-gray-600 dark:text-gray-400">Week view coming soon</p>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Week View</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Week view coming soon</p>
                   </div>
                 )}
                 
                 {viewMode === 'day' && (
                   <div className="text-center py-12">
                     <i className="ri-calendar-line text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Day View</h3>
-                    <p className="text-gray-600 dark:text-gray-400">Day view coming soon</p>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Day View</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Day view coming soon</p>
                   </div>
                 )}
               </Card>
@@ -435,7 +435,7 @@ const CalendarPage: React.FC = () => {
           {/* Event Detail Modal */}
           {selectedEvent && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full shadow-2xl">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full shadow-2xl">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">Event Details</h2>
@@ -453,21 +453,21 @@ const CalendarPage: React.FC = () => {
                       <div className="mt-2">{getStatusBadge(selectedEvent.status)}</div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 text-sm bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4 text-sm bg-rose-50/50 dark:bg-white/5 p-4 rounded-lg">
                       <div>
-                        <span className="text-gray-600 dark:text-gray-400">Date:</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Date:</span>
                         <div className="font-medium text-gray-900 dark:text-white">{selectedEvent.date}</div>
                       </div>
                       <div>
-                        <span className="text-gray-600 dark:text-gray-400">Time:</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Time:</span>
                         <div className="font-medium text-gray-900 dark:text-white">{selectedEvent.time}</div>
                       </div>
                       <div>
-                        <span className="text-gray-600 dark:text-gray-400">Duration:</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Duration:</span>
                         <div className="font-medium text-gray-900 dark:text-white">{selectedEvent.duration}</div>
                       </div>
                       <div>
-                        <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Location:</span>
                         <div className="font-medium text-gray-900 dark:text-white">{selectedEvent.location}</div>
                       </div>
                     </div>
@@ -489,7 +489,7 @@ const CalendarPage: React.FC = () => {
                     {selectedEvent.notes && (
                       <div>
                         <span className="text-gray-600 dark:text-gray-400 font-medium">Notes:</span>
-                        <div className="mt-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-100 dark:border-gray-600">
+                        <div className="mt-2 text-sm text-gray-700 dark:text-gray-300 bg-rose-50/50 dark:bg-white/5 p-3 rounded-lg border border-gray-100 dark:border-white/10">
                           {selectedEvent.notes}
                         </div>
                       </div>
@@ -514,7 +514,7 @@ const CalendarPage: React.FC = () => {
           {/* New Event Modal */}
           {showNewEventModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full shadow-2xl">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full shadow-2xl">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -537,7 +537,7 @@ const CalendarPage: React.FC = () => {
                         type="text"
                         value={formData.title || ''}
                         onChange={e => setFormData({...formData, title: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
                         placeholder="Enter event title"
                       />
                     </div>
@@ -577,7 +577,7 @@ const CalendarPage: React.FC = () => {
                           type="date"
                           value={formData.date}
                           onChange={e => setFormData({...formData, date: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
                         />
                       </div>
                       <div>
@@ -588,7 +588,7 @@ const CalendarPage: React.FC = () => {
                           type="time"
                           value={formData.time}
                           onChange={e => setFormData({...formData, time: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
                         />
                       </div>
                     </div>
@@ -609,7 +609,7 @@ const CalendarPage: React.FC = () => {
                       <select 
                          value={formData.type}
                          onChange={e => setFormData({...formData, type: e.target.value as any})}
-                         className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none"
+                         className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
                       >
                         <option value="consultation">Consultation</option>
                         <option value="medical">Medical</option>
@@ -625,7 +625,7 @@ const CalendarPage: React.FC = () => {
                       <textarea
                         value={formData.notes || ''}
                         onChange={e => setFormData({...formData, notes: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white outline-none resize-none"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none resize-none"
                         placeholder="Add any additional notes here..."
                         rows={3}
                       />

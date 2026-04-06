@@ -14,111 +14,8 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-const USERS_TO_SEED = [
-  {
-    email: 'roshanpratap1235@gmail.com',
-    password: 'Test@123',
-    role: 'Intended Parent',
-    firstName: 'Roshan',
-    lastName: 'Pratap',
-    status: 'To be Matched',
-    formData: {
-      firstName: 'Roshan',
-      lastName: 'Pratap',
-      email: 'roshanpratap1235@gmail.com',
-      phoneNumber: '+91 9876543210',
-      city: 'Gurgaon',
-      state: 'Haryana',
-      country: 'India',
-      zip: '122001',
-      address: 'Sector 44, Gurgaon',
-      whenToStart: 'Immediately',
-      preferredContactMethod: 'Email',
-      whySurrogate: 'Looking to grow our family through a compassionate journey.'
-    },
-    form2Data: {
-      fertilityClinic: 'Family Matters Wellness Center',
-      embryosAvailable: '4',
-      embryoQuality: 'Grade A',
-      medicalHistory: 'Healthy, no major issues.',
-      timeline: 'Next 6 months',
-      surrogacyBudget: 'Standard',
-      legalCounsel: 'Family Matters Legal Team',
-      fertility: {
-        clinicName: 'Wellness IVF',
-        physician: 'Dr. Sharma',
-        clinicContact: 'info@wellnessivf.com',
-        embryoReport: 'Pending',
-        geneticTesting: 'Completed'
-      }
-    },
-    about: {
-      bio: 'We are a loving couple based in Gurgaon, eager to start our family journey. We value transparency and open communication.',
-      age: '34',
-      aboutUs: 'Enthusiastic travelers and home cooks.',
-      relationshipPreference: 'Close and supportive',
-      familyLifestyle: 'Active and social',
-      occupation: 'Tech Consultant',
-      education: 'MBA',
-      heritage: 'Indian',
-      religion: 'Hindu',
-      hobbies: 'Cooking, Hiking'
-    }
-  },
-  {
-    email: 'roshansingh1235@gmail.com',
-    password: 'Test@123',
-    role: 'Surrogate',
-    firstName: 'Roshan',
-    lastName: 'Singh',
-    status: 'Available',
-    formData: {
-      firstName: 'Roshan',
-      lastName: 'Singh',
-      email: 'roshansingh1235@gmail.com',
-      phoneNumber: '+91 8888888888',
-      city: 'Delhi',
-      state: 'Delhi',
-      country: 'India',
-      zip: '110001',
-      address: 'Connaught Place, Delhi',
-      whenToStart: 'Next Month',
-      preferredContactMethod: 'WhatsApp'
-    },
-    form2: {
-      availability: 'Ready to match',
-      pregnancyHistory: {
-        total: '2',
-        vaginal: '2',
-        cSection: '0'
-      },
-      surrogacyChildren: '0',
-      bmi: '22.5',
-      smoker: false,
-      medications: 'None',
-      supportSystem: 'Husband and parents',
-      medicalFitness: {
-        gynecologicalExam: 'Normal',
-        obstetricHistory: 'Unremarkable',
-        bmi: '22.5',
-        bp: '120/80',
-        generalHealthClearance: 'Cleared'
-      }
-    },
-    about: {
-      bioMotherHeritage: 'Indian',
-      bioFatherHeritage: 'Indian',
-      education: 'Graduate',
-      occupation: 'Teacher',
-      age: '29',
-      height: '5\'6"',
-      relationshipPreference: 'Friendly',
-      amhStatus: 'Good',
-      opennessToSecondCycle: 'Yes',
-      bio: 'I want to help others experience the joy of parenthood. I have two healthy children of my own and a supportive family.'
-    }
-  }
-];
+/** Add demo users here (email, password, profile fields). Kept empty by default. */
+const USERS_TO_SEED = [];
 
 async function seedData() {
   console.log('🚀 Starting Seeding Process...');
@@ -246,25 +143,6 @@ async function seedData() {
       status: 'Pending'
     });
     console.log('   ✅ Task seeded');
-  }
-
-  // 4. Create a Proposed Match
-  const parentEmail = 'roshanpratap1235@gmail.com';
-  const surrogateEmail = 'roshansingh1235@gmail.com';
-  
-  const { data: users } = await supabase.from('users').select('id, email');
-  const parentId = users.find(u => u.email === parentEmail)?.id;
-  const surrogateId = users.find(u => u.email === surrogateEmail)?.id;
-
-  if (parentId && surrogateId) {
-    await supabase.from('matches').upsert({
-      intended_parent_id: parentId,
-      gestational_carrier_id: surrogateId,
-      status: 'Proposed',
-      match_score: 95,
-      agency_notes: 'Strong alignment on communication and expectations.'
-    });
-    console.log('\n🤝 Proposed Match created between Parent and Surrogate');
   }
 
   console.log('\n✨ Seeding Process Finished!');

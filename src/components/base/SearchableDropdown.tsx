@@ -70,25 +70,25 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
       )}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer flex justify-between items-center ${
-          isOpen ? 'ring-2 ring-blue-500 border-transparent' : ''
+        className={`w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md text-slate-900 dark:text-white focus-within:ring-2 focus-within:ring-rose-500/20 outline-none cursor-pointer flex justify-between items-center transition-all duration-200 shadow-sm ${
+          isOpen ? 'ring-2 ring-rose-500/50 border-rose-500/50' : 'hover:border-rose-300 dark:hover:border-white/20'
         }`}
       >
-        <span className={!selectedOption ? "text-gray-500 dark:text-gray-400" : ""}>
+        <span className={!selectedOption ? "text-slate-400 dark:text-slate-500 font-medium" : "font-semibold text-slate-700 dark:text-white"}>
           {selectedOption ? selectedOption.name : placeholder}
         </span>
-        <i className={`ri-arrow-down-s-line transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
+        <i className={`ri-arrow-down-s-line transition-transform duration-300 ${isOpen ? 'rotate-180 text-rose-500' : 'text-slate-400'}`}></i>
       </div>
 
       {isOpen && (
-        <div className="absolute z-[60] mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
-          <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+        <div className="absolute z-[60] mt-2 w-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="p-3 border-b border-slate-100 dark:border-white/5">
             <div className="relative">
-              <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
               <input
                 ref={inputRef}
                 type="text"
-                className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500/50 dark:text-white placeholder-slate-400 transition-all"
                 placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -102,14 +102,14 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                 <div
                   key={option.id}
                   onClick={() => handleSelect(option.id)}
-                  className={`px-4 py-2 text-sm cursor-pointer transition-colors flex items-center justify-between ${
+                  className={`px-4 py-3 text-sm cursor-pointer transition-all flex items-center justify-between mx-1 my-0.5 rounded-xl ${
                     option.id === value
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      ? 'bg-rose-500 text-white font-bold shadow-md shadow-rose-500/20'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'
                   }`}
                 >
                   <span>{option.name}</span>
-                  {option.id === value && <i className="ri-check-line"></i>}
+                  {option.id === value && <i className="ri-check-line text-lg"></i>}
                 </div>
               ))
             ) : (

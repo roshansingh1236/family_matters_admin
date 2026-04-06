@@ -68,14 +68,14 @@ export const IP_STATUSES: UserStatus[] = [
 // ... (existing User types)
 
 export type MatchStatus = 
-  | 'Proposed'
-  | 'Presented'
-  | 'Accepted'
-  | 'Active'
-  | 'Delivered'
-  | 'Escrow Closure'
-  | 'Cancelled'
-  | 'Completed';
+  | 'Proposed'        // Internal pairing under consideration
+  | 'Presented'       // Match shown to GC and IP(s)
+  | 'Accepted'        // Both parties agree to proceed
+  | 'Active'          // Journey created and operational
+  | 'Delivered'       // Delivery has occurred
+  | 'Escrow Closure'  // Post-delivery financial reconciliation
+  | 'Completed'       // Escrow closed; match archived
+  | 'Cancelled';      // Terminated early (reason required)
 
 export interface Match {
   id: string;
@@ -87,23 +87,36 @@ export interface Match {
   matchScore?: number;
   matchCriteria?: Record<string, unknown>;
   agencyNotes?: string;
+  internalNotes?: string;
   parentAccepted?: boolean;
   surrogateAccepted?: boolean;
   parentDeclined?: boolean;
   surrogateDeclined?: boolean;
+  // Lifecycle tracking
+  deliveryDate?: string; // ISO Date
+  escrowClosedAt?: string; // ISO Date
+  cancellationReason?: string;
+  coordinatorId?: string;
+  journeyId?: string;
   // Denormalized
   intendedParentData?: User;
   gestationalCarrierData?: User;
 }
 
+// Journey top-level status (per spec)
 export type JourneyStatus = 
+  | 'Active'
+  | 'Completed'
+  | 'Cancelled';
+
+// Journey operational sub-stage (within Active status)
+export type JourneyStage = 
   | 'Medical Screening'
   | 'Legal'
   | 'Embryo Transfer'
   | 'Pregnancy'
   | 'Birth'
-  | 'Completed'
-  | 'Cancelled';
+  | 'Postpartum';
 
 export interface Journey {
   id: string;
@@ -113,9 +126,12 @@ export interface Journey {
   gestationalCarrierId: string;
   caseManagerId: string;
   status: JourneyStatus | string;
+  stage: JourneyStage | string; // Operational sub-stage within Active
   createdAt: string; // ISO Date
   completedAt?: string; // ISO Date
   estimatedDeliveryDate?: string; // ISO Date
+  deliveryDate?: string; // ISO Date - actual delivery
+  postpartumNotes?: Record<string, unknown>;
   
   milestones: CaseMilestone[];
   documents: CaseDocument[];
@@ -174,20 +190,93 @@ export type TransactionCategory =
 export interface AgencyTransaction {
   id: string;
   journeyId?: string; // Optional link to a specific journey
+  intendedParentId?: string; // For agency fee schedules linked directly to IP
   caseNumber?: string; // Denormalized for display
   type: TransactionType;
   category: TransactionCategory;
   amount: number;
   date: string; // ISO Date
   description: string;
-  status: 'Pending' | 'Completed' | 'Cancelled';
+  status: 'Pending' | 'Completed' | 'Cancelled' | 'Waived';
   paymentMethod?: string;
-  reference?: string;
+  reference?: string; // Used for installment tagging: "installment:1", "installment:2"
+  waiverReason?: string; // Required if status = 'Waived' (admin only)
   createdBy: string;
   createdAt: string;
 }
 
-export type MedicalScreeningStatus = 'Pending' | 'In Review' | 'Cleared' | 'Rejected';
+// Per spec: Agency fees must be tracked per IP with installment structure, separate from escrow
+export interface AgencyFeeInstallment {
+  id: string;
+  intendedParentId: string;
+  installmentNumber: number;
+  totalInstallments: number;
+  amount: number;
+  dueDate: string;
+  paidDate?: string;
+  status: 'Pending' | 'Paid' | 'Waived' | 'Overdue';
+  waiverReason?: string; // Admin only, required if Waived
+  notes?: string;
+  createdAt: string;
+}
+
+// Per spec: Medical record requests are tracked per GC, per provider/OB history entry
+export type MedicalRecordRequestStatus =
+  | 'Not Requested'
+  | 'Requested'
+  | 'Follow-Up Needed'
+  | 'Received (Partial)'
+  | 'Received (Complete)'
+  | 'Unable to Obtain';
+
+export type MedicalRecordRequestMethod = 'Fax' | 'Portal' | 'Email' | 'Mail';
+
+export interface MedicalRecordRequest {
+  id: string;
+  gcId: string; // Links to GC user
+  // Link to OB history entry (matches pregnancyN fields from intake form)
+  pregnancyNumber?: number;
+  providerName: string;
+  facilityName: string;
+  recordType: string; // OB delivery records, prenatal records, operative report, lab results, imaging, clearance letter, mental health, other
+  dateRequested?: string;
+  requestMethod?: MedicalRecordRequestMethod;
+  authorizationOnFile: boolean;
+  followUpDate?: string;
+  status: MedicalRecordRequestStatus;
+  notes?: string;
+  // Review outcome
+  reviewSummary?: string;
+  clearanceRecommendation?: 'Cleared' | 'Not Cleared' | 'Conditional / Needs Follow-Up';
+  blockingIssues?: boolean;
+  // Received file attachments (linked to this request)
+  receivedFiles?: ReceivedFile[];
+  // HIPAA Medical Authorization tracking
+  hipaaAuthStatus?: HipaaAuthStatus;
+  hipaaAuthSentAt?: string;
+  hipaaAuthSignedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type MedicalScreeningStatus =
+  | 'Not Started'
+  | 'Records Requested'
+  | 'Records Partially Received'
+  | 'Under Medical Review'
+  | 'Medically Cleared for Program'
+  | 'Medically Not Cleared'
+  | 'On Hold – Needs Follow-Up';
+
+export const GC_MEDICAL_SCREENING_STATUSES: MedicalScreeningStatus[] = [
+  'Not Started',
+  'Records Requested',
+  'Records Partially Received',
+  'Under Medical Review',
+  'Medically Cleared for Program',
+  'Medically Not Cleared',
+  'On Hold – Needs Follow-Up',
+];
 
 export interface MedicalScreening {
   id: string;
@@ -218,6 +307,72 @@ export interface MedicalScreening {
   internalNotes?: string;
   clearanceDate?: string;
 }
+
+// Per spec: Agency Reimbursables — tracked per Journey, separate from agency fees
+export type ReimbursableCategory =
+  | 'Travel – Air'
+  | 'Travel – Ground'
+  | 'Lodging'
+  | 'Meals'
+  | 'Medical – Copay'
+  | 'Medical – Prescription'
+  | 'Lost Wages'
+  | 'Childcare'
+  | 'Other';
+
+export type ReimbursableStatus =
+  | 'Submitted'
+  | 'Under Review'
+  | 'Approved'
+  | 'Partially Approved'
+  | 'Reimbursed'
+  | 'Denied';
+
+export interface AgencyReimbursable {
+  id: string;
+  journeyId: string;
+  gcId?: string;
+  category: ReimbursableCategory;
+  amount: number;
+  approvedAmount?: number;
+  receiptUrl?: string;
+  description: string;
+  incurredDate: string;
+  submittedDate: string;
+  status: ReimbursableStatus;
+  reviewNotes?: string;
+  reimbursedDate?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+// Per spec: 11-stage agency pipeline
+export type AgencyPipelineStage =
+  | 'Inquiry Received'
+  | 'Consultation Completed'
+  | 'Program Accepted'
+  | 'Agency Fee Installment 1 Paid'
+  | 'Matching in Progress'
+  | 'Match Accepted'
+  | 'Agency Fee Installment 2 Paid'
+  | 'Journey Active'
+  | 'Delivered'
+  | 'Escrow Closure'
+  | 'Case Completed';
+
+// Per spec: files received must link to the originating record request
+export interface ReceivedFile {
+  id: string;
+  name: string;
+  url: string;
+  fileType: string;
+  pageCount?: number;
+  source?: string;
+  uploadedBy: string;
+  receivedDate: string;
+}
+
+export type HipaaAuthStatus = 'Not Sent' | 'Sent' | 'Signed' | 'Expired';
 
 export interface Payment {
   id?: string;

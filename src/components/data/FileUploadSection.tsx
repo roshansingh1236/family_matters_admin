@@ -161,7 +161,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
         className={`relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed p-8 transition-all
           ${dragActive 
             ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10' 
-            : 'border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 bg-white dark:bg-gray-900/50'
+            : 'border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 bg-white dark:bg-[#0e0b1a]/50'
           }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
@@ -214,7 +214,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
              <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value as FileCategory)}
-              className="rounded-xl border-gray-200 bg-gray-50 py-2 pl-3 pr-8 text-sm font-semibold text-gray-700 focus:border-emerald-500 focus:ring-emerald-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200"
+              className="rounded-xl border-rose-100/60 bg-gray-50 py-2 pl-3 pr-8 text-sm font-semibold text-gray-700 focus:border-emerald-500 focus:ring-emerald-500 dark:bg-[#15111f] dark:border-white/5 dark:text-gray-200"
             >
               {CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
@@ -244,7 +244,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
           <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Photos</h4>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {imageFiles.map((file, index) => (
-              <div key={`${file.path}-${index}`} className="group relative aspect-square overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800">
+              <div key={`${file.path}-${index}`} className="group relative aspect-square overflow-hidden rounded-2xl bg-gray-100 dark:bg-[#15111f]">
                 <img 
                   src={file.url} 
                   alt={file.name} 
@@ -274,7 +274,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
           <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Documents</h4>
           <div className="grid gap-3">
             {documentFiles.map((file, index) => (
-              <div key={`${file.path}-${index}`} className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-emerald-200 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:hover:border-emerald-800">
+              <div key={`${file.path}-${index}`} className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-emerald-200 hover:shadow-md dark:border-gray-800 dark:bg-[#0e0b1a] dark:hover:border-emerald-800">
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl 
                   ${file.type.includes('pdf') ? 'bg-red-50 text-red-500 dark:bg-red-900/20' : 'bg-blue-50 text-blue-500 dark:bg-blue-900/20'}`}>
                    <i className={`${file.type.includes('pdf') ? 'ri-file-pdf-line' : 'ri-file-text-line'} text-2xl`}></i>

@@ -26,6 +26,10 @@ export interface Message {
 export const messagingService = {
   // Get all conversations where admin is a participant
   getConversations: async (adminId: string): Promise<Conversation[]> => {
+    if (!adminId) {
+      console.warn('getConversations called without adminId');
+      return [];
+    }
     try {
       const { data, error } = await supabase
         .from('conversation_participants')
@@ -138,35 +142,83 @@ export const messagingService = {
     adminId: string,
     userId: string
   ): Promise<string> => {
+    if (!adminId || !userId) {
+      throw new Error('Admin ID and User ID are required to create a conversation');
+    }
     try {
-      // Check if conversation already exists (simplified to check for exact pair in participants table)
-      // This logic is better handled via an RPC or clever select in Supabase, 
-      // but for similarity to the original:
-      const { data: existing, error: existError } = await supabase.rpc('find_conversation_by_participants', {
-          p_user_ids: [adminId, userId]
+      // 1. Manually check if conversation already exists
+      const { data: adminParticipants, error: adminErr } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', adminId);
+
+      if (adminErr) {
+        console.warn('Error checking admin participants:', adminErr);
+      } else if (adminParticipants && adminParticipants.length > 0) {
+        const convIds = adminParticipants.map(p => p.conversation_id);
+        
+        const { data: existing, error: existError } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', userId)
+          .in('conversation_id', convIds)
+          .maybeSingle();
+
+        if (!existError && existing) {
+          console.log('Found existing conversation:', existing.conversation_id);
+          return existing.conversation_id;
+        }
+      }
+
+      // Fetch user names for denormalization (required by Flutter app)
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .in('id', [adminId, userId]);
+
+      const names: Record<string, string> = {};
+      (usersData || []).forEach(u => {
+        names[u.id] = u.full_name || 'Unknown User';
       });
 
-      if (!existError && existing) return existing;
-
-      // Create new conversation
+      // 2. Create new conversation
       const { data: conv, error: convError } = await supabase
         .from('conversations')
-        .insert({ last_message: 'Started a new conversation' })
+        .insert({ 
+          last_message: 'Started a new conversation',
+          last_message_at: new Date().toISOString(),
+          participants: [adminId, userId],
+          participant_names: names
+        })
         .select('id')
-        .maybeSingle();
+        .single();
       
-      if (convError) throw convError;
-      if (!conv) throw new Error('Failed to create conversation');
+      if (convError) {
+        console.error('Failed to insert into conversations table:', convError);
+        throw convError;
+      }
+      
+      if (!conv) throw new Error('Failed to create conversation: No ID returned');
 
-      // Add participants
-      await supabase.from('conversation_participants').insert([
+      // 3. Add participants
+      const { error: partError } = await supabase.from('conversation_participants').insert([
           { conversation_id: conv.id, user_id: adminId, role: 'admin' },
           { conversation_id: conv.id, user_id: userId, role: 'user' }
       ]);
 
+      if (partError) {
+        console.error('Failed to add participants:', partError);
+        // Attempt to cleanup the orphaned conversation if possible
+        await supabase.from('conversations').delete().eq('id', conv.id);
+        throw partError;
+      }
+
       return conv.id;
     } catch (error) {
-      console.error('Error creating conversation:', error);
+      console.error('CRITICAL: Error in createConversation:', error);
+      if (typeof error === 'object' && error !== null) {
+        console.error('Error Details:', JSON.stringify(error, null, 2));
+      }
       throw error;
     }
   },
@@ -176,7 +228,8 @@ export const messagingService = {
     conversationId: string,
     senderId: string,
     text: string,
-    media?: { url: string; type: 'image' | 'file' }
+    media?: { url: string; type: 'image' | 'file' },
+    senderName?: string
   ): Promise<void> => {
     try {
       const { error: msgError } = await supabase
@@ -184,6 +237,7 @@ export const messagingService = {
         .insert({
           conversation_id: conversationId,
           sender_id: senderId,
+          sender_name: senderName || 'Admin',
           content: text,
           attachments: media?.url ? [media.url] : [],
           is_read: false

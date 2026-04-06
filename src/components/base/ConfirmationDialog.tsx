@@ -24,8 +24,8 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-sm overflow-hidden bg-white rounded-2xl shadow-xl dark:bg-gray-800">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="w-full max-w-sm overflow-hidden bg-white rounded-2xl shadow-xl dark:bg-[#15111f]">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className={`flex items-center justify-center w-10 h-10 rounded-full ${isDestructive ? 'bg-red-100 text-red-600 dark:bg-red-900/20' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/20'}`}>
@@ -41,7 +41,7 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
           <div className="flex items-center justify-end gap-3 mt-6">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 transition-colors bg-white border border-gray-300 rounded-xl hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+              className="px-4 py-2 text-sm font-medium text-gray-700 transition-colors bg-white border border-gray-300 rounded-xl hover:bg-rose-50/60 dark:bg-[#15111f] dark:text-gray-300 dark:border-gray-600 dark:hover:bg-white/5"
             >
               {cancelLabel}
             </button>
