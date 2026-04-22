@@ -9,6 +9,7 @@ import type { Match, MatchStatus, User } from '../../types';
 import Toast from '../../components/base/Toast';
 import ConfirmationDialog from '../../components/base/ConfirmationDialog';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const MATCH_STATUSES: MatchStatus[] = [
   'Proposed',
@@ -433,7 +434,7 @@ const MatchesPage: React.FC = () => {
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">Match #{match.id.slice(0, 8)}</h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Created {new Date(match.createdAt).toLocaleDateString()}
+                          Created {formatMMDDYYYY(match.createdAt)}
                         </p>
                       </div>
                     </div>
@@ -530,7 +531,7 @@ const MatchesPage: React.FC = () => {
                       </div>
                       <div className="flex-1">
                         <h3 className="text-base font-bold text-gray-900 dark:text-white">Match #{selectedMatch.id.slice(0, 8)}</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Created on {new Date(selectedMatch.createdAt).toLocaleDateString()}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Created on {formatMMDDYYYY(selectedMatch.createdAt)}</p>
                         <div className="mt-1">{getStatusBadge(getDerivedStatus(selectedMatch))}</div>
                       </div>
                     </div>
@@ -665,13 +666,13 @@ const MatchesPage: React.FC = () => {
                           {selectedMatch.deliveryDate && (
                             <div className="flex justify-between">
                               <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Delivery Date</span>
-                              <span className="font-medium text-gray-900 dark:text-white">{new Date(selectedMatch.deliveryDate).toLocaleDateString()}</span>
+                              <span className="font-medium text-gray-900 dark:text-white">{formatMMDDYYYY(selectedMatch.deliveryDate)}</span>
                             </div>
                           )}
                           {selectedMatch.escrowClosedAt && (
                             <div className="flex justify-between">
                               <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Escrow Closed</span>
-                              <span className="font-medium text-gray-900 dark:text-white">{new Date(selectedMatch.escrowClosedAt).toLocaleDateString()}</span>
+                              <span className="font-medium text-gray-900 dark:text-white">{formatMMDDYYYY(selectedMatch.escrowClosedAt)}</span>
                             </div>
                           )}
                           {selectedMatch.cancellationReason && (

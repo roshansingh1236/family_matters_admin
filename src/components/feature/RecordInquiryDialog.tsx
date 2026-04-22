@@ -18,8 +18,22 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
     role: 'Intended Parents',
     age: '',
     location: '',
-    experience: ''
+    experience: '',
+    // "How did you hear about us?" — required on every phone inquiry so we
+    // can tell whether callers came from the marketing site, the mobile app,
+    // a referral, etc.
+    inquirySource: '' as '' | 'Website' | 'App' | 'Referral' | 'Social Media' | 'Event' | 'Other',
+    inquirySourceOther: ''
   });
+
+  const INQUIRY_SOURCES: Array<'Website' | 'App' | 'Referral' | 'Social Media' | 'Event' | 'Other'> = [
+    'Website',
+    'App',
+    'Referral',
+    'Social Media',
+    'Event',
+    'Other'
+  ];
 
   if (!isOpen) return null;
 
@@ -28,19 +42,32 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
     setLoading(true);
 
     try {
+      const inquirySource = formData.inquirySource === 'Other'
+        ? (formData.inquirySourceOther.trim() || 'Other')
+        : formData.inquirySource;
+
+      const extraData: Record<string, unknown> = variant === 'detailed'
+        ? {
+            age: formData.age,
+            location: formData.location,
+            experience: formData.experience
+          }
+        : {};
+      if (inquirySource) extraData.inquirySource = inquirySource;
+
       const data: any = {
         full_name: formData.name,
         email: formData.email,
         phone: formData.phone,
         description: formData.message,
         source: 'phone',
+        // Dedicated column so we can filter/group by channel without
+        // touching the JSON blob. `data.inquirySource` is kept as the
+        // source of truth for free-text "Other" values.
+        inquiry_source: inquirySource || null,
         status: 'new',
         role: variant === 'detailed' ? (formData.role === 'Surrogate' ? 'Surrogate' : 'Intended Parent') : 'inquiry',
-        data: variant === 'detailed' ? {
-            age: formData.age,
-            location: formData.location,
-            experience: formData.experience
-        } : {}
+        data: extraData
       };
 
       // If email is provided, try to create an Auth user
@@ -88,7 +115,8 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
 
       setFormData({
         name: '', email: '', phone: '', message: '',
-        role: 'Intended Parents', age: '', location: '', experience: ''
+        role: 'Intended Parents', age: '', location: '', experience: '',
+        inquirySource: '', inquirySourceOther: ''
       });
       onSuccess();
       onClose();
@@ -188,6 +216,32 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                   placeholder="Email (Optional)"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                How did they hear about us? *
+              </label>
+              <select
+                required
+                value={formData.inquirySource}
+                onChange={(e) => setFormData({ ...formData, inquirySource: e.target.value as typeof formData.inquirySource })}
+                className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors"
+              >
+                <option value="" disabled>Select a source…</option>
+                {INQUIRY_SOURCES.map((src) => (
+                  <option key={src} value={src}>{src}</option>
+                ))}
+              </select>
+              {formData.inquirySource === 'Other' && (
+                <input
+                  type="text"
+                  value={formData.inquirySourceOther}
+                  onChange={(e) => setFormData({ ...formData, inquirySourceOther: e.target.value })}
+                  className="mt-2 w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors"
+                  placeholder="Please specify…"
+                />
+              )}
             </div>
 
             {variant === 'detailed' && (

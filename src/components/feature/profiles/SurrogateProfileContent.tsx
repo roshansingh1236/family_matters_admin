@@ -22,6 +22,7 @@ import {
   ABOUT_SURROGATE_TEMPLATE
 } from '../../../constants/jsonTemplates';
 import CreateMatchDialog from '../CreateMatchDialog';
+import AgencyApprovalToggle from '../AgencyApprovalToggle';
 import MedicalReportView from '../MedicalReportView';
 import { GC_STATUSES, GC_MEDICAL_SCREENING_STATUSES } from '../../../types';
 import {
@@ -502,6 +503,20 @@ export default function SurrogateProfileContent({
           </Button>
         )}
         <div className="flex items-center gap-2">
+           {surrogate && (
+             <AgencyApprovalToggle
+               userId={id!}
+               approved={surrogate.agency_approved === true}
+               onChange={(approved) => {
+                 setSurrogate((prev: any) => ({ ...prev, agency_approved: approved }));
+                 setToast({
+                   message: approved ? 'Surrogate approved for matching' : 'Approval revoked',
+                   type: 'success',
+                 });
+               }}
+               onError={() => setToast({ message: 'Failed to update approval', type: 'error' })}
+             />
+           )}
            {surrogate && showCreateMatch && <CreateMatchDialog user={surrogate} />}
            {onClose && (
              <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-gray-500">

@@ -7,6 +7,7 @@ import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import { screeningService } from '../../services/screeningService';
 import type { MedicalScreening } from '../../types';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const ScreeningPage: React.FC = () => {
   const [screenings, setScreenings] = useState<MedicalScreening[]>([]);
@@ -92,7 +93,7 @@ const ScreeningPage: React.FC = () => {
                           <div className="text-xs text-gray-500">{screening.surrogateId}</div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                           {new Date(screening.submittedAt).toLocaleDateString()}
+                           {formatMMDDYYYY(screening.submittedAt)}
                         </td>
                         <td className="px-6 py-4">{getStatusBadge(screening.status)}</td>
                         <td className="px-6 py-4 text-right">
@@ -190,7 +191,7 @@ const ScreeningPage: React.FC = () => {
                                <a href={doc.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate max-w-[150px]">
                                  {doc.name}
                                </a>
-                               <span className="text-gray-500 text-xs">{new Date(doc.uploadedAt).toLocaleDateString()}</span>
+                               <span className="text-gray-500 text-xs">{formatMMDDYYYY(doc.uploadedAt)}</span>
                              </li>
                            ))}
                         </ul>

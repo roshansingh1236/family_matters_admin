@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 type SectionDef = {
   id: string;
@@ -215,8 +216,8 @@ const formatValue = (value: unknown): string => {
   if (typeof value === 'string') {
     const t = value.trim();
     if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
-      const d = new Date(t);
-      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString(undefined, { dateStyle: 'medium' });
+      const formatted = formatMMDDYYYY(t);
+      if (formatted) return formatted;
     }
     return t;
   }

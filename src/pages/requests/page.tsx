@@ -7,6 +7,7 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import RecordInquiryDialog from '../../components/feature/RecordInquiryDialog';
+import { formatMMDDYYYYOr } from '../../utils/dateFormat';
 
 const RequestsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -36,7 +37,7 @@ const RequestsPage: React.FC = () => {
           type: u.role === 'Surrogate' ? 'Surrogate Application' : 'Intended Parents',
           status: u.status || 'pending',
           source: source,
-          submittedDate: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A'
+          submittedDate: formatMMDDYYYYOr(u.created_at)
         };
       });
       setRequests(fetchedRequests);

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { storageService, STORAGE_BUCKETS } from '../../services/storageService';
 import Button from '../base/Button';
 import ConfirmationDialog from '../base/ConfirmationDialog';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 type FileCategory = 'Legal' | 'Financial' | 'Medical' | 'Personal' | 'Other';
 
@@ -127,13 +128,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
+  const formatDate = (dateString: string) => formatMMDDYYYY(dateString);
 
   // Group files by type for display
   const imageFiles = files.filter(f => f.type.startsWith('image/'));

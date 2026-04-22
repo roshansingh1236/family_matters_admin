@@ -11,6 +11,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import Toast from "../../components/base/Toast";
 import ConfirmationDialog from "../../components/base/ConfirmationDialog";
 import { canViewFinancials } from "../../utils/permissions";
+import { formatMMDDYYYY } from "../../utils/dateFormat";
 
 // Helper type for user preview
 type UserPreview = {
@@ -178,7 +179,7 @@ const JourneysPage: React.FC = () => {
       const trimmed = progressNotes.trim();
       if (trimmed) {
         const existing = typeof notes.client_notes === 'string' ? (notes.client_notes as string) : '';
-        const line = `[${new Date().toLocaleDateString()}] ${trimmed}`;
+        const line = `[${formatMMDDYYYY(new Date())}] ${trimmed}`;
         notes.client_notes = existing ? `${existing}\n\n${line}` : line;
         await journeyService.updateJourneyNotes(selectedJourney.id, notes);
       }
@@ -369,7 +370,7 @@ const JourneysPage: React.FC = () => {
   // ─── Helpers ──────────────────────────────────────────────────────────────
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return formatMMDDYYYY(dateStr);
   };
 
   const filteredJourneys = (() => {

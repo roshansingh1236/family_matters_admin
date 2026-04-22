@@ -8,6 +8,7 @@ import { contractService } from '../../services/contractService';
 import type { Contract, ContractEsignStatus } from '../../services/contractService';
 import { useAuth } from '../../contexts/AuthContext';
 import { hasPermission } from '../../utils/permissions';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const CONTRACT_TYPES = [
   { id: 'surrogacy_agreement',    label: 'Surrogacy Agreement',     icon: 'ri-file-text-line',              color: 'bg-blue-100 dark:bg-blue-900 text-rose-500 dark:text-rose-400' },
@@ -188,7 +189,7 @@ const ContractsPage: React.FC = () => {
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white">{c.value ? `$${c.value.toLocaleString()}` : '—'}</p>
-                        <p className="text-xs text-gray-400">{new Date(c.createdAt).toLocaleDateString()}</p>
+                        <p className="text-xs text-gray-400">{formatMMDDYYYY(c.createdAt)}</p>
                       </div>
                     </div>
                   </Card>
@@ -226,7 +227,7 @@ const ContractsPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><span className="text-gray-500">Type:</span> <span className="font-medium">{formatType(selectedContract.type)}</span></div>
                   <div><span className="text-gray-500">Value:</span> <span className="font-medium">{selectedContract.value ? `$${selectedContract.value.toLocaleString()}` : '—'}</span></div>
-                  <div><span className="text-gray-500">Created:</span> <span className="font-medium">{new Date(selectedContract.createdAt).toLocaleDateString()}</span></div>
+                  <div><span className="text-gray-500">Created:</span> <span className="font-medium">{formatMMDDYYYY(selectedContract.createdAt)}</span></div>
                   {selectedContract.journeyId && <div><span className="text-gray-500">Journey:</span> <span className="font-mono text-xs">{selectedContract.journeyId.slice(0,8)}</span></div>}
                 </div>
 
@@ -266,8 +267,8 @@ const ContractsPage: React.FC = () => {
                   <Badge color={esignColor(selectedContract.esignStatus)}>
                     <i className="ri-pen-nib-line mr-1"></i>{selectedContract.esignStatus || 'Not Sent'}
                   </Badge>
-                  {selectedContract.esignSentAt && <span className="text-xs text-gray-400">Sent: {new Date(selectedContract.esignSentAt).toLocaleDateString()}</span>}
-                  {selectedContract.esignSignedAt && <span className="text-xs text-green-600 font-medium">Fully signed: {new Date(selectedContract.esignSignedAt).toLocaleDateString()}</span>}
+                  {selectedContract.esignSentAt && <span className="text-xs text-gray-400">Sent: {formatMMDDYYYY(selectedContract.esignSentAt)}</span>}
+                  {selectedContract.esignSignedAt && <span className="text-xs text-green-600 font-medium">Fully signed: {formatMMDDYYYY(selectedContract.esignSignedAt)}</span>}
                 </div>
 
                 {/* HIPAA / e-sign send stub */}

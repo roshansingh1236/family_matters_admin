@@ -20,6 +20,7 @@ import {
   IP_EMBRYO_RECORDS_TEMPLATE
 } from '../../../constants/jsonTemplates';
 import CreateMatchDialog from '../CreateMatchDialog';
+import AgencyApprovalToggle from '../AgencyApprovalToggle';
 import MedicalReportView from '../MedicalReportView';
 import { IP_STATUSES } from '../../../types';
 import { auditService } from '../../../services/auditService';
@@ -414,6 +415,20 @@ export default function ParentProfileContent({
           </Button>
         )}
         <div className="flex items-center gap-2">
+           {parent && (
+             <AgencyApprovalToggle
+               userId={id!}
+               approved={parent.agency_approved === true}
+               onChange={(approved) => {
+                 setParent((prev: any) => ({ ...prev, agency_approved: approved }));
+                 setToast({
+                   message: approved ? 'User approved for matching' : 'Approval revoked',
+                   type: 'success',
+                 });
+               }}
+               onError={() => setToast({ message: 'Failed to update approval', type: 'error' })}
+             />
+           )}
            {parent && showCreateMatch && <CreateMatchDialog user={parent} />}
            {onClose && (
              <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-gray-500">

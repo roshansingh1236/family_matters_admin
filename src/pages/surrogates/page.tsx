@@ -7,6 +7,7 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import DataSection from '../../components/data/DataSection';
+import AddUserDialog from '../../components/feature/AddUserDialog';
 import type { User, UserStatus } from '../../types';
 import { GC_STATUSES } from '../../types';
 import {
@@ -59,6 +60,7 @@ const SurrogatesPage: React.FC = () => {
   const [surrogates, setSurrogates] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const navigate = useNavigate();
 
   const fetchSurrogates = async () => {
@@ -240,29 +242,38 @@ const SurrogatesPage: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Surrogates Management</h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all registered surrogates and their profiles.</p>
               </div>
-              <div className="flex bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
-                <button
-                  onClick={() => setViewStyle('grid')}
-                  className={`p-2 rounded-md transition-colors cursor-pointer ${
-                    viewStyle === 'grid'
-                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                  }`}
-                  title="Grid View"
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => setIsAddDialogOpen(true)}
+                  className="whitespace-nowrap"
                 >
-                  <i className="ri-layout-grid-line text-lg"></i>
-                </button>
-                <button
-                  onClick={() => setViewStyle('table')}
-                  className={`p-2 rounded-md transition-colors cursor-pointer ${
-                    viewStyle === 'table'
-                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                  }`}
-                  title="Table View"
-                >
-                  <i className="ri-table-line text-lg"></i>
-                </button>
+                  <i className="ri-add-line mr-1"></i>
+                  Add Surrogate
+                </Button>
+                <div className="flex bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
+                  <button
+                    onClick={() => setViewStyle('grid')}
+                    className={`p-2 rounded-md transition-colors cursor-pointer ${
+                      viewStyle === 'grid'
+                        ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }`}
+                    title="Grid View"
+                  >
+                    <i className="ri-layout-grid-line text-lg"></i>
+                  </button>
+                  <button
+                    onClick={() => setViewStyle('table')}
+                    className={`p-2 rounded-md transition-colors cursor-pointer ${
+                      viewStyle === 'table'
+                        ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }`}
+                    title="Table View"
+                  >
+                    <i className="ri-table-line text-lg"></i>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -546,6 +557,13 @@ const SurrogatesPage: React.FC = () => {
           )}
         </main>
       </div>
+
+      <AddUserDialog
+        isOpen={isAddDialogOpen}
+        role="Surrogate"
+        onClose={() => setIsAddDialogOpen(false)}
+        onSuccess={fetchSurrogates}
+      />
     </div>
   );
 };

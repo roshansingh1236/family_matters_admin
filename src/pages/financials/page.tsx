@@ -8,6 +8,7 @@ import { agencyService } from '../../services/agencyService';
 import { reimbursableService } from '../../services/reimbursableService';
 import { useAuth } from '../../contexts/AuthContext';
 import { canViewFinancials, hasPermission } from '../../utils/permissions';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 import type { AgencyTransaction, AgencyFeeInstallment, AgencyReimbursable, ReimbursableCategory, ReimbursableStatus } from '../../types';
 
 const PIPELINE_STAGES = [
@@ -354,7 +355,7 @@ const FinancialsPage: React.FC = () => {
                                 <td className="px-4 py-2 font-mono text-xs text-gray-500">{inst.intendedParentId?.slice(0, 8) || '—'}</td>
                                 <td className="px-4 py-2">#{inst.installmentNumber}</td>
                                 <td className="px-4 py-2 font-semibold">{formatCurrency(inst.amount)}</td>
-                                <td className="px-4 py-2">{new Date(inst.dueDate).toLocaleDateString()}</td>
+                                <td className="px-4 py-2">{formatMMDDYYYY(inst.dueDate)}</td>
                                 <td className="px-4 py-2"><Badge color={c}>{inst.status}</Badge></td>
                                 <td className="px-4 py-2 flex gap-2">
                                   {inst.status !== 'Paid' && inst.status !== 'Waived' && (
@@ -450,7 +451,7 @@ const FinancialsPage: React.FC = () => {
                                 <td className="px-4 py-2 max-w-xs truncate">{r.description}</td>
                                 <td className="px-4 py-2 font-semibold">{formatCurrency(r.amount)}</td>
                                 <td className="px-4 py-2">{r.approvedAmount != null ? formatCurrency(r.approvedAmount) : '—'}</td>
-                                <td className="px-4 py-2">{new Date(r.incurredDate).toLocaleDateString()}</td>
+                                <td className="px-4 py-2">{formatMMDDYYYY(r.incurredDate)}</td>
                                 <td className="px-4 py-2"><Badge color={reimbursableStatusColor(r.status)}>{r.status}</Badge></td>
                                 <td className="px-4 py-2">{r.receiptUrl ? <a href={r.receiptUrl} target="_blank" rel="noreferrer" className="text-blue-500 text-xs hover:underline">View</a> : '—'}</td>
                                 <td className="px-4 py-2">
@@ -568,7 +569,7 @@ const FinancialsPage: React.FC = () => {
                         ) : (
                           transactions.map(t => (
                             <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                              <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300">{new Date(t.date).toLocaleDateString()}</td>
+                              <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300">{formatMMDDYYYY(t.date)}</td>
                               <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
                                 {t.description}
                                 {t.journeyId && <span className="block text-xs text-gray-500">Ref: {t.journeyId.slice(0,8)}</span>}

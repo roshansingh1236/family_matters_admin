@@ -7,6 +7,7 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import DataSection from '../../components/data/DataSection';
+import AddUserDialog from '../../components/feature/AddUserDialog';
 import type { User, UserStatus } from '../../types';
 import { IP_STATUSES } from '../../types';
 
@@ -55,6 +56,7 @@ const ParentsPage: React.FC = () => {
   const [parents, setParents] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const navigate = useNavigate();
 
   const fetchParents = async () => {
@@ -216,29 +218,38 @@ const ParentsPage: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Intended Parents</h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all intended parents and their journey progress.</p>
               </div>
-              <div className="flex bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
-                <button
-                  onClick={() => setViewStyle('grid')}
-                  className={`p-2 rounded-md transition-colors cursor-pointer ${
-                    viewStyle === 'grid'
-                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                  }`}
-                  title="Grid View"
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => setIsAddDialogOpen(true)}
+                  className="whitespace-nowrap"
                 >
-                  <i className="ri-layout-grid-line text-lg"></i>
-                </button>
-                <button
-                  onClick={() => setViewStyle('table')}
-                  className={`p-2 rounded-md transition-colors cursor-pointer ${
-                    viewStyle === 'table'
-                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                  }`}
-                  title="Table View"
-                >
-                  <i className="ri-table-line text-lg"></i>
-                </button>
+                  <i className="ri-add-line mr-1"></i>
+                  Add Intended Parent
+                </Button>
+                <div className="flex bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
+                  <button
+                    onClick={() => setViewStyle('grid')}
+                    className={`p-2 rounded-md transition-colors cursor-pointer ${
+                      viewStyle === 'grid'
+                        ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }`}
+                    title="Grid View"
+                  >
+                    <i className="ri-layout-grid-line text-lg"></i>
+                  </button>
+                  <button
+                    onClick={() => setViewStyle('table')}
+                    className={`p-2 rounded-md transition-colors cursor-pointer ${
+                      viewStyle === 'table'
+                        ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }`}
+                    title="Table View"
+                  >
+                    <i className="ri-table-line text-lg"></i>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -521,6 +532,13 @@ const ParentsPage: React.FC = () => {
           )}
         </main>
       </div>
+
+      <AddUserDialog
+        isOpen={isAddDialogOpen}
+        role="Intended Parent"
+        onClose={() => setIsAddDialogOpen(false)}
+        onSuccess={fetchParents}
+      />
     </div>
   );
 };

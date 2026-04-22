@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Badge from '../../components/base/Badge';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -147,7 +148,7 @@ const HomePage: React.FC = () => {
 
   const formatDate = (value: Date | null) => {
     if (!value) return '—';
-    return value.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return formatMMDDYYYY(value);
   };
 
   const recentRequests = useMemo(() => {

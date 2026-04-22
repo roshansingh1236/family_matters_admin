@@ -7,6 +7,7 @@ import Button from '../../components/base/Button';
 import Toast from '../../components/base/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import DataSection from '../../components/data/DataSection';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const SettingsPage: React.FC = () => {
   const { user, profile, profileLoading } = useAuth();
@@ -81,7 +82,7 @@ const SettingsPage: React.FC = () => {
 
   const memberSince = useMemo(() => {
     if (user?.metadata?.creationTime) {
-      return new Date(user.metadata.creationTime).toLocaleDateString();
+      return formatMMDDYYYY(user.metadata.creationTime);
     }
     return null;
   }, [user]);

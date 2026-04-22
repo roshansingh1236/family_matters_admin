@@ -8,6 +8,7 @@ import Badge from '../../components/base/Badge';
 import { inquiryService } from '../../services/inquiryService';
 import RecordInquiryDialog from '../../components/feature/RecordInquiryDialog';
 import type { User } from '../../types';
+import { formatMMDDYYYYOr } from '../../utils/dateFormat';
 
 const InquiriesPage: React.FC = () => {
   const [inquiries, setInquiries] = useState<User[]>([]);
@@ -40,6 +41,19 @@ const InquiriesPage: React.FC = () => {
     } catch (error) {
       alert('Failed to update status');
     }
+  };
+
+  // Resolves the human-readable inquiry source for a user. Prefers the
+  // dedicated `inquiry_source` column but falls back to `data.inquirySource`
+  // for rows written before the column existed.
+  const inquirySourceOf = (user: User): string => {
+    const direct = (user as Record<string, unknown>).inquiry_source;
+    if (typeof direct === 'string' && direct.trim()) return direct;
+    const blob = (user as Record<string, unknown>).data as Record<string, unknown> | undefined;
+    if (blob && typeof blob.inquirySource === 'string' && blob.inquirySource.trim()) {
+      return blob.inquirySource;
+    }
+    return '—';
   };
 
   const handeArchive = async (userId: string) => {
@@ -141,7 +155,13 @@ const InquiriesPage: React.FC = () => {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Received:</span>
                       <span className="text-gray-900 dark:text-white">
-                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                        {formatMMDDYYYYOr(user.createdAt)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Source:</span>
+                      <span className="text-gray-900 dark:text-white">
+                        {inquirySourceOf(user)}
                       </span>
                     </div>
                   </div>
@@ -185,6 +205,7 @@ const InquiriesPage: React.FC = () => {
                     <tr>
                       <th className="px-6 py-3 font-semibold">Name</th>
                       <th className="px-6 py-3 font-semibold">Email</th>
+                      <th className="px-6 py-3 font-semibold">Source</th>
                       <th className="px-6 py-3 font-semibold">Date Received</th>
                       <th className="px-6 py-3 font-semibold">Status</th>
                       <th className="px-6 py-3 font-semibold text-right">Actions</th>
@@ -204,7 +225,10 @@ const InquiriesPage: React.FC = () => {
                           </a>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                          {inquirySourceOf(user)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                          {formatMMDDYYYYOr(user.createdAt)}
                         </td>
                         <td className="px-6 py-4">
                           <Badge color="blue">{user.status as string}</Badge>
