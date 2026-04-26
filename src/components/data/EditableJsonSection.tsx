@@ -131,8 +131,13 @@ const EditableJsonSection: React.FC<EditableJsonSectionProps> = ({
           </div>
         </>
       ) : (
-        <DataSection title="" data={data ?? undefined} emptyMessage={emptyMessage} />
+        <DataSection 
+          title="" 
+          data={data && Object.keys(data).length > 0 ? { ...(templateData || {}), ...data } : (templateData || data || undefined)} 
+          emptyMessage={emptyMessage} 
+        />
       )}
+
     </div>
   );
 };

@@ -99,6 +99,128 @@ const LabTestRow: React.FC<{ row: LabRow }> = ({ row }) => (
   </div>
 );
 
+const DocumentPreviewModal: React.FC<{ url: string; onClose: () => void }> = ({ url, onClose }) => {
+  const [zoom, setZoom] = useState(1);
+  const isPdf = url.toLowerCase().split('?')[0].endsWith('.pdf');
+
+  // Lock body scroll
+  React.useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="relative w-full max-w-6xl h-full bg-white dark:bg-[#15111f] rounded-3xl overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5 bg-white dark:bg-[#15111f]">
+           <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                 <i className={isPdf ? "ri-file-pdf-line text-xl" : "ri-image-line text-xl"}></i>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">Document Preview</h3>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider">{isPdf ? 'PDF Document' : 'Image File'}</p>
+              </div>
+           </div>
+           
+           <div className="flex items-center gap-3">
+              {!isPdf && (
+                <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-white/5 rounded-xl text-xs border border-gray-200 dark:border-white/5">
+                   <button 
+                    onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
+                    className="p-1.5 hover:bg-white dark:hover:bg-white/10 rounded-lg transition-colors text-gray-500 dark:text-white/60"
+                   >
+                    <i className="ri-zoom-out-line text-base"></i>
+                   </button>
+                   <span className="px-2 font-mono font-bold text-gray-900 dark:text-white w-12 text-center">{Math.round(zoom * 100)}%</span>
+                   <button 
+                    onClick={() => setZoom(Math.min(3, zoom + 0.25))}
+                    className="p-1.5 hover:bg-white dark:hover:bg-white/10 rounded-lg transition-colors text-gray-500 dark:text-white/60"
+                   >
+                    <i className="ri-zoom-in-line text-base"></i>
+                   </button>
+                </div>
+              )}
+              
+              <a 
+                href={url} 
+                download 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/20 transition-all"
+              >
+                <i className="ri-download-2-line"></i> Download
+              </a>
+              
+              <button 
+                onClick={onClose} 
+                className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-xl transition-colors text-gray-400 dark:text-white/40 dark:hover:text-white"
+              >
+                <i className="ri-close-line text-2xl"></i>
+              </button>
+           </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto bg-gray-50 dark:bg-black/40 flex items-center justify-center p-4 sm:p-12">
+           {isPdf ? (
+              <iframe 
+                src={`${url}#toolbar=0`} 
+                className="w-full h-full rounded-xl border border-gray-200 dark:border-white/10 shadow-lg bg-white"
+              />
+           ) : (
+              <div 
+                className="transition-transform duration-200 ease-out"
+                style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+              >
+                <img 
+                  src={url} 
+                  alt="Preview" 
+                  className="max-w-full max-h-[70vh] rounded-xl shadow-2xl border border-gray-200 dark:border-white/10 bg-white" 
+                />
+              </div>
+           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DocumentLinks: React.FC<{ urls?: string[]; label: string; onPreview: (url: string) => void }> = ({ urls, label, onPreview }) => {
+  if (!urls || urls.length === 0) return null;
+  return (
+    <div className="py-2.5 border-b border-gray-100 dark:border-white/5 last:border-0">
+      <p className="text-[10px] font-black uppercase tracking-[0.1em] text-gray-400 mb-2.5">{label}</p>
+      <div className="flex flex-wrap gap-2.5">
+        {urls.map((url, i) => {
+          const isPdf = url.toLowerCase().split('?')[0].endsWith('.pdf');
+          return (
+            <button
+              key={i}
+              onClick={() => onPreview(url)}
+              className="group inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-gray-100 dark:border-white/10 shadow-sm hover:shadow-md hover:border-blue-200 dark:hover:border-blue-500/30 transition-all text-left"
+            >
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isPdf ? 'bg-red-50 dark:bg-red-500/10 text-red-500' : 'bg-blue-50 dark:bg-blue-500/10 text-blue-500'}`}>
+                <i className={isPdf ? "ri-file-pdf-line text-base" : "ri-image-line text-base"}></i>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-gray-900 dark:text-white leading-none">Report {i + 1}</p>
+                <p className="text-[9px] text-gray-400 mt-1 uppercase tracking-tighter">Click to Preview</p>
+              </div>
+              <div className="ml-2 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 bg-gray-50 dark:bg-white/10 transition-opacity">
+                <i className="ri-eye-line text-xs text-blue-500"></i>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  );
+};
+
 const SectionCard: React.FC<{
   title: string;
   icon: string;
@@ -106,7 +228,7 @@ const SectionCard: React.FC<{
   children: React.ReactNode;
   badge?: React.ReactNode;
 }> = ({ title, icon, accentColor, children, badge }) => (
-  <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5 overflow-hidden shadow-sm">
+  <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
     <div className={`flex items-center justify-between px-5 py-3.5 border-b border-rose-100/60 dark:border-white/5 bg-gradient-to-r ${accentColor}`}>
       <div className="flex items-center gap-2.5">
         <i className={`${icon} text-base`}></i>
@@ -128,9 +250,10 @@ export default function MedicalReportView({
   screeningStatus,
   onUpdateScreeningStatus,
 }: MedicalReportViewProps) {
-  const [editingStatus, setEditingStatus] = useState(false);
+   const [editingStatus, setEditingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState(screeningStatus ?? 'Not Started');
   const [downloading, setDownloading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
   const handleDownloadPdf = async () => {
@@ -201,11 +324,11 @@ export default function MedicalReportView({
   ] : [];
 
   const ipInfectiousRows: LabRow[] = userType === 'parent' ? [
-    { test: 'HIV', result: data?.infectiousDisease?.hiv ?? fd?.infectiousDisease?.hiv ?? '', status: inferStatus(data?.infectiousDisease?.hiv ?? fd?.infectiousDisease?.hiv) },
-    { test: 'HBsAg', result: data?.infectiousDisease?.hbsag ?? fd?.infectiousDisease?.hbsag ?? '', status: inferStatus(data?.infectiousDisease?.hbsag ?? fd?.infectiousDisease?.hbsag) },
-    { test: 'HCV', result: data?.infectiousDisease?.hcv ?? fd?.infectiousDisease?.hcv ?? '', status: inferStatus(data?.infectiousDisease?.hcv ?? fd?.infectiousDisease?.hcv) },
-    { test: 'VDRL (Syphilis)', result: data?.infectiousDisease?.vdrl ?? fd?.infectiousDisease?.vdrl ?? '', status: inferStatus(data?.infectiousDisease?.vdrl ?? fd?.infectiousDisease?.vdrl) },
-    { test: 'CMV (Cytomegalovirus)', result: data?.infectiousDisease?.cmv ?? fd?.infectiousDisease?.cmv ?? '', status: inferStatus(data?.infectiousDisease?.cmv ?? fd?.infectiousDisease?.cmv) },
+    { test: 'HIV', result: data?.form2Data?.infectiousDisease?.hiv ?? data?.infectiousDisease?.hiv ?? fd?.infectiousDisease?.hiv ?? fd?.ip_additional?.hiv ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.hiv ?? data?.infectiousDisease?.hiv ?? fd?.infectiousDisease?.hiv ?? fd?.ip_additional?.hiv) },
+    { test: 'HBsAg', result: data?.form2Data?.infectiousDisease?.hbsag ?? data?.infectiousDisease?.hbsag ?? fd?.infectiousDisease?.hbsag ?? fd?.ip_additional?.hbsag ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.hbsag ?? data?.infectiousDisease?.hbsag ?? fd?.infectiousDisease?.hbsag ?? fd?.ip_additional?.hbsag) },
+    { test: 'HCV', result: data?.form2Data?.infectiousDisease?.hcv ?? data?.infectiousDisease?.hcv ?? fd?.infectiousDisease?.hcv ?? fd?.ip_additional?.hcv ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.hcv ?? data?.infectiousDisease?.hcv ?? fd?.infectiousDisease?.hcv ?? fd?.ip_additional?.hcv) },
+    { test: 'VDRL (Syphilis)', result: data?.form2Data?.infectiousDisease?.vdrl ?? data?.infectiousDisease?.vdrl ?? fd?.infectiousDisease?.vdrl ?? fd?.ip_additional?.vdrl ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.vdrl ?? data?.infectiousDisease?.vdrl ?? fd?.infectiousDisease?.vdrl ?? fd?.ip_additional?.vdrl) },
+    { test: 'CMV (Cytomegalovirus)', result: data?.form2Data?.infectiousDisease?.cmv ?? data?.infectiousDisease?.cmv ?? fd?.infectiousDisease?.cmv ?? fd?.ip_additional?.cmv ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.cmv ?? data?.infectiousDisease?.cmv ?? fd?.infectiousDisease?.cmv ?? fd?.ip_additional?.cmv) },
   ] : [];
 
   const overallClearanceStatus: ResultStatus = (() => {
@@ -381,22 +504,23 @@ export default function MedicalReportView({
 
           {/* Fertility Assessment */}
           <SectionCard title="Fertility Assessment" icon="ri-test-tube-line" accentColor="from-pink-50 to-rose-50/50 dark:from-pink-500/10 dark:to-transparent text-pink-700 dark:text-pink-300">
-            <FieldRow label="IVF Evaluation Summary" value={data?.fertility?.ivfEvaluationSummary ?? data?.medicalReports?.ivfEvaluationSummary} />
-            <FieldRow label="Ovarian Reserve (AMH)" value={data?.fertility?.ovarianReserveAMH ?? data?.medicalReports?.ovarianReserveAMH} />
-            <FieldRow label="Semen Analysis" value={data?.fertility?.semenAnalysis ?? data?.medicalReports?.semenAnalysis} />
-            <FieldRow label="Diagnosis" value={data?.fertility?.diagnosis ?? data?.medicalReports?.diagnosis} />
-            <FieldRow label="Embryo Report" value={data?.fertility?.embryoReport} />
-            <FieldRow label="Genetic Testing" value={data?.fertility?.geneticTesting} />
+            <FieldRow label="IVF Evaluation Summary" value={data?.form2Data?.fertility?.ivfEvaluationSummary ?? data?.fertility?.ivfEvaluationSummary ?? data?.medicalReports?.ivfEvaluationSummary ?? fd?.ip_additional?.ivf_evaluation_summary} />
+            <FieldRow label="Ovarian Reserve (AMH)" value={data?.form2Data?.fertility?.ovarianReserveAMH ?? data?.fertility?.ovarianReserveAMH ?? data?.medicalReports?.ovarianReserveAMH ?? fd?.ip_additional?.ovarian_reserve_amh} />
+            <FieldRow label="Semen Analysis" value={data?.form2Data?.fertility?.semenAnalysis ?? data?.fertility?.semenAnalysis ?? data?.medicalReports?.semenAnalysis ?? fd?.ip_additional?.semen_analysis} />
+            <FieldRow label="Diagnosis" value={data?.form2Data?.fertility?.diagnosis ?? data?.fertility?.diagnosis ?? data?.medicalReports?.diagnosis ?? fd?.ip_additional?.diagnosis} />
+            <FieldRow label="Embryo Report" value={data?.fertility?.embryoReport ?? data?.form2Data?.fertility?.embryoReport} />
+            <FieldRow label="Genetic Testing" value={data?.fertility?.geneticTesting ?? data?.form2Data?.fertility?.geneticTesting} />
           </SectionCard>
 
-          {/* Embryo Records */}
+           {/* Embryo Records */}
           <SectionCard title="Embryo Records" icon="ri-seedling-line" accentColor="from-amber-50 to-yellow-50/50 dark:from-amber-500/10 dark:to-transparent text-amber-700 dark:text-amber-300">
             <FieldRow label="Embryos Available" value={data?.form2Data?.embryosAvailable} />
             <FieldRow label="Embryo Quality" value={data?.form2Data?.embryoQuality} />
             <FieldRow label="Embryo Freezing Report" value={data?.embryoRecords?.embryoFreezingReport ?? data?.medicalReports?.embryoFreezingReport} />
             <FieldRow label="Donor Screening Report" value={data?.embryoRecords?.donorScreeningReport ?? data?.medicalReports?.donorScreeningReport} />
+            <DocumentLinks urls={data?.ipAdditional?.embryo_records_urls || fd?.ip_additional?.embryo_records_urls} label="Uploaded Embryo Records" onPreview={setPreviewUrl} />
           </SectionCard>
-
+          
           {/* Infectious Disease */}
           <SectionCard
             title="Infectious Disease Panel"
@@ -411,12 +535,14 @@ export default function MedicalReportView({
             }
           >
             {ipInfectiousRows.map(row => <LabTestRow key={row.test} row={row} />)}
+            <DocumentLinks urls={data?.ipAdditional?.disease_screening_urls || fd?.ip_additional?.disease_screening_urls} label="Uploaded Screening Reports" onPreview={setPreviewUrl} />
           </SectionCard>
-
+          
           {/* Medical History */}
           <SectionCard title="Medical History" icon="ri-file-text-line" accentColor="from-blue-50 to-indigo-50/50 dark:from-blue-500/10 dark:to-transparent text-blue-700 dark:text-blue-300">
             <FieldRow label="General Medical History" value={data?.form2Data?.medicalHistory} />
             <FieldRow label="Budget" value={data?.form2Data?.surrogacyBudget} />
+            <DocumentLinks urls={data?.ipAdditional?.fertility_report_urls || fd?.ip_additional?.fertility_report_urls} label="Uploaded Fertility Reports" onPreview={setPreviewUrl} />
           </SectionCard>
         </>
       )}
@@ -429,6 +555,14 @@ export default function MedicalReportView({
       </div>
 
       </div>{/* end reportRef */}
+
+      {/* ── Document Preview Modal ─────────────────────────────────────────── */}
+      {previewUrl && (
+        <DocumentPreviewModal 
+          url={previewUrl} 
+          onClose={() => setPreviewUrl(null)} 
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 import Card from '../../base/Card';
 import Button from '../../base/Button';
+import Badge from '../../base/Badge';
 import EditableJsonSection from '../../data/EditableJsonSection';
 import CoreProfileCard from '../../data/CoreProfileCard';
 import AboutSection from '../AboutSection';
@@ -17,13 +18,16 @@ import {
   IP_SURROGATE_RELATED_TEMPLATE,
   IP_FERTILITY_QUESTIONS_TEMPLATE,
   IP_INFECTIOUS_DISEASE_TEMPLATE,
-  IP_EMBRYO_RECORDS_TEMPLATE
+  IP_EMBRYO_RECORDS_TEMPLATE,
+  INITIAL_APPLICATION_TEMPLATE
 } from '../../../constants/jsonTemplates';
+
 import CreateMatchDialog from '../CreateMatchDialog';
 import AgencyApprovalToggle from '../AgencyApprovalToggle';
 import MedicalReportView from '../MedicalReportView';
 import { IP_STATUSES } from '../../../types';
 import { auditService } from '../../../services/auditService';
+import { resolveParentAdditionalProfile } from '../../../utils/surrogateFormData';
 
 interface ParentProfileContentProps {
   id: string;
@@ -35,49 +39,96 @@ interface ParentProfileContentProps {
 const PARENT_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
 
 function parentStateFromRow(data: Record<string, any>) {
-  const fd = data.form_data ?? data.formData ?? {};
+  const resolveJson = (v: any) => {
+    if (typeof v === 'string') {
+      try { return JSON.parse(v); } catch (e) { return v; }
+    }
+    return v;
+  };
+
+  const colFd = resolveJson(data.form_data ?? data.formData ?? {});
+  const colF2D = resolveJson(data.form2_data ?? data.form2Data ?? {});
+  
+  const getNested = (obj: any) => (obj && typeof obj === 'object' && obj.form_data && typeof obj.form_data === 'object' && !Array.isArray(obj.form_data)) ? obj.form_data : null;
+  const fd = {
+    ...colFd,
+    ...(getNested(colFd) || {}),
+    ...(colF2D || {}),
+    ...(getNested(colF2D) || {})
+  };
+
   const firstName = data.first_name ?? data.firstName ?? fd.firstName ?? fd.first_name;
   const lastName = data.last_name ?? data.lastName ?? fd.lastName ?? fd.last_name;
-  const profileCompletedAt =
-    data.profile_completed_at ??
-    data.profileCompletedAt ??
-    fd.profileCompletedAt ??
-    fd.profile_completed_at ??
-    '';
-  const form2CompletedAt =
-    data.form_2_completed_at ??
-    data.form2_completed_at ??
-    data.form2CompletedAt ??
-    fd.form2CompletedAt ??
-    fd.form_2_completed_at ??
-    '';
+  
+  const isPopulated = (v: any) => v && typeof v === 'object' && Object.keys(v).length > 0;
+
+  const ipAdd = resolveJson(fd.ip_additional ?? {});
+  let p1 = resolveJson(data.parent1 ?? fd.parent1 ?? fd.parent_1 ?? fd.form1 ?? fd.form_1 ?? ipAdd?.parent1);
+  let p2 = resolveJson(data.parent2 ?? fd.parent2 ?? fd.parent_2 ?? fd.form2 ?? fd.form_2 ?? ipAdd?.parent2);
+  let fer = resolveJson(fd.fertility_questions ?? fd.fertility ?? ipAdd?.fertility ?? ipAdd);
+  let surr = resolveJson(data.surrogate_related ?? data.surrogateRelated ?? fd.surrogate_related ?? fd.surrogateRelated ?? fd.questions ?? ipAdd?.surrogate_related);
+
+  // Aggressive Parent 2 resolution: check if colF2D itself is the Parent 2 object
+  if (!isPopulated(p2) && isPopulated(colF2D) && (colF2D.name || colF2D.address || colF2D.occupation)) {
+    p2 = colF2D;
+  }
+
+  // Fallback for Parent 1 if missing but root fields exist (from initial registration)
+  if (!isPopulated(p1) && (firstName || lastName || data.email || fd.email || fd.phone || fd.phoneNumber)) {
+    p1 = {
+      ...(p1 || {}),
+      name: p1?.name || [firstName, lastName].filter(Boolean).join(' '),
+      email: p1?.email || fd.email || data.email,
+      phone: p1?.phone || fd.phone || fd.phoneNumber || data.phone_number,
+      address: p1?.address || fd.address || [fd.city, fd.state].filter(Boolean).join(', '),
+      gender: p1?.gender || fd.gender,
+      occupation: p1?.occupation || fd.occupation,
+      age: p1?.age || fd.age
+    };
+  }
+
+  // Fallback for Parent 2 if missing but partner fields exist (from initial registration)
+  if (!isPopulated(p2) && (fd.partnerFirstName || fd.partnerLastName)) {
+    p2 = {
+      ...(p2 || {}),
+      name: p2?.name || [fd.partnerFirstName, fd.partnerLastName].filter(Boolean).join(' '),
+      gender: p2?.gender || fd.partnerGender,
+    };
+  }
+
+  // Ensure fer is an object (it might be ipAdd if others are missing)
+  if (fer && typeof fer !== 'object') fer = { details: String(fer) };
+  if (!isPopulated(fer)) {
+     if (fd.clinic) fer = { fertility_doctor: fd.clinic };
+  }
+
+  // Ensure surr is an object (it might be fd.questions string if others are missing)
+  if (surr && typeof surr !== 'object') surr = { additional_info_for_surrogate: String(surr) };
+  if (!isPopulated(surr)) {
+      if (fd.whySurrogate || fd.message) surr = { additional_info_for_surrogate: fd.whySurrogate || fd.message };
+  }
+
   return {
     ...data,
     firstName: firstName ?? data.firstName,
     lastName: lastName ?? data.lastName,
-    profileCompletedAt,
-    form2CompletedAt,
     formData: fd,
-    parent1: data.parent1 ?? fd.parent1 ?? null,
-    parent2: data.parent2 ?? fd.parent2 ?? null,
-    form2Data: data.form2_data ?? data.form2Data ?? fd.parent2 ?? null,
-    surrogateRelated: data.surrogate_related ?? data.surrogateRelated ?? fd.surrogate_related ?? null,
-    medicalReports: data.medical_reports ?? fd.medical_reports ?? null,
-    fertility: fd.fertility ?? null,
+    ipAdditional: ipAdd || null,
+    parent1: isPopulated(p1) ? p1 : null,
+    parent2: isPopulated(p2) ? p2 : null,
+    fertility: isPopulated(fer) ? fer : null,
+    surrogateRelated: isPopulated(surr) ? surr : null,
+    form2Data: resolveParentAdditionalProfile(fd, data),
     form2Completed: data.form_2_completed ?? data.form2Completed ?? false,
     profileCompleted: data.profile_completed ?? data.profileCompleted ?? false,
-    updatedAt: data.updated_at ?? data.updatedAt,
-    createdAt: data.created_at ?? data.createdAt,
   };
 }
 
 const TABS = [
     { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line' },
-    { id: 'about', label: 'About', icon: 'ri-information-line' },
-    { id: 'personal', label: 'Personal', icon: 'ri-user-line' },
-    { id: 'medical_report', label: 'Medical Report', icon: 'ri-heart-pulse-line' },
-    { id: 'medical', label: 'Medical & Fertility', icon: 'ri-stethoscope-line' },
-    { id: 'intake', label: 'Intake & Preferences', icon: 'ri-file-list-3-line' },
+    { id: 'application', label: 'Signup & App', icon: 'ri-file-user-line' },
+    { id: 'personal', label: 'Detailed Application (Form 2)', icon: 'ri-profile-line' },
+    { id: 'medical', label: 'Medical & Fertility', icon: 'ri-heart-pulse-line' },
     { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
 ] as const;
 
@@ -489,95 +540,76 @@ export default function ParentProfileContent({
       </div>
 
       <div className="space-y-6">
-        {activeTab === 'overview' && (
-            <>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    {summaryCards.map((card) => (
-                        <Card key={card.label} padding="sm" className={`${card.className} border-none shadow-sm backdrop-blur`}>
-                            <div className="flex items-start justify-between">
-                                <div><p className="text-xs font-semibold uppercase opacity-70">{card.label}</p><p className="mt-2 text-lg font-semibold">{card.value}</p></div>
-                                <span className="text-xl opacity-70"><i className={card.icon}></i></span>
-                            </div>
-                        </Card>
-                    ))}
-                </div>
-                <CoreProfileCard
-                  data={Object.fromEntries(PARENT_CORE_FIELDS.map((f) => [f, parent[f]])) as Record<string, unknown>}
-                  fieldOrder={PARENT_CORE_FIELDS}
-                  onSave={handleUpdateCore}
-                  title="Core profile"
-                  subtitle="Identity, role, and completion state stored on the user record (synced with the parent app)."
-                />
-                {parent.formData && Object.keys(parent.formData).length > 0 && (
-                  <Card>
-                    <div className="p-4">
-                      <p className="text-xs font-semibold uppercase text-gray-500 mb-2">Form Data Keys Saved (from App)</p>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.keys(parent.formData).map((k) => (
-                          <span key={k} className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 px-3 py-1 text-xs font-medium">
-                            <i className="ri-key-line text-xs"></i> {k}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </Card>
-                )}
-            </>
-        )}
-
-        {activeTab === 'about' && (
-             <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                <div className="xl:col-span-5 space-y-4">
-                    <div className="columns-1 gap-4 sm:columns-2 space-y-4">
-                        {parent.profileImageUrl && <div className="rounded-2xl overflow-hidden shadow-md"><img src={parent.profileImageUrl} alt="" className="w-full"/></div>}
-                        {parent.documents?.filter((d: any) => d.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(d.name)).map((doc: any) => (
-                            <div key={doc.url} className="rounded-2xl overflow-hidden shadow-md"><img src={doc.url} alt="" className="w-full transition-transform hover:scale-105"/></div>
+            {activeTab === 'overview' && (
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 lg:col-span-2">
+                        {summaryCards.map((card) => (
+                            <Card key={card.label} padding="sm" className={`${card.className} border-none shadow-sm backdrop-blur`}>
+                                <div className="flex items-start justify-between">
+                                    <div><p className="text-xs font-semibold uppercase opacity-70">{card.label}</p><p className="mt-2 text-lg font-semibold">{card.value}</p></div>
+                                    <span className="text-xl opacity-70"><i className={card.icon}></i></span>
+                                </div>
+                            </Card>
                         ))}
                     </div>
+                    <CoreProfileCard
+                        data={Object.fromEntries(PARENT_CORE_FIELDS.map((f) => [f, parent[f]])) as Record<string, unknown>}
+                        fieldOrder={PARENT_CORE_FIELDS}
+                        onSave={handleUpdateCore}
+                        title="Core Profile State"
+                        subtitle="Identity flags & system completion status."
+                    />
+                    <Card><AboutSection title="Public Biography" data={parent.about || {}} type="parent" templateData={ABOUT_PARENT_TEMPLATE} onSave={(v: any) => handleUpdateField('about', v)} /></Card>
                 </div>
-                <div className="xl:col-span-7">                <Card><AboutSection title={`About ${displayName}`} data={aboutData} type="parent" templateData={ABOUT_PARENT_TEMPLATE} onSave={(v: any) => handleUpdateField('about', v)} /></Card></div>
-            </div>
-        )}
+            )}
 
-        {activeTab === 'personal' && (
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <Card><EditableJsonSection title="Parent 1 (from App)" description="Personal information submitted by Parent 1 through the mobile app" data={parent.parent1 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent1', v)} /></Card>
-                <Card><EditableJsonSection title="Parent 2 (from App)" description="Personal information submitted by Parent 2 through the mobile app" data={parent.parent2 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent2', v)} /></Card>
-            </div>
-        )}
+            {activeTab === 'application' && (
+                <div className="grid grid-cols-1 gap-6">
+                    <Card>
+                        <EditableJsonSection 
+                            title="Initial Application & Signup Info" 
+                            description="Data collected during the initial signup (Form 1 equivalent)."
+                            data={parent.formData || null} 
+                            templateData={INITIAL_APPLICATION_TEMPLATE} 
+                            onSave={(v: any) => handleUpdateField('form_data', v)} 
+                        />
+                    </Card>
+                </div>
+            )}
 
-        {activeTab === 'medical_report' && (
-            <MedicalReportView
-                userType="parent"
-                data={parent}
-                name={displayName}
-                userId={parent.id}
-            />
-        )}
+            {activeTab === 'personal' && (
+                <div className="grid grid-cols-1 gap-6">
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                        <Card><EditableJsonSection title="Parent 1 (from App)" description="Personal information submitted by Parent 1 through the mobile app" data={parent.parent1 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent1', v)} /></Card>
+                        <Card><EditableJsonSection title="Parent 2 (from App)" description="Personal information submitted by Parent 2 through the mobile app" data={parent.parent2 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent2', v)} /></Card>
+                    </div>
+                    <Card><EditableJsonSection title="Fertility & Embryos" description="Embryo & fertility information submitted through the mobile app" data={parent.fertility || null} templateData={IP_FERTILITY_QUESTIONS_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.fertility', v)} /></Card>
+                    <Card><EditableJsonSection title="Surrogate Preferences" description="Surrogate relationship preferences submitted through the mobile app" data={parent.surrogateRelated || null} templateData={IP_SURROGATE_RELATED_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.surrogate_related', v)} /></Card>
+                    <Card><EditableJsonSection title="Resolved Profile (Form 2 Merge)" description="Combined data resolved from all Form 2 sources" data={parent.form2Data || null} onSave={(v: any) => handleUpdateField('form2_data', v)} /></Card>
+                </div>
+            )}
 
-        {activeTab === 'medical' && (
-             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <Card className="xl:col-span-2"><EditableJsonSection title="Medical Reports (from App)" description="Lab results and fertility reports submitted through the mobile app" data={parent.medicalReports || null} templateData={IP_MEDICAL_REPORTS_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.medical_reports', v)} /></Card>
-                <Card><EditableJsonSection title="Fertility Questions (from App)" description="Embryo & fertility information submitted through the mobile app" data={parent.fertility || null} templateData={IP_FERTILITY_QUESTIONS_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.fertility', v)} /></Card>
-                <Card><EditableJsonSection title="Infectious Disease (Admin)" data={parent.form2Data?.infectiousDisease || null} templateData={IP_INFECTIOUS_DISEASE_TEMPLATE} onSave={(v: any) => handleUpdateField('form2Data.infectiousDisease', v)} /></Card>
-                <Card><EditableJsonSection title="Embryo Records (Admin)" data={parent.form2Data?.embryoRecords || null} templateData={IP_EMBRYO_RECORDS_TEMPLATE} onSave={(v: any) => handleUpdateField('form2Data.embryoRecords', v)} /></Card>
-            </div>
-        )}
+            {activeTab === 'medical' && (
+                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    <Card className="xl:col-span-2">
+                        <MedicalReportView userType="parent" data={parent} name={displayName} userId={parent.id} />
+                    </Card>
+                    <Card><EditableJsonSection title="Medical Reports (Raw)" description="Raw medical data structure stored in form_data" data={parent.formData?.medical_reports || null} templateData={IP_MEDICAL_REPORTS_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.medical_reports', v)} /></Card>
+                    <Card><EditableJsonSection title="Infectious Disease" data={parent.form2Data?.infectiousDisease || null} templateData={IP_INFECTIOUS_DISEASE_TEMPLATE} onSave={(v: any) => handleUpdateField('form2Data.infectiousDisease', v)} /></Card>
+                    <Card><EditableJsonSection title="Embryo Records" data={parent.form2Data?.embryoRecords || null} templateData={IP_EMBRYO_RECORDS_TEMPLATE} onSave={(v: any) => handleUpdateField('form2Data.embryoRecords', v)} /></Card>
+                </div>
+            )}
 
-        {activeTab === 'intake' && (
-             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <Card><EditableJsonSection title="Parent 1 – Full Form" description="Complete form submission from Parent 1 in the mobile app" data={parent.parent1 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent1', v)} /></Card>
-                <Card><EditableJsonSection title="Parent 2 – Full Form" description="Complete form submission from Parent 2 in the mobile app" data={parent.parent2 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent2', v)} /></Card>
-                <Card className="xl:col-span-2"><EditableJsonSection title="Surrogate-Related Preferences" description="How parents feel about their relationship with the surrogate (from app)" data={parent.surrogateRelated || null} templateData={IP_SURROGATE_RELATED_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.surrogate_related', v)} /></Card>
-                <Card className="xl:col-span-2"><EditableJsonSection title="Fertility & Embryo Questions" description="Fertility questions submitted through the mobile app" data={parent.fertility || null} templateData={IP_FERTILITY_QUESTIONS_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.fertility', v)} /></Card>
-            </div>
-        )}
-
-        {activeTab === 'documents' && (
-            <Card>
-                <FileUploadSection title="Documents" userId={parent.id} files={parent.documents ?? []} onFilesChange={(f: any) => handleUpdateField('documents', f)} />
-            </Card>
-        )}
+            {activeTab === 'documents' && (
+                <Card>
+                    <FileUploadSection 
+                        title="Document Vault" 
+                        userId={id} 
+                        bucket={STORAGE_BUCKETS.USERS} 
+                        folder={`${id}/documents`} 
+                    />
+                </Card>
+            )}
       </div>
     </div>
   );

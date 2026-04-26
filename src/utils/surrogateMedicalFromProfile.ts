@@ -13,11 +13,13 @@ export function medicalIntakeProfileSource(
   if (!surrogate) return null;
   const fd = (surrogate.formData ?? surrogate.form_data ?? {}) as JsonObj;
   const fromMedical = fd.medical_screening as JsonObj | undefined;
+  const fromAdditional = (fd.gc_additional ?? surrogate.form2_data ?? surrogate.form2Data) as JsonObj | undefined;
   const fromSp = fd.surrogate_profile as JsonObj | undefined;
   const fromForm2 = surrogate.form2 as JsonObj | undefined;
 
   const merged: JsonObj = {};
   if (fromMedical && typeof fromMedical === 'object') Object.assign(merged, fromMedical);
+  if (fromAdditional && typeof fromAdditional === 'object') Object.assign(merged, fromAdditional);
   if (fromSp && typeof fromSp === 'object') Object.assign(merged, fromSp);
   if (fromForm2 && typeof fromForm2 === 'object') Object.assign(merged, fromForm2);
 

@@ -14,6 +14,7 @@ import {
   resolveSurrogateAdditionalProfile,
   resolveSurrogateIntakeProfile
 } from '../../utils/surrogateFormData';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const statusDefinitions = [
   {
@@ -55,9 +56,10 @@ const statusDefinitions = [
 
 const SurrogatesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
-  const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('grid');
+  const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('table');
   const [selectedSurrogate, setSelectedSurrogate] = useState<User | null>(null);
   const [surrogates, setSurrogates] = useState<User[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -154,9 +156,26 @@ const SurrogatesPage: React.FC = () => {
 
   const filteredSurrogates = useMemo(() => {
     const currentStatus = statusDefinitions.find((status) => status.id === activeTab);
-    if (!currentStatus) return surrogates;
-    return surrogates.filter((surrogate) => currentStatus.filter(surrogate));
-  }, [activeTab, surrogates]);
+    let filtered = currentStatus ? surrogates.filter((surrogate) => currentStatus.filter(surrogate)) : surrogates;
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(surrogate => {
+        const name = getDisplayName(surrogate).toLowerCase();
+        const email = (surrogate.email || '').toLowerCase();
+        const phone = getPhone(surrogate).toLowerCase();
+        const id = (surrogate.id || '').toLowerCase();
+        return (
+          name.includes(query) || 
+          email.includes(query) || 
+          phone.includes(query) || 
+          id.includes(query)
+        );
+      });
+    }
+
+    return filtered;
+  }, [activeTab, surrogates, searchQuery]);
 
   const getStatusBadge = (surrogate: User) => {
     const status = surrogate.status;
@@ -277,6 +296,28 @@ const SurrogatesPage: React.FC = () => {
               </div>
             </div>
 
+          {/* Search and Filter Row */}
+          <div className="mb-6 flex flex-col md:flex-row gap-4 items-center">
+            <div className="relative flex-1 w-full">
+              <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input
+                type="text"
+                placeholder="Search by name, email, phone or ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-[#15111f] border border-rose-100/60 dark:border-white/5 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all dark:text-white"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <i className="ri-close-circle-fill"></i>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Status Tabs */}
           <div className="mb-6 overflow-x-auto">
             <div className="flex space-x-1 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
@@ -393,9 +434,13 @@ const SurrogatesPage: React.FC = () => {
                         <tr>
                           <th className="px-6 py-3 font-semibold">Name</th>
                           <th className="px-6 py-3 font-semibold">Status</th>
+                          <th className="px-6 py-3 font-semibold">Email</th>
                           <th className="px-6 py-3 font-semibold">Phone</th>
                           <th className="px-6 py-3 font-semibold">Location</th>
                           <th className="px-6 py-3 font-semibold">Experience</th>
+                          <th className="px-6 py-3 font-semibold text-center">Profile</th>
+                          <th className="px-6 py-3 font-semibold text-center">Form 2</th>
+                          <th className="px-6 py-3 font-semibold">Joined</th>
                           <th className="px-6 py-3 font-semibold text-right">Actions</th>
                         </tr>
                       </thead>
@@ -424,6 +469,11 @@ const SurrogatesPage: React.FC = () => {
                             <td className="px-6 py-4">
                               {getStatusBadge(surrogate)}
                             </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-900 dark:text-white truncate max-w-[180px]" title={surrogate.email}>
+                                {surrogate.email ?? '—'}
+                              </div>
+                            </td>
                             <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
                               {getPhone(surrogate)}
                             </td>
@@ -433,17 +483,37 @@ const SurrogatesPage: React.FC = () => {
                             <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                               {getExperience(surrogate)}
                             </td>
+                            <td className="px-6 py-4 text-center">
+                              {surrogate.profileCompleted ? (
+                                <Badge color="green">Yes</Badge>
+                              ) : (
+                                <Badge color="yellow">No</Badge>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              {surrogate.form2Completed ? (
+                                <Badge color="green">Yes</Badge>
+                              ) : (
+                                <Badge color="yellow">No</Badge>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                              {formatMMDDYYYY(surrogate.createdAt)}
+                            </td>
                             <td className="px-6 py-4 text-right">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={(event: React.MouseEvent) => {
-                                  event.stopPropagation();
-                                  navigate(`/surrogates/${surrogate.id}`);
-                                }}
-                              >
-                                <i className="ri-eye-line"></i>
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(event: React.MouseEvent) => {
+                                    event.stopPropagation();
+                                    navigate(`/surrogates/${surrogate.id}`);
+                                  }}
+                                  className="hover:bg-rose-50 dark:hover:bg-white/5"
+                                >
+                                  <i className="ri-eye-line text-rose-500"></i>
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}

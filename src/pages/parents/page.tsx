@@ -10,6 +10,7 @@ import DataSection from '../../components/data/DataSection';
 import AddUserDialog from '../../components/feature/AddUserDialog';
 import type { User, UserStatus } from '../../types';
 import { IP_STATUSES } from '../../types';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const statusDefinitions = [
   {
@@ -51,9 +52,10 @@ const statusDefinitions = [
 
 const ParentsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
-  const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('grid');
+  const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('table');
   const [selectedParent, setSelectedParent] = useState<User | null>(null);
   const [parents, setParents] = useState<User[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -150,9 +152,20 @@ const ParentsPage: React.FC = () => {
 
   const filteredParents = useMemo(() => {
     const currentStatus = statusDefinitions.find((status) => status.id === activeTab);
-    if (!currentStatus) return parents;
-    return parents.filter((parent) => currentStatus.filter(parent));
-  }, [activeTab, parents]);
+    let filtered = currentStatus ? parents.filter((parent) => currentStatus.filter(parent)) : parents;
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(parent => {
+        const name = getDisplayName(parent).toLowerCase();
+        const email = (parent.email || '').toLowerCase();
+        const id = (parent.id || '').toLowerCase();
+        return name.includes(query) || email.includes(query) || id.includes(query);
+      });
+    }
+    
+    return filtered;
+  }, [activeTab, parents, searchQuery]);
 
   const getStatusBadge = (parent: User) => {
     const status = parent.status;
@@ -252,6 +265,28 @@ const ParentsPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+          {/* Search and Filter Row */}
+          <div className="mb-6 flex flex-col md:flex-row gap-4 items-center">
+            <div className="relative flex-1 w-full">
+              <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input
+                type="text"
+                placeholder="Search by name, email or ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-[#15111f] border border-rose-100/60 dark:border-white/5 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all dark:text-white"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <i className="ri-close-circle-fill"></i>
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* Status Tabs */}
           <div className="mb-6 overflow-x-auto">
@@ -365,8 +400,12 @@ const ParentsPage: React.FC = () => {
                         <tr>
                           <th className="px-6 py-3 font-semibold">Name</th>
                           <th className="px-6 py-3 font-semibold">Status</th>
+                          <th className="px-6 py-3 font-semibold">Email</th>
                           <th className="px-6 py-3 font-semibold">Location</th>
                           <th className="px-6 py-3 font-semibold">Timeline</th>
+                          <th className="px-6 py-3 font-semibold text-center">Profile</th>
+                          <th className="px-6 py-3 font-semibold text-center">Form 2</th>
+                          <th className="px-6 py-3 font-semibold">Joined</th>
                           <th className="px-6 py-3 font-semibold text-right">Actions</th>
                         </tr>
                       </thead>
@@ -395,23 +434,48 @@ const ParentsPage: React.FC = () => {
                             <td className="px-6 py-4">
                               {getStatusBadge(parent)}
                             </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-900 dark:text-white truncate max-w-[180px]" title={parent.email}>
+                                {parent.email ?? '—'}
+                              </div>
+                            </td>
                             <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                               {getLocation(parent)}
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
                               {getTimeline(parent)}
                             </td>
+                            <td className="px-6 py-4 text-center">
+                              {parent.profileCompleted ? (
+                                <Badge color="green">Yes</Badge>
+                              ) : (
+                                <Badge color="yellow">No</Badge>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              {parent.form2Completed ? (
+                                <Badge color="green">Yes</Badge>
+                              ) : (
+                                <Badge color="yellow">No</Badge>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                              {formatMMDDYYYY(parent.createdAt)}
+                            </td>
                             <td className="px-6 py-4 text-right">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={(event: React.MouseEvent) => {
-                                  event.stopPropagation();
-                                  navigate(`/parents/${parent.id}`);
-                                }}
-                              >
-                                <i className="ri-eye-line"></i>
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(event: React.MouseEvent) => {
+                                    event.stopPropagation();
+                                    navigate(`/parents/${parent.id}`);
+                                  }}
+                                  className="hover:bg-rose-50 dark:hover:bg-white/5"
+                                >
+                                  <i className="ri-eye-line text-rose-500"></i>
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}

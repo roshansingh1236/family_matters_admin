@@ -19,8 +19,10 @@ import type { Payment, MedicalRecordRequest, MedicalRecordRequestStatus, Receive
 import {
   SURROGATE_INTAKE_TEMPLATE,
   SURROGATE_ADDITIONAL_TEMPLATE,
-  ABOUT_SURROGATE_TEMPLATE
+  ABOUT_SURROGATE_TEMPLATE,
+  INITIAL_APPLICATION_TEMPLATE
 } from '../../../constants/jsonTemplates';
+
 import CreateMatchDialog from '../CreateMatchDialog';
 import AgencyApprovalToggle from '../AgencyApprovalToggle';
 import MedicalReportView from '../MedicalReportView';
@@ -44,24 +46,24 @@ const SURROGATE_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileComplete
 
 /** Merge DB snake_case, legacy camelCase, and form_data (Flutter) into UI firstName/lastName. */
 function surrogateStateFromRow(data: Record<string, any>) {
-  const fd = { ...(data.form_data ?? data.formData ?? {}) };
+  const resolveJson = (v: any) => {
+    if (typeof v === 'string') {
+      try { return JSON.parse(v); } catch (e) { return v; }
+    }
+    return v;
+  };
+
+  const colFd = resolveJson(data.form_data ?? data.formData ?? {});
+  const getNested = (obj: any) => (obj && typeof obj === 'object' && obj.form_data && typeof obj.form_data === 'object' && !Array.isArray(obj.form_data)) ? obj.form_data : null;
+  const fd = { ...colFd, ...(getNested(colFd) || {}) };
+
   const intake = resolveSurrogateIntakeProfile(fd, data);
   const additional = resolveSurrogateAdditionalProfile(fd, data);
   const firstName = data.first_name ?? data.firstName ?? fd.firstName ?? fd.first_name;
   const lastName = data.last_name ?? data.lastName ?? fd.lastName ?? fd.last_name;
-  const profileCompletedAt =
-    data.profile_completed_at ??
-    data.profileCompletedAt ??
-    fd.profileCompletedAt ??
-    fd.profile_completed_at ??
-    '';
-  const form2CompletedAt =
-    data.form_2_completed_at ??
-    data.form2_completed_at ??
-    data.form2CompletedAt ??
-    fd.form2CompletedAt ??
-    fd.form_2_completed_at ??
-    '';
+  const profileCompletedAt = data.profile_completed_at ?? data.profileCompletedAt ?? fd.profileCompletedAt ?? fd.profile_completed_at ?? '';
+  const form2CompletedAt = data.form_2_completed_at ?? data.form2_completed_at ?? data.form2CompletedAt ?? fd.form2CompletedAt ?? fd.form_2_completed_at ?? '';
+
   return {
     ...data,
     documents: normalizeUserDocuments(data.documents),
@@ -70,25 +72,24 @@ function surrogateStateFromRow(data: Record<string, any>) {
     profileCompletedAt,
     form2CompletedAt,
     formData: fd,
-    form2: intake,
-    form2Data: additional,
+    form1: intake,
+    form2: additional,
     form2Completed: data.form_2_completed ?? data.form2Completed ?? false,
     profileCompleted: data.profile_completed ?? data.profileCompleted ?? false,
-    updatedAt: data.updated_at ?? data.updatedAt,
-    createdAt: data.created_at ?? data.createdAt,
   };
 }
 
 const TABS = [
     { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line' },
-    { id: 'about', label: 'About', icon: 'ri-information-line' },
-    { id: 'personal', label: 'Personal & Intake', icon: 'ri-user-line' },
-    { id: 'medical_report', label: 'Medical Report', icon: 'ri-heart-pulse-line' },
+    { id: 'application', label: 'Signup & Intake (Form 1)', icon: 'ri-file-user-line' },
+    { id: 'personal', label: 'Detailed App (Form 2)', icon: 'ri-profile-line' },
+    { id: 'medical_report', label: 'Medical Reports', icon: 'ri-heart-pulse-line' },
     { id: 'medical_intake', label: 'Medical Intake', icon: 'ri-file-shield-line' },
     { id: 'clinical', label: 'Clinical Care', icon: 'ri-stethoscope-line' },
     { id: 'compensation', label: 'Compensation', icon: 'ri-money-dollar-circle-line' },
     { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
 ] as const;
+
 
 export default function SurrogateProfileContent({ 
   id, 
@@ -614,7 +615,7 @@ export default function SurrogateProfileContent({
       <div className="space-y-6">
         {activeTab === 'overview' && (
             <>
-                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 lg:col-span-2">
                     {summaryCards.map((card) => (
                         <Card key={card.label} padding="sm" className={`${card.className} border-none shadow-sm backdrop-blur`}>
                             <div className="flex items-start justify-between">
@@ -629,182 +630,115 @@ export default function SurrogateProfileContent({
                     data={Object.fromEntries(SURROGATE_CORE_FIELDS.map((f) => [f, surrogate[f]])) as Record<string, unknown>}
                     fieldOrder={SURROGATE_CORE_FIELDS}
                     onSave={handleUpdateCore}
-                    title="Core profile"
-                    subtitle="Identity, role, and completion state stored on the user record (synced with the surrogate app)."
+                    title="Profile Lifecycle"
+                    subtitle="Identity flags & system completion status."
                   />
                 </div>
             </>
         )}
 
-        {activeTab === 'about' && (
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                <div className="xl:col-span-5 space-y-4">
-                    <div className="columns-1 gap-4 sm:columns-2 space-y-4">
-                        {surrogate.profileImageUrl && <div className="rounded-2xl overflow-hidden shadow-md"><img src={surrogate.profileImageUrl} alt="" className="w-full"/></div>}
-                        {surrogate.documents?.filter((d: any) => d.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(d.name)).map((doc: any) => (
-                            <div key={doc.url} className="rounded-2xl overflow-hidden shadow-md"><img src={doc.url} alt="" className="w-full transition-transform hover:scale-105"/></div>
-                        ))}
+        {activeTab === 'application' && (
+              <div className="grid grid-cols-1 gap-6">
+                  <Card>
+                      <EditableJsonSection 
+                          title="Initial Signup & Application Info" 
+                          description="Data collected during the initial signup phase."
+                          data={surrogate.formData || null} 
+                          templateData={INITIAL_APPLICATION_TEMPLATE} 
+                          onSave={(v: any) => handleUpdateField('form_data', v)} 
+                      />
+                  </Card>
+                  
+                  <Card className="overflow-hidden border-rose-100/70 shadow-md shadow-rose-500/5 dark:border-white/5 dark:shadow-none">
+                    <div className="relative overflow-hidden border-b border-rose-100/60 bg-gradient-to-r from-rose-500/[0.08] via-fuchsia-500/[0.06] to-indigo-500/[0.05] px-6 py-5 dark:border-white/5 dark:from-rose-500/15 dark:via-fuchsia-500/10 dark:to-indigo-500/10">
+                      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-fuchsia-600 text-white shadow-lg shadow-rose-500/30">
+                            <i className="ri-smartphone-line text-2xl" />
+                          </div>
+                          <div>
+                            <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Detailed Intake (Form 1)</h2>
+                            <p className="mt-1 max-w-xl text-sm text-gray-600 dark:text-gray-400">Exhaustive answers from the primary intake questionnaire.</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                </div>
-                <div className="xl:col-span-7"><Card><AboutSection title={`About ${surrogate.firstName || 'Surrogate'}`} data={aboutData} type="surrogate" templateData={ABOUT_SURROGATE_TEMPLATE} onSave={(v: any) => handleUpdateField('about', v)} /></Card></div>
-            </div>
-        )}
-
-        {activeTab === 'medical_report' && (
-            <MedicalReportView
-                userType="surrogate"
-                data={surrogate}
-                name={displayName}
-                userId={surrogate.id}
-                screeningStatus={surrogate.medical_screening_status ?? surrogate.medicalScreeningStatus}
-                onUpdateScreeningStatus={async (status) => {
-                    // Per spec: enforce clearance eligibility before allowing "Medically Cleared for Program"
-                    if (status === 'Medically Cleared for Program') {
-                      const { eligible, issues } = await screeningService.checkClearanceEligibility(id);
-                      if (!eligible) {
-                        setToast({ message: `Cannot mark Medically Cleared:\n${issues.join('\n')}`, type: 'error' });
-                        return;
-                      }
-                    }
-                    const { error } = await supabase
-                      .from('users')
-                      .update({ medical_screening_status: status, updated_at: new Date().toISOString() })
-                      .eq('id', id);
-                    if (error) {
-                      console.error('medical_screening_status update', error);
-                      setToast({
-                        message: error.message?.includes('check constraint')
-                          ? `Database rejected this status. Run migration 20260409_users_medical_screening_status_check.sql. ${error.message}`
-                          : `Failed to update screening status: ${error.message}`,
-                        type: 'error'
-                      });
-                    } else {
-                      setSurrogate((prev: any) => ({ ...prev, medical_screening_status: status }));
-                      setToast({ message: 'Screening status updated', type: 'success' });
-                    }
-                }}
-            />
+                    <div className="bg-[#fdf4f6]/30 p-5 dark:bg-[#0e0b1a]/40 md:p-6">
+                      <SurrogateIntakeFormView data={surrogate.form1 as Record<string, unknown> | null} />
+                    </div>
+                  </Card>
+              </div>
         )}
 
         {activeTab === 'personal' && (
-            <div className="grid grid-cols-1 gap-6">
-                {/* OB History — structured table parsed from flat intake fields */}
-                {(() => {
-                  const d = surrogate.form2 as any;
+            <div className="grid grid-cols-1 gap-6 text-left">
+                <Card><EditableJsonSection title="Form 2 Responses (Detailed)" data={surrogate.form2 || null} templateData={SURROGATE_ADDITIONAL_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.surrogate_profile', v)} /></Card>
+                 {(() => {
+                  const d = surrogate.form1 as any;
                   if (!d) return null;
-                  const pregnancies = [1, 2, 3].map(n => ({
-                    number: n,
-                    name: d[`pregnancy${n}Name`],
-                    dob: d[`pregnancy${n}DOB`],
-                    gender: d[`pregnancy${n}Gender`],
-                    weight: d[`pregnancy${n}Weight`],
-                    deliveryType: d[`pregnancy${n}Delivery`],
-                    gestationalAge: d[`pregnancy${n}GestationalAge`],
-                    complications: d[`pregnancy${n}Complications`],
-                    obgyn: d[`pregnancy${n}OBGYN`],
-                    hospital: d[`pregnancy${n}Hospital`],
-                    surrogacy: n > 1 ? d[`pregnancy${n}Surrogacy`] : null,
-                  })).filter(p => p.name || p.dob || p.obgyn || p.hospital);
-
-                  if (pregnancies.length === 0) return null;
+                  
+                  const pregnancies: any[] = [];
+                  Object.keys(d).forEach(key => {
+                    const match = key.match(/^pregnancy(\d+)Name$/);
+                    if (match) {
+                      const n = parseInt(match[1]);
+                      pregnancies.push({
+                        number: n,
+                        name: d[`pregnancy${n}Name`],
+                        dob: d[`pregnancy${n}DOB`],
+                        gender: d[`pregnancy${n}Gender`],
+                        weight: d[`pregnancy${n}Weight`],
+                        deliveryType: d[`pregnancy${n}Delivery`],
+                        gestationalAge: d[`pregnancy${n}GestationalAge`],
+                        complications: d[`pregnancy${n}Complications`],
+                        obgyn: d[`pregnancy${n}OBGYN`],
+                        hospital: d[`pregnancy${n}Hospital`],
+                        surrogacy: d[`pregnancy${n}Surrogacy`],
+                      });
+                    }
+                  });
+                  const validPregnancies = pregnancies.sort((a, b) => a.number - b.number).filter(p => p.name || p.dob || p.obgyn || p.hospital);
+                  if (validPregnancies.length === 0) return null;
 
                   return (
                     <Card>
                       <div className="p-4">
-                        <h3 className="text-base font-semibold text-gray-800 dark:text-white mb-1">OB History</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Parsed from intake form — provider and hospital names are internal only, never shown to Intended Parents</p>
-                        <div className="overflow-x-auto">
+                        <h3 className="text-base font-semibold text-gray-800 dark:text-white mb-1">OB History Summary</h3>
+                        <div className="overflow-x-auto mt-4">
                           <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 dark:bg-[#15111f] text-xs uppercase text-gray-500">
+                            <thead className="bg-gray-50 dark:bg-white/5 text-xs uppercase text-gray-500">
                               <tr>
                                 <th className="px-3 py-2">#</th>
                                 <th className="px-3 py-2">Name</th>
                                 <th className="px-3 py-2">DOB</th>
                                 <th className="px-3 py-2">Delivery</th>
                                 <th className="px-3 py-2">GA</th>
-                                <th className="px-3 py-2">Complications</th>
-                                <th className="px-3 py-2">OB/GYN <span className="text-rose-400">(internal)</span></th>
-                                <th className="px-3 py-2">Hospital <span className="text-rose-400">(internal)</span></th>
+                                <th className="px-3 py-2">OB/GYN</th>
                                 <th className="px-3 py-2">Surrogacy?</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {pregnancies.map(p => (
-                                <tr key={p.number} className="border-t border-gray-100 dark:border-white/5">
+                              {validPregnancies.map((p, idx) => (
+                                <tr key={idx} className="border-t border-gray-100 dark:border-white/5">
                                   <td className="px-3 py-2 font-semibold">{p.number}</td>
                                   <td className="px-3 py-2">{p.name || '—'}</td>
                                   <td className="px-3 py-2">{p.dob ? new Date(p.dob).toLocaleDateString() : '—'}</td>
                                   <td className="px-3 py-2">{p.deliveryType || '—'}</td>
                                   <td className="px-3 py-2">{p.gestationalAge || '—'}</td>
-                                  <td className="px-3 py-2">{p.complications || 'None'}</td>
-                                  <td className="px-3 py-2 text-rose-600 dark:text-rose-400 font-medium">{p.obgyn || '—'}</td>
-                                  <td className="px-3 py-2 text-rose-600 dark:text-rose-400 font-medium">{p.hospital || '—'}</td>
+                                  <td className="px-3 py-2">{p.obgyn || '—'}</td>
                                   <td className="px-3 py-2">{p.surrogacy || '—'}</td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
-                        {d.additionalPregnancyInfo && (
-                          <p className="mt-3 text-xs text-gray-500">Additional info: {d.additionalPregnancyInfo}</p>
-                        )}
                       </div>
                     </Card>
                   );
                 })()}
-
-                <Card className="overflow-hidden border-rose-100/70 shadow-md shadow-rose-500/5 dark:border-white/5 dark:shadow-none">
-                  <div className="relative overflow-hidden border-b border-rose-100/60 bg-gradient-to-r from-rose-500/[0.08] via-fuchsia-500/[0.06] to-indigo-500/[0.05] px-6 py-5 dark:border-white/5 dark:from-rose-500/15 dark:via-fuchsia-500/10 dark:to-indigo-500/10">
-                    <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-rose-400/20 blur-2xl dark:bg-rose-500/10" />
-                    <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-fuchsia-600 text-white shadow-lg shadow-rose-500/30">
-                          <i className="ri-smartphone-line text-2xl" />
-                        </div>
-                        <div>
-                          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-                            Intake form responses
-                          </h2>
-                          <p className="mt-1 max-w-xl text-sm text-gray-600 dark:text-gray-400">
-                            Structured answers from the surrogate mobile app. When present, OB history is also summarized in the table above.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-[#fdf4f6]/30 p-5 dark:bg-[#0e0b1a]/40 md:p-6">
-                    <SurrogateIntakeFormView data={surrogate.form2 as Record<string, unknown> | null} />
-                  </div>
-                  <details className="group border-t border-rose-100/50 bg-white dark:border-white/5 dark:bg-[#15111f]/50">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-6 py-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-50/80 dark:text-rose-400 dark:hover:bg-white/5 [&::-webkit-details-marker]:hidden">
-                      <span className="inline-flex items-center gap-2">
-                        <i className="ri-code-s-slash-line text-lg" />
-                        Edit raw JSON (admin)
-                      </span>
-                      <i className="ri-arrow-down-s-line text-lg transition group-open:rotate-180" />
-                    </summary>
-                    <div className="border-t border-rose-100/40 px-5 pb-6 pt-2 dark:border-white/5">
-                      <EditableJsonSection
-                        title="Surrogate intake JSON"
-                        description="Direct edit of form_data.surrogate_profile — use only if you know the schema."
-                        data={surrogate.form2 || null}
-                        templateData={SURROGATE_INTAKE_TEMPLATE}
-                        onSave={(v: any) => handleUpdateField('form_data.surrogate_profile', v)}
-                      />
-                    </div>
-                  </details>
-                </Card>
-                <Card>
-                    <EditableJsonSection
-                        title="Additional Profile Data"
-                        description="Stored in form_data.gc_additional (or legacy form2_data column). The mobile app does not populate this yet unless you add a save path."
-                        data={surrogate.form2Data || null}
-                        templateData={SURROGATE_ADDITIONAL_TEMPLATE}
-                        onSave={(v: any) => handleUpdateField('form_data.gc_additional', v)}
-                    />
-                </Card>
             </div>
         )}
+
 
         {activeTab === 'medical_intake' && (
              <div className="space-y-6">
