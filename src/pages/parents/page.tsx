@@ -69,9 +69,26 @@ const ParentsPage: React.FC = () => {
         .in('role', ['Intended Parent', 'intendedParent']);
 
       if (err) throw err;
-      
+
       const mappedData: User[] = (data || []).map(u => {
         const formData = u.form_data || u.formData || u.formdata || {};
+
+        const medicalKeys = ['medications', 'smokesVapes', 'hasBirthedChildren', 'onPublicAssistance', 'questions'];
+        const excludedKeys = ['parent2', 'fertility', 'surrogate_related', 'surrogateRelated', ...medicalKeys];
+
+        const parent1Data: Record<string, unknown> = {};
+        const medicalData: Record<string, unknown> = {};
+
+        if (formData && typeof formData === 'object') {
+          Object.keys(formData).forEach(key => {
+            if (medicalKeys.includes(key)) {
+              medicalData[key] = (formData as any)[key];
+            } else if (!excludedKeys.includes(key)) {
+              parent1Data[key] = (formData as any)[key];
+            }
+          });
+        }
+
         return {
           id: u.id,
           ...u,
@@ -80,14 +97,16 @@ const ParentsPage: React.FC = () => {
           formData: formData,
           form2Data: u.form2_data || u.form2Data || u.form2data,
           // Extract parent2 and other nested data from form_data
-          parent1: u.parent1 || formData?.parent1 || null,
-          parent2: u.parent2 || formData?.parent2 || null,
-          surrogateRelated: u.surrogateRelated || formData?.surrogate_related || formData?.surrogateRelated || null,
+          parent1: u.parent1 || formData?.parent1 || (Object.keys(parent1Data).length > 0 ? parent1Data : null),
+          parent2: (u.parent2 && Object.keys(u.parent2).length > 0) ? u.parent2 : (formData?.parent2 || null),
+          surrogateRelated: (u.surrogateRelated && Object.keys(u.surrogateRelated).length > 0) ? u.surrogateRelated : (formData?.surrogate_related || formData?.surrogateRelated || null),
+          fertility: formData?.fertility || null,
+          medical: Object.keys(medicalData).length > 0 ? medicalData : null,
           updatedAt: u.updated_at,
           createdAt: u.created_at
         };
       });
-      
+
       setParents(mappedData);
       setIsLoading(false);
       setError(null);
@@ -103,16 +122,16 @@ const ParentsPage: React.FC = () => {
 
     const channel = supabase
       .channel('public:users:parents')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
         table: 'users'
         // Filter in JS/TS as .in() is not supported directly in the payload filter for some Supabase client versions
       }, (payload: any) => {
         if (payload.new && (payload.new.role === 'Intended Parent' || payload.new.role === 'intendedParent')) {
-            fetchParents();
+          fetchParents();
         } else if (payload.old && (payload.old.role === 'Intended Parent' || payload.old.role === 'intendedParent')) {
-            fetchParents();
+          fetchParents();
         }
       })
       .subscribe();
@@ -133,7 +152,7 @@ const ParentsPage: React.FC = () => {
         .eq('id', userId);
 
       if (err) throw err;
-      
+
       if (selectedParent && selectedParent.id === userId) {
         setSelectedParent({ ...selectedParent, status: newStatus });
       }
@@ -153,7 +172,7 @@ const ParentsPage: React.FC = () => {
   const filteredParents = useMemo(() => {
     const currentStatus = statusDefinitions.find((status) => status.id === activeTab);
     let filtered = currentStatus ? parents.filter((parent) => currentStatus.filter(parent)) : parents;
-    
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(parent => {
@@ -163,7 +182,7 @@ const ParentsPage: React.FC = () => {
         return name.includes(query) || email.includes(query) || id.includes(query);
       });
     }
-    
+
     return filtered;
   }, [activeTab, parents, searchQuery]);
 
@@ -221,50 +240,48 @@ const ParentsPage: React.FC = () => {
   return (
     <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
-      
+
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        
+
         <main className="flex-1 overflow-y-auto p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Intended Parents</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all intended parents and their journey progress.</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button
-                  onClick={() => setIsAddDialogOpen(true)}
-                  className="whitespace-nowrap"
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Intended Parents</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all intended parents and their journey progress.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => setIsAddDialogOpen(true)}
+                className="whitespace-nowrap"
+              >
+                <i className="ri-add-line mr-1"></i>
+                Add Intended Parent
+              </Button>
+              <div className="flex bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
+                <button
+                  onClick={() => setViewStyle('grid')}
+                  className={`p-2 rounded-md transition-colors cursor-pointer ${viewStyle === 'grid'
+                    ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }`}
+                  title="Grid View"
                 >
-                  <i className="ri-add-line mr-1"></i>
-                  Add Intended Parent
-                </Button>
-                <div className="flex bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
-                  <button
-                    onClick={() => setViewStyle('grid')}
-                    className={`p-2 rounded-md transition-colors cursor-pointer ${
-                      viewStyle === 'grid'
-                        ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  <i className="ri-layout-grid-line text-lg"></i>
+                </button>
+                <button
+                  onClick={() => setViewStyle('table')}
+                  className={`p-2 rounded-md transition-colors cursor-pointer ${viewStyle === 'table'
+                    ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                     }`}
-                    title="Grid View"
-                  >
-                    <i className="ri-layout-grid-line text-lg"></i>
-                  </button>
-                  <button
-                    onClick={() => setViewStyle('table')}
-                    className={`p-2 rounded-md transition-colors cursor-pointer ${
-                      viewStyle === 'table'
-                        ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                    }`}
-                    title="Table View"
-                  >
-                    <i className="ri-table-line text-lg"></i>
-                  </button>
-                </div>
+                  title="Table View"
+                >
+                  <i className="ri-table-line text-lg"></i>
+                </button>
               </div>
             </div>
+          </div>
 
           {/* Search and Filter Row */}
           <div className="mb-6 flex flex-col md:flex-row gap-4 items-center">
@@ -278,7 +295,7 @@ const ParentsPage: React.FC = () => {
                 className="w-full pl-10 pr-4 py-2 bg-white dark:bg-[#15111f] border border-rose-100/60 dark:border-white/5 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all dark:text-white"
               />
               {searchQuery && (
-                <button 
+                <button
                   onClick={() => setSearchQuery('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                 >
@@ -295,11 +312,10 @@ const ParentsPage: React.FC = () => {
                 <button
                   key={status.id}
                   onClick={() => setActiveTab(status.id)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                    activeTab === status.id
-                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${activeTab === status.id
+                    ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
                 >
                   {status.label} ({statusCounts[status.id] ?? 0})
                 </button>
@@ -347,11 +363,10 @@ const ParentsPage: React.FC = () => {
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           {getStatusBadge(parent)}
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            isEligibleToMatch(parent)
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                              : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400'
-                          }`}>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isEligibleToMatch(parent)
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                            : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400'
+                            }`}>
                             {isEligibleToMatch(parent) ? '✓ Eligible to Match' : '✗ Not Eligible'}
                           </span>
                         </div>
@@ -411,8 +426,8 @@ const ParentsPage: React.FC = () => {
                       </thead>
                       <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                         {filteredParents.map((parent) => (
-                          <tr 
-                            key={parent.id} 
+                          <tr
+                            key={parent.id}
                             className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
                             onClick={() => setSelectedParent(parent)}
                           >
@@ -510,7 +525,7 @@ const ParentsPage: React.FC = () => {
                       <div className="flex-1">
                         <h3 className="text-base font-bold text-gray-900 dark:text-white">{getDisplayName(selectedParent)}</h3>
                         <p className="text-gray-600 dark:text-gray-400 break-all mb-2">Parent ID: {selectedParent.id}</p>
-                        
+
                         {/* Status Dropdown */}
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
@@ -542,27 +557,7 @@ const ParentsPage: React.FC = () => {
                         'Updated At': selectedParent.updatedAt
                       }}
                     />
-                    
-                    {/* ... Rest of DataSections (same as before) ... */}
-                    <DataSection
-                      title="Form 1 Responses"
-                      data={(selectedParent.formData as Record<string, unknown>) ?? null}
-                      emptyMessage="No form data available."
-                    />
-                    <DataSection
-                      title="Form 2 Responses"
-                      data={
-                        (selectedParent.form2Data as Record<string, unknown>) ??
-                        ((selectedParent.formData as Record<string, unknown>)?.fertility as Record<string, unknown>) ??
-                        null
-                      }
-                      emptyMessage="Form 2 has not been completed."
-                    />
-                    <DataSection
-                      title="Fertility Information"
-                      data={((selectedParent.form2Data as Record<string, unknown>)?.fertility as Record<string, unknown>) ?? null}
-                      emptyMessage="No fertility information provided."
-                    />
+
                     <DataSection
                       title="Parent 1"
                       data={(selectedParent.parent1 as Record<string, unknown>) ?? null}
@@ -577,6 +572,16 @@ const ParentsPage: React.FC = () => {
                       title="Surrogate Preferences"
                       data={(selectedParent.surrogateRelated as Record<string, unknown>) ?? null}
                       emptyMessage="No surrogate preferences captured."
+                    />
+                    <DataSection
+                      title="Fertility Information"
+                      data={(selectedParent.fertility as Record<string, unknown>) ?? ((selectedParent.form2Data as Record<string, unknown>)?.fertility as Record<string, unknown>) ?? null}
+                      emptyMessage="No fertility information provided."
+                    />
+                    <DataSection
+                      title="Medical Information"
+                      data={(selectedParent.medical as Record<string, unknown>) ?? null}
+                      emptyMessage="No medical information provided."
                     />
 
                     <div className="flex gap-3">

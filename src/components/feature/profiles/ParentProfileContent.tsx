@@ -62,30 +62,53 @@ function parentStateFromRow(data: Record<string, any>) {
   
   const isPopulated = (v: any) => v && typeof v === 'object' && Object.keys(v).length > 0;
 
+  const getPopulated = (...args: any[]) => {
+    for (const arg of args) {
+      const resolved = resolveJson(arg);
+      if (isPopulated(resolved)) return resolved;
+    }
+    return null;
+  };
+
   const ipAdd = resolveJson(fd.ip_additional ?? {});
   let p1 = resolveJson(data.parent1 ?? fd.parent1 ?? fd.parent_1 ?? fd.form1 ?? fd.form_1 ?? ipAdd?.parent1);
-  let p2 = resolveJson(data.parent2 ?? fd.parent2 ?? fd.parent_2 ?? fd.form2 ?? fd.form_2 ?? ipAdd?.parent2);
-  let fer = resolveJson(fd.fertility_questions ?? fd.fertility ?? ipAdd?.fertility ?? ipAdd);
-  let surr = resolveJson(data.surrogate_related ?? data.surrogateRelated ?? fd.surrogate_related ?? fd.surrogateRelated ?? fd.questions ?? ipAdd?.surrogate_related);
+  let p2 = getPopulated(data.parent2, fd.parent2, fd.parent_2, fd.form2, fd.form_2, ipAdd?.parent2);
+  let fer = getPopulated(fd.fertility_questions, fd.fertility, ipAdd?.fertility, ipAdd);
+  let surr = getPopulated(data.surrogate_related, data.surrogateRelated, fd.surrogate_related, fd.surrogateRelated, fd.questions, ipAdd?.surrogate_related);
 
   // Aggressive Parent 2 resolution: check if colF2D itself is the Parent 2 object
   if (!isPopulated(p2) && isPopulated(colF2D) && (colF2D.name || colF2D.address || colF2D.occupation)) {
     p2 = colF2D;
   }
 
-  // Fallback for Parent 1 if missing but root fields exist (from initial registration)
-  if (!isPopulated(p1) && (firstName || lastName || data.email || fd.email || fd.phone || fd.phoneNumber)) {
-    p1 = {
-      ...(p1 || {}),
-      name: p1?.name || [firstName, lastName].filter(Boolean).join(' '),
-      email: p1?.email || fd.email || data.email,
-      phone: p1?.phone || fd.phone || fd.phoneNumber || data.phone_number,
-      address: p1?.address || fd.address || [fd.city, fd.state].filter(Boolean).join(', '),
-      gender: p1?.gender || fd.gender,
-      occupation: p1?.occupation || fd.occupation,
-      age: p1?.age || fd.age
-    };
+  // Top-level Parent 1 resolution using given schema
+  const medicalKeys = ['medications', 'smokesVapes', 'hasBirthedChildren', 'onPublicAssistance', 'questions'];
+  const excludedKeys = ['parent2', 'fertility', 'surrogate_related', 'surrogateRelated', ...medicalKeys];
+  
+  let parent1Data: Record<string, unknown> = {};
+  if (isPopulated(p1)) {
+    parent1Data = p1;
+  } else {
+    // If not explicitly set, extract top level from formData
+    Object.keys(fd).forEach(key => {
+      if (!excludedKeys.includes(key)) {
+        parent1Data[key] = fd[key];
+      }
+    });
+    
+    // Add explicitly normalized fallbacks
+    if (!parent1Data.name) {
+      parent1Data.name = [firstName, lastName].filter(Boolean).join(' ');
+    }
+    if (!parent1Data.email) {
+      parent1Data.email = data.email || fd.email;
+    }
+    if (!parent1Data.phone) {
+      parent1Data.phone = data.phone_number || fd.phone || fd.phoneNumber;
+    }
   }
+
+  p1 = parent1Data;
 
   // Fallback for Parent 2 if missing but partner fields exist (from initial registration)
   if (!isPopulated(p2) && (fd.partnerFirstName || fd.partnerLastName)) {
@@ -580,7 +603,7 @@ export default function ParentProfileContent({
             {activeTab === 'personal' && (
                 <div className="grid grid-cols-1 gap-6">
                     <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                        <Card><EditableJsonSection title="Parent 1 (from App)" description="Personal information submitted by Parent 1 through the mobile app" data={parent.parent1 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent1', v)} /></Card>
+                        <Card><EditableJsonSection title="Parent 1 (from App)" description="Personal information submitted by Parent 1 through the mobile app" data={parent.parent1 || null} onSave={(v: any) => handleUpdateField('form_data.parent1', v)} /></Card>
                         <Card><EditableJsonSection title="Parent 2 (from App)" description="Personal information submitted by Parent 2 through the mobile app" data={parent.parent2 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent2', v)} /></Card>
                     </div>
                     <Card><EditableJsonSection title="Fertility & Embryos" description="Embryo & fertility information submitted through the mobile app" data={parent.fertility || null} templateData={IP_FERTILITY_QUESTIONS_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.fertility', v)} /></Card>

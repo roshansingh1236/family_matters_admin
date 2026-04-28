@@ -311,6 +311,9 @@ export default function SurrogateProfileContent({
       updatePayload = { form_data: fd };
     } else if (field === 'form2Data') {
       updatePayload = { form2_data: value };
+    } else if (field === 'form_data') {
+      const fd = mergedFormData();
+      updatePayload = { form_data: { ...fd, ...value } };
     } else if (field.includes('.')) {
       const [top, nest] = field.split('.');
       updatePayload = { [top]: { ...(surrogate[top] || {}), [nest]: value } };
@@ -672,7 +675,7 @@ export default function SurrogateProfileContent({
 
         {activeTab === 'personal' && (
             <div className="grid grid-cols-1 gap-6 text-left">
-                <Card><EditableJsonSection title="Form 2 Responses (Detailed)" data={surrogate.form2 || null} templateData={SURROGATE_ADDITIONAL_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.surrogate_profile', v)} /></Card>
+                <Card><EditableJsonSection title="Detailed App (surrogate_profile)" data={surrogate.form2 || null} templateData={SURROGATE_INTAKE_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.surrogate_profile', v)} /></Card>
                  {(() => {
                   const d = surrogate.form1 as any;
                   if (!d) return null;
