@@ -25,7 +25,10 @@ const InquiriesPage: React.FC = () => {
   const sourceParam = searchParams.get('source');
   
   const [inquiries, setInquiries] = useState<User[]>([]);
+  const [surrogateInquiries, setSurrogateInquiries] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'parents' | 'surrogates'>('parents');
   const [filteredInquiries, setFilteredInquiries] = useState<User[]>([]);
+  const [filteredSurrogateInquiries, setFilteredSurrogateInquiries] = useState<any[]>([]);
   const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('table');
   const [isLoading, setIsLoading] = useState(true);
   const [isRecordDialogOpen, setIsRecordDialogOpen] = useState(false);
@@ -35,36 +38,41 @@ const InquiriesPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let filtered = inquiries;
-    
+    let filteredParents = inquiries;
     if (sourceParam) {
-      filtered = filtered.filter(inquiry => {
+      filteredParents = filteredParents.filter(inquiry => {
         const source = inquirySourceOf(inquiry).toLowerCase();
-        if (sourceParam === 'online') {
-          return source === 'online' || source === 'website' || source === 'app' || source === '—';
-        }
-        if (sourceParam === 'phone') {
-          return source === 'phone' || source === 'manual' || source === 'call';
-        }
+        if (sourceParam === 'online') return source === 'online' || source === 'website' || source === 'app' || source === '—';
+        if (sourceParam === 'phone') return source === 'phone' || source === 'manual' || source === 'call';
         return true;
       });
     }
-
     const statusParam = searchParams.get('status');
     if (statusParam) {
-      filtered = filtered.filter(inquiry => 
+      filteredParents = filteredParents.filter(inquiry => 
         (inquiry.status as string).toLowerCase() === statusParam.toLowerCase()
       );
     }
-    
-    setFilteredInquiries(filtered);
-  }, [inquiries, sourceParam, searchParams]);
+    setFilteredInquiries(filteredParents);
+
+    let filteredSurrogates = surrogateInquiries;
+    if (statusParam) {
+      filteredSurrogates = filteredSurrogates.filter(inquiry => 
+        (inquiry.status as string).toLowerCase() === statusParam.toLowerCase()
+      );
+    }
+    setFilteredSurrogateInquiries(filteredSurrogates);
+  }, [inquiries, surrogateInquiries, sourceParam, searchParams]);
 
   const fetchInquiries = async () => {
     setIsLoading(true);
     try {
-      const data = await inquiryService.getNewInquiries();
-      setInquiries(data);
+      const [parents, surrogates] = await Promise.all([
+        inquiryService.getNewInquiries(),
+        inquiryService.getSurrogateInquiries()
+      ]);
+      setInquiries(parents);
+      setSurrogateInquiries(surrogates);
     } catch (error) {
       console.error('Error fetching inquiries:', error);
     } finally {
@@ -94,14 +102,25 @@ const InquiriesPage: React.FC = () => {
     return '—';
   };
 
-  const handeArchive = async (userId: string) => {
+  const handleArchive = async (userId: string) => {
       if (!window.confirm('Are you sure you want to archive this inquiry?')) return;
       try {
           await inquiryService.archiveInquiry(userId);
           fetchInquiries();
       } catch (error) {
-          alert('Failed to archive');
+          console.error('Error archiving:', error);
       }
+  };
+
+  const handleConvertToProfile = async (inquiry: any) => {
+    if (!window.confirm(`Convert ${inquiry.first_name} ${inquiry.last_name} to a full profile?`)) return;
+    try {
+      await inquiryService.convertSurrogateToProfile(inquiry);
+      fetchInquiries();
+    } catch (error) {
+      console.error('Error converting:', error);
+      alert('Failed to convert inquiry. The email might already be registered.');
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -144,17 +163,32 @@ const InquiriesPage: React.FC = () => {
                 Review and process new inbound leads.
               </p>
             </div>
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex bg-white dark:bg-[#15111f] p-1 rounded-2xl border border-rose-100/60 dark:border-white/5 shadow-sm">
+                <button 
+                  onClick={() => setActiveTab('parents')}
+                  className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'parents' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Intended Parents
+                </button>
+                <button 
+                  onClick={() => setActiveTab('surrogates')}
+                  className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'surrogates' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Surrogates
+                </button>
+            </div>
             <div className="flex items-center gap-3">
                <div className="flex bg-white dark:bg-[#15111f] rounded-xl p-1 border border-rose-100/60 dark:border-white/5">
                  <button 
                    onClick={() => setViewStyle('table')}
-                   className={`p-2 rounded-lg transition-all ${viewStyle === 'table' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                   className={`p-2 rounded-lg transition-all ${viewStyle === 'table' ? 'bg-gray-100 dark:bg-white/10 text-rose-500' : 'text-gray-400 hover:text-gray-600'}`}
                  >
                    <i className="ri-table-line text-lg"></i>
                  </button>
                  <button 
                    onClick={() => setViewStyle('grid')}
-                   className={`p-2 rounded-lg transition-all ${viewStyle === 'grid' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                   className={`p-2 rounded-lg transition-all ${viewStyle === 'grid' ? 'bg-gray-100 dark:bg-white/10 text-rose-500' : 'text-gray-400 hover:text-gray-600'}`}
                  >
                    <i className="ri-layout-grid-line text-lg"></i>
                  </button>
@@ -169,7 +203,7 @@ const InquiriesPage: React.FC = () => {
             <div className="flex items-center justify-center h-64">
               <i className="ri-loader-4-line text-4xl animate-spin text-rose-500"></i>
             </div>
-          ) : filteredInquiries.length === 0 ? (
+          ) : (activeTab === 'parents' ? filteredInquiries : filteredSurrogateInquiries).length === 0 ? (
             <Card className="p-12 text-center border-dashed border-2">
               <i className="ri-inbox-line text-4xl text-gray-300 mb-4"></i>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">No inquiries found</h3>
@@ -177,56 +211,75 @@ const InquiriesPage: React.FC = () => {
             </Card>
           ) : viewStyle === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredInquiries.map((user) => (
-                <Card key={user.id} className="hover:shadow-md transition-shadow">
+              {(activeTab === 'parents' ? filteredInquiries : (filteredSurrogateInquiries as any[])).map((item) => (
+                <Card key={item.id} className="hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500 font-bold">
-                        {user.firstName?.[0]}{user.lastName?.[0]}
+                        {(item.firstName || item.first_name)?.[0]}{(item.lastName || item.last_name)?.[0]}
                       </div>
                       <div>
                         <h3 className="font-bold text-gray-900 dark:text-white">
-                          {user.firstName} {user.lastName}
+                          {item.firstName || item.first_name} {item.lastName || item.last_name}
                         </h3>
                         <p className="text-[10px] text-gray-400 font-medium">
-                          ID: {user.id.split('-')[0]}
+                          ID: {String(item.id).split('-')[0]}
                         </p>
                       </div>
                     </div>
-                    {getStatusBadge(user.status as string)}
+                    {getStatusBadge(item.status as string)}
                   </div>
 
                   <div className="space-y-2 mb-6">
                     <div className="flex items-center gap-2 text-sm">
                       <i className="ri-mail-line text-gray-400"></i>
-                      <a href={`mailto:${user.email}`} className="text-blue-600 hover:underline truncate">
-                        {user.email}
+                      <a href={`mailto:${item.email}`} className="text-blue-600 hover:underline truncate">
+                        {item.email}
                       </a>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <i className="ri-calendar-line text-gray-400"></i>
                       <span className="text-gray-600 dark:text-gray-400">
-                        Received {formatMMDDYYYYOr(user.createdAt)}
+                        Received {formatMMDDYYYYOr(item.createdAt || item.created_at)}
                       </span>
                     </div>
+                    {activeTab === 'surrogates' && item.state && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <i className="ri-map-pin-line text-gray-400"></i>
+                        <span className="text-gray-600 dark:text-gray-400">{item.state}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-4 border-t border-rose-50 dark:border-white/5 flex items-center justify-between">
                      <select 
                        className="text-xs font-semibold bg-rose-50/50 dark:bg-white/5 border-none rounded-lg focus:ring-rose-500 dark:text-white px-3 py-2 cursor-pointer"
-                       value={user.status || 'New Inquiry'}
-                       onChange={(e) => handleStatusUpdate(user.id, e.target.value)}
+                       value={item.status || (activeTab === 'parents' ? 'New Inquiry' : 'pending')}
+                       onChange={(e) => {
+                         if (activeTab === 'parents') handleStatusUpdate(item.id, e.target.value);
+                         else {
+                            inquiryService.updateSurrogateInquiryStatus(item.id, e.target.value).then(() => fetchInquiries());
+                         }
+                       }}
                      >
-                        {INQUIRY_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                        {(activeTab === 'parents' ? INQUIRY_STATUSES : ['pending', 'reviewed', 'contacted', 'declined', 'converted']).map(s => <option key={s} value={s}>{s}</option>)}
                      </select>
-                     <Button 
-                       size="sm" 
-                       color="red" 
-                       variant="outline"
-                       onClick={() => handeArchive(user.id)}
-                     >
-                       <i className="ri-archive-line"></i>
-                     </Button>
+                     
+                     <div className="flex gap-2">
+                        {activeTab === 'surrogates' && item.status !== 'converted' && (
+                          <Button size="sm" color="emerald" onClick={() => handleConvertToProfile(item)}>
+                            Convert
+                          </Button>
+                        )}
+                        <Button 
+                          size="sm" 
+                          color="red" 
+                          variant="outline"
+                          onClick={() => activeTab === 'parents' ? handleArchive(item.id) : alert('Archive not implemented for surrogate inquiries')}
+                        >
+                          <i className="ri-archive-line"></i>
+                        </Button>
+                     </div>
                   </div>
                 </Card>
               ))}
@@ -238,42 +291,56 @@ const InquiriesPage: React.FC = () => {
                   <thead className="bg-rose-50/50 dark:bg-white/5 text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-widest font-black">
                     <tr>
                       <th className="px-6 py-4 font-bold">Name</th>
-                      <th className="px-6 py-4 font-bold">Source</th>
+                      <th className="px-6 py-4 font-bold">{activeTab === 'parents' ? 'Source' : 'State'}</th>
                       <th className="px-6 py-4 font-bold">Received</th>
                       <th className="px-6 py-4 font-bold">Status</th>
                       <th className="px-6 py-4 font-bold text-right">Update Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                    {filteredInquiries.map((user) => (
-                      <tr key={user.id} className="hover:bg-rose-50/20 dark:hover:bg-white/5 transition-colors group">
+                    {(activeTab === 'parents' ? filteredInquiries : (filteredSurrogateInquiries as any[])).map((item) => (
+                      <tr key={item.id} className="hover:bg-rose-50/20 dark:hover:bg-white/5 transition-colors group">
                         <td className="px-6 py-4">
                           <div className="font-bold text-gray-900 dark:text-white">
-                            {user.firstName} {user.lastName}
+                            {item.firstName || item.first_name} {item.lastName || item.last_name}
                           </div>
-                          <div className="text-[10px] text-gray-400">{user.email}</div>
+                          <div className="text-[10px] text-gray-400">{item.email}</div>
                         </td>
                         <td className="px-6 py-4">
-                          <Badge color="blue" variant="outline">{inquirySourceOf(user)}</Badge>
+                          {activeTab === 'parents' ? (
+                             <Badge color="blue" variant="outline">{inquirySourceOf(item)}</Badge>
+                          ) : (
+                             <span className="text-xs font-medium">{item.state || '—'}</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-xs text-gray-600 dark:text-gray-400">
-                          {formatMMDDYYYYOr(user.createdAt)}
+                          {formatMMDDYYYYOr(item.createdAt || item.created_at)}
                         </td>
                         <td className="px-6 py-4">
-                          {getStatusBadge(user.status as string)}
+                          {getStatusBadge(item.status as string)}
                         </td>
                         <td className="px-6 py-4 text-right">
                            <div className="flex items-center justify-end gap-3">
+                             {activeTab === 'surrogates' && item.status !== 'converted' && (
+                               <Button size="xs" color="emerald" onClick={() => handleConvertToProfile(item)}>
+                                 Convert
+                               </Button>
+                             )}
                              <select 
                                className="text-xs font-semibold bg-rose-50/50 dark:bg-white/5 border-none rounded-lg focus:ring-rose-500 dark:text-white px-3 py-2 cursor-pointer transition-all hover:bg-rose-100/50 dark:hover:bg-white/10"
-                               value={user.status || 'New Inquiry'}
-                               onChange={(e) => handleStatusUpdate(user.id, e.target.value)}
+                               value={item.status || (activeTab === 'parents' ? 'New Inquiry' : 'pending')}
+                               onChange={(e) => {
+                                  if (activeTab === 'parents') handleStatusUpdate(item.id, e.target.value);
+                                  else {
+                                     inquiryService.updateSurrogateInquiryStatus(item.id, e.target.value).then(() => fetchInquiries());
+                                  }
+                               }}
                              >
-                                {INQUIRY_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                                {(activeTab === 'parents' ? INQUIRY_STATUSES : ['pending', 'reviewed', 'contacted', 'declined', 'converted']).map(s => <option key={s} value={s}>{s}</option>)}
                              </select>
                              <button 
                                className="p-2 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                               onClick={() => handeArchive(user.id)}
+                               onClick={() => activeTab === 'parents' ? handleArchive(item.id) : alert('Archive not implemented')}
                                title="Archive Inquiry"
                              >
                                <i className="ri-delete-bin-line text-base"></i>

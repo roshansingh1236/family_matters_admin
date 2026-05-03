@@ -71,5 +71,67 @@ export const inquiryService = {
   // Archive or Decline Inquiry
   archiveInquiry: async (userId: string): Promise<void> => {
       await inquiryService.updateInquiryStatus(userId, 'Declined / Inactive');
+  },
+
+  // Fetch Surrogate Inquiries (from the dedicated table)
+  getSurrogateInquiries: async (): Promise<any[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('surrogate_inquiries')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching surrogate inquiries:', error);
+      throw error;
+    }
+  },
+
+  updateSurrogateInquiryStatus: async (id: string, status: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('surrogate_inquiries')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating surrogate inquiry status:', error);
+      throw error;
+    }
+  },
+
+  // Convert a Surrogate Inquiry lead into a full User Profile
+  convertSurrogateToProfile: async (inquiry: any): Promise<void> => {
+    try {
+      // 1. Create the user row (Staff will need to manually trigger auth invite or we do it here)
+      const { data: newUser, error: userError } = await supabase
+        .from('users')
+        .insert({
+          email: inquiry.email,
+          first_name: inquiry.first_name,
+          last_name: inquiry.last_name,
+          role: 'Surrogate',
+          status: 'Inquiry',
+          phone: inquiry.phone,
+          form_data: {
+            initial_inquiry_id: inquiry.id,
+            state: inquiry.state,
+            previous_pregnancy: inquiry.previous_pregnancy,
+            message: inquiry.message
+          }
+        })
+        .select()
+        .single();
+
+      if (userError) throw userError;
+
+      // 2. Update the inquiry status
+      await inquiryService.updateSurrogateInquiryStatus(inquiry.id, 'converted');
+    } catch (error) {
+      console.error('Error converting surrogate inquiry:', error);
+      throw error;
+    }
   }
 };

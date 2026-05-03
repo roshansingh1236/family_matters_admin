@@ -233,15 +233,14 @@ export const SURROGATE_INTAKE_TEMPLATE = {
   mentalHealth: '', usedTHC: '', postpartumDepression: '', bedrest: '',
   hepatitisBVaccination: '', rhogamInjection: '', fertilityTreatments: '',
   hadMiscarriage: '', miscarriageDetails: '', childrenBirthed: '', surrogacyChildren: '',
-  // OB History – Pregnancy 1
+  // OB History
+  numberOfPregnancies: 0,
   pregnancy1Name: '', pregnancy1Gender: '', pregnancy1DOB: '', pregnancy1Weight: '',
   pregnancy1Delivery: '', pregnancy1GestationalAge: '', pregnancy1Complications: '',
   pregnancy1OBGYN: '', pregnancy1Hospital: '',
-  // OB History – Pregnancy 2
   pregnancy2Name: '', pregnancy2Gender: '', pregnancy2DOB: '', pregnancy2Weight: '',
   pregnancy2Delivery: '', pregnancy2GestationalAge: '', pregnancy2Complications: '',
   pregnancy2OBGYN: '', pregnancy2Hospital: '', pregnancy2Surrogacy: '',
-  // OB History – Pregnancy 3
   pregnancy3Name: '', pregnancy3Gender: '', pregnancy3DOB: '', pregnancy3Weight: '',
   pregnancy3Delivery: '', pregnancy3GestationalAge: '', pregnancy3Complications: '',
   pregnancy3OBGYN: '', pregnancy3Hospital: '', pregnancy3Surrogacy: '',
@@ -259,7 +258,7 @@ export const SURROGATE_INTAKE_TEMPLATE = {
   helpSameSexCouple: '', helpSingleParent: '', fetusesWilling: '',
   reduceTripletsToTwins: '', reduceTwinsToSingleton: '',
   terminateIfNecessary: '', terminateDownSyndrome: '', amniocentesis: '',
-  agreeToFetalTesting: '', messageToParents: ''
+  agreeToFetalTesting: '', willingForSplitTwins: false, messageToParents: ''
 };
 
 // Matches Flutter form_data.parent1 and form_data.parent2 (IntendedParentsSignUpForm / form1.dart + form2.dart)

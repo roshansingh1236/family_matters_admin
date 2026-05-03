@@ -108,6 +108,7 @@ const SECTIONS: SectionDef[] = [
     subtitle: 'Matches the surrogate questionnaire; see OB table above when parsed',
     icon: 'ri-parent-line',
     keys: [
+      'numberOfPregnancies',
       'pregnancy1Name',
       'pregnancy1Gender',
       'pregnancy1DOB',
@@ -186,6 +187,7 @@ const SECTIONS: SectionDef[] = [
       'terminateDownSyndrome',
       'amniocentesis',
       'agreeToFetalTesting',
+      'willingForSplitTwins',
       'messageToParents'
     ]
   }

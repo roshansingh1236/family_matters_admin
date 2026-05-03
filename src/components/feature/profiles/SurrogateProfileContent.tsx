@@ -34,6 +34,8 @@ import {
 import { medicalIntakeProfileSource } from '../../../utils/surrogateMedicalFromProfile';
 import { normalizeUserDocuments } from '../../../utils/userDocuments';
 import SurrogateMedicalIntakeView from '../../data/SurrogateMedicalIntakeView';
+import { JourneyRoadmap } from '../JourneyRoadmap';
+import ReimbursementTracker from '../ReimbursementTracker';
 
 interface SurrogateProfileContentProps {
   id: string;
@@ -89,7 +91,7 @@ const TABS = [
     { id: 'medical_report', label: 'Medical Reports', icon: 'ri-heart-pulse-line' },
     { id: 'medical_intake', label: 'Medical Intake', icon: 'ri-file-shield-line' },
     { id: 'clinical', label: 'Clinical Care', icon: 'ri-stethoscope-line' },
-    { id: 'compensation', label: 'Compensation', icon: 'ri-money-dollar-circle-line' },
+    { id: 'finances', label: 'Finances & Expenses', icon: 'ri-money-dollar-circle-line' },
     { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
 ] as const;
 
@@ -574,6 +576,36 @@ export default function SurrogateProfileContent({
                         </div>
                     </div>
                 </Card>
+
+                <div className="lg:col-span-1 space-y-6">
+                    <Card>
+                        <JourneyRoadmap role="Surrogate" currentStatus={surrogate.status} />
+                    </Card>
+                    
+                    <Card className="bg-gradient-to-br from-indigo-600 to-blue-700 text-white border-none shadow-lg">
+                        <div className="flex flex-col h-full justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-bold">Become a Surrogate</h3>
+                                <p className="text-sm text-white/80 mt-2">Reading materials and resources provided to this surrogate in the app dashboard.</p>
+                            </div>
+                            <div className="space-y-3">
+                                {[
+                                    { title: 'The Surrogacy Process', icon: 'ri-book-read-line' },
+                                    { title: 'Medical Screening 101', icon: 'ri-stethoscope-line' },
+                                    { title: 'Understanding Legal Steps', icon: 'ri-scales-3-line' }
+                                ].map((doc, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all cursor-pointer">
+                                        <div className="flex items-center gap-3">
+                                            <i className={doc.icon}></i>
+                                            <span className="text-xs font-medium">{doc.title}</span>
+                                        </div>
+                                        <i className="ri-external-link-line opacity-50"></i>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </Card>
+                </div>
             </div>
         )}
 
@@ -928,22 +960,27 @@ export default function SurrogateProfileContent({
             </div>
         )}
 
-        {activeTab === 'compensation' && (
-            <Card>
-                 <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold">Payment History</h3><Button size="sm" onClick={() => navigate('/payments')}>Manage</Button></div>
-                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 dark:bg-[#15111f]">
-                            <tr><th className="px-4 py-3">Type</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Status</th></tr>
-                        </thead>
-                        <tbody>
-                            {payments.map(p => (
-                                <tr key={p.id} className="border-t border-gray-100 dark:border-white/5"><td className="px-4 py-3 font-medium">{p.type}</td><td className="px-4 py-3 font-mono">${Number(p.amount).toLocaleString()}</td><td className="px-4 py-3"><Badge color={getPaymentStatusColor(p.status)}>{p.status}</Badge></td></tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </Card>
+        {activeTab === 'finances' && (
+            <div className="space-y-6">
+                <Card>
+                    <ReimbursementTracker userId={id} />
+                </Card>
+                <Card>
+                    <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold">Legacy Payment History</h3><Button size="sm" onClick={() => navigate('/payments')}>Manage</Button></div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 dark:bg-[#15111f]">
+                                <tr><th className="px-4 py-3">Type</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Status</th></tr>
+                            </thead>
+                            <tbody>
+                                {payments.map(p => (
+                                    <tr key={p.id} className="border-t border-gray-100 dark:border-white/5"><td className="px-4 py-3 font-medium">{p.type}</td><td className="px-4 py-3 font-mono">${Number(p.amount).toLocaleString()}</td><td className="px-4 py-3"><Badge color={getPaymentStatusColor(p.status)}>{p.status}</Badge></td></tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            </div>
         )}
 
         {activeTab === 'documents' && (

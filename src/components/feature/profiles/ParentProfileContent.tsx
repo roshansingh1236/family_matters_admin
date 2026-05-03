@@ -25,6 +25,8 @@ import {
   ABOUT_PARENT_TEMPLATE
 } from '../../../constants/jsonTemplates';
 import { STORAGE_BUCKETS } from '../../../services/storageService';
+import { JourneyRoadmap } from '../JourneyRoadmap';
+import ReimbursementTracker from '../ReimbursementTracker';
 
 interface ParentProfileContentProps {
   id: string;
@@ -122,6 +124,7 @@ const TABS = [
     { id: 'application', label: 'Signup & App', icon: 'ri-file-user-line' },
     { id: 'personal', label: 'Detailed Application (Form 2)', icon: 'ri-profile-line' },
     { id: 'medical', label: 'Medical & Fertility', icon: 'ri-heart-pulse-line' },
+    { id: 'finances', label: 'Finances & Expenses', icon: 'ri-bank-card-line' },
     { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
 ] as const;
 
@@ -462,6 +465,36 @@ export default function ParentProfileContent({
                             </div>
                         </div>
                     </Card>
+
+                    <div className="lg:col-span-1 space-y-6">
+                        <Card>
+                            <JourneyRoadmap role="Intended Parent" currentStatus={parent.status} />
+                        </Card>
+                        
+                        <Card className="bg-gradient-to-br from-indigo-600 to-blue-700 text-white border-none shadow-lg">
+                            <div className="flex flex-col h-full justify-between gap-4">
+                                <div>
+                                    <h3 className="text-lg font-bold">Intended Parent Guide</h3>
+                                    <p className="text-sm text-white/80 mt-2">Educational materials and resources provided to these parents in the app dashboard.</p>
+                                </div>
+                                <div className="space-y-3">
+                                    {[
+                                        { title: 'Choosing Your Carrier', icon: 'ri-user-search-line' },
+                                        { title: 'The Legal Roadmap', icon: 'ri-scales-3-line' },
+                                        { title: 'Financial Planning', icon: 'ri-bank-card-line' }
+                                    ].map((doc, idx) => (
+                                        <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all cursor-pointer">
+                                            <div className="flex items-center gap-3">
+                                                <i className={doc.icon}></i>
+                                                <span className="text-xs font-medium">{doc.title}</span>
+                                            </div>
+                                            <i className="ri-external-link-line opacity-50"></i>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
                 </div>
             )}
 
@@ -492,6 +525,12 @@ export default function ParentProfileContent({
                     <Card><EditableJsonSection title="Infectious Disease" data={parent.form2Data?.infectiousDisease || null} templateData={IP_INFECTIOUS_DISEASE_TEMPLATE} onSave={(v: any) => handleUpdateField('form2Data.infectiousDisease', v)} /></Card>
                     <Card><EditableJsonSection title="Embryo Records" data={parent.form2Data?.embryoRecords || null} templateData={IP_EMBRYO_RECORDS_TEMPLATE} onSave={(v: any) => handleUpdateField('form2Data.embryoRecords', v)} /></Card>
                 </div>
+            )}
+
+            {activeTab === 'finances' && (
+                <Card>
+                    <ReimbursementTracker userId={id} />
+                </Card>
             )}
 
             {activeTab === 'documents' && (
