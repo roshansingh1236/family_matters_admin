@@ -11,6 +11,7 @@ export type StorageBucket = typeof STORAGE_BUCKETS[keyof typeof STORAGE_BUCKETS]
 export interface UploadResult {
   url: string;
   path: string;
+  error?: any;
 }
 
 export const storageService = {
@@ -29,9 +30,8 @@ export const storageService = {
         .upload(path, file, options);
 
       if (error) {
-        // If error is bucket not found, we might want to log it specifically
         if (error.message.includes('Bucket not found')) {
-          console.error(`Bucket "${bucket}" not found. Please run the bucket initialization script.`);
+          console.error(`Bucket "${bucket}" not found.`);
         }
         throw error;
       }
@@ -47,6 +47,21 @@ export const storageService = {
     } catch (error) {
       console.error(`Error uploading to ${bucket}:`, error);
       throw error;
+    }
+  },
+
+  /**
+   * Specialized helper for profile images
+   */
+  uploadProfileImage: async (userId: string, file: File): Promise<UploadResult> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-profile.${fileExt}`;
+    const path = `${userId}/${fileName}`;
+
+    try {
+      return await storageService.uploadFile(STORAGE_BUCKETS.USERS, path, file, { upsert: true });
+    } catch (error: any) {
+      return { url: '', path: '', error };
     }
   },
 
@@ -78,8 +93,6 @@ export const storageService = {
 
   /**
    * Ensures all required buckets exist
-   * Note: This usually requires more permissions than the anon key has.
-   * This is best run in a setup script or via a service role.
    */
   ensureBucketsExist: async () => {
     const buckets = Object.values(STORAGE_BUCKETS);
@@ -90,28 +103,23 @@ export const storageService = {
         const { data: bucket, error: checkError } = await supabase.storage.getBucket(bucketName);
         
         if (checkError || !bucket) {
-          console.log(`Bucket "${bucketName}" not found, attempting to create...`);
           const { error: createError } = await supabase.storage.createBucket(bucketName, {
             public: true,
             fileSizeLimit: 1024 * 1024 * 50, // 50MB limit
           });
           
           if (createError) {
-            console.error(`Failed to create bucket "${bucketName}":`, createError.message);
             results.push({ name: bucketName, status: 'error', error: createError });
           } else {
-            console.log(`Successfully created bucket "${bucketName}"`);
             results.push({ name: bucketName, status: 'created' });
           }
         } else {
           results.push({ name: bucketName, status: 'exists' });
         }
       } catch (error) {
-        console.error(`Error checking/creating bucket "${bucketName}":`, error);
         results.push({ name: bucketName, status: 'failed', error });
       }
     }
     return results;
   }
 };
-                

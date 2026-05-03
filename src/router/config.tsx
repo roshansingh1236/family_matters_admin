@@ -1,4 +1,3 @@
-
 import type { RouteObject } from 'react-router-dom';
 import HomePage from '../pages/home/page';
 import RequestsPage from '../pages/requests/page';
@@ -27,6 +26,9 @@ import LandingPage from '../pages/landing/page';
 import ScreeningPage from '../pages/screening/page';
 import ProfilePreviewPage from '../components/feature/ProfilePreviewPage';
 import AuditPage from '../pages/audit/page';
+import ContactsPage from '../pages/contacts/page';
+import ContactDetailPage from '../pages/contacts/detail/page';
+import MarketingPage from '../pages/marketing/page';
 
 const routes: RouteObject[] = [
   {
@@ -36,6 +38,10 @@ const routes: RouteObject[] = [
   {
     path: '/requests',
     element: <RequestsPage />,
+  },
+  {
+    path: '/marketing',
+    element: <MarketingPage />,
   },
   {
     path: '/inquiries',
@@ -136,6 +142,14 @@ const routes: RouteObject[] = [
   {
     path: '/audit',
     element: <AuditPage />,
+  },
+  {
+    path: '/contacts',
+    element: <ContactsPage />,
+  },
+  {
+    path: '/contacts/:id',
+    element: <ContactDetailPage />,
   }
 ];
 

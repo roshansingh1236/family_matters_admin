@@ -3,41 +3,73 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 import Card from '../../base/Card';
 import Button from '../../base/Button';
-import Badge from '../../base/Badge';
 import EditableJsonSection from '../../data/EditableJsonSection';
 import CoreProfileCard from '../../data/CoreProfileCard';
 import AboutSection from '../AboutSection';
 import FileUploadSection from '../../data/FileUploadSection';
-import { storageService, STORAGE_BUCKETS } from '../../../services/storageService';
 import Toast from '../../base/Toast';
+import Badge from '../../base/Badge';
+import MedicalReportView from '../MedicalReportView';
+import { storageService } from '../../../services/storageService';
+import { IP_STATUSES } from '../../../types';
 import {
-  PARENT_PROFILE_TEMPLATE,
-  ABOUT_PARENT_TEMPLATE,
+  resolveParentAdditionalProfile
+} from '../../../utils/surrogateFormData';
+import {
   IP_PARENT_FORM_TEMPLATE,
   IP_MEDICAL_REPORTS_TEMPLATE,
   IP_SURROGATE_RELATED_TEMPLATE,
   IP_FERTILITY_QUESTIONS_TEMPLATE,
   IP_INFECTIOUS_DISEASE_TEMPLATE,
   IP_EMBRYO_RECORDS_TEMPLATE,
-  INITIAL_APPLICATION_TEMPLATE
+  ABOUT_PARENT_TEMPLATE
 } from '../../../constants/jsonTemplates';
-
-import CreateMatchDialog from '../CreateMatchDialog';
-import AgencyApprovalToggle from '../AgencyApprovalToggle';
-import MedicalReportView from '../MedicalReportView';
-import { IP_STATUSES } from '../../../types';
-import { auditService } from '../../../services/auditService';
-import { resolveParentAdditionalProfile } from '../../../utils/surrogateFormData';
+import { STORAGE_BUCKETS } from '../../../services/storageService';
 
 interface ParentProfileContentProps {
   id: string;
   onClose?: () => void;
   showBackButton?: boolean;
-  showCreateMatch?: boolean;
 }
 
 const PARENT_CORE_FIELDS = ['firstName', 'lastName', 'role', 'profileCompleted', 'form2Completed', 'profileCompletedAt', 'form2CompletedAt'] as const;
 
+function isPopulated(obj: any) {
+    if (!obj || typeof obj !== 'object') return false;
+    return Object.keys(obj).length > 0;
+}
+
+function getPopulated(...args: any[]) {
+    for (const arg of args) {
+        if (isPopulated(arg)) return arg;
+    }
+    return null;
+}
+
+/** 
+ * Clean Parent Data: Removes Surrogate-specific fields from Parent profile displays 
+ */
+function cleanParentData(data: any) {
+    if (!data || typeof data !== 'object') return data;
+    const clean = { ...data };
+    
+    // List of fields that are only for surrogates
+    const surrogateOnlyFields = [
+        'hasBirthedChildren', 'childrenBirthed', 'children_birthed',
+        'medications', 'onPublicAssistance', 'on_public_assistance',
+        'smokesVapes', 'smokes_vapes', 'smokes', 'vapes',
+        'pregnancyHistory', 'menstrualFlow', 'cycleFlow',
+        'surrogacyChildren', 'surrogacy_children'
+    ];
+    
+    surrogateOnlyFields.forEach(field => {
+        delete clean[field];
+    });
+    
+    return clean;
+}
+
+/** Merge DB snake_case, legacy camelCase, and form_data (Flutter) into unified parent state. */
 function parentStateFromRow(data: Record<string, any>) {
   const resolveJson = (v: any) => {
     if (typeof v === 'string') {
@@ -47,103 +79,41 @@ function parentStateFromRow(data: Record<string, any>) {
   };
 
   const colFd = resolveJson(data.form_data ?? data.formData ?? {});
-  const colF2D = resolveJson(data.form2_data ?? data.form2Data ?? {});
-  
   const getNested = (obj: any) => (obj && typeof obj === 'object' && obj.form_data && typeof obj.form_data === 'object' && !Array.isArray(obj.form_data)) ? obj.form_data : null;
-  const fd = {
-    ...colFd,
-    ...(getNested(colFd) || {}),
-    ...(colF2D || {}),
-    ...(getNested(colF2D) || {})
-  };
+  const fd = { ...colFd, ...(getNested(colFd) || {}) };
 
   const firstName = data.first_name ?? data.firstName ?? fd.firstName ?? fd.first_name;
   const lastName = data.last_name ?? data.lastName ?? fd.lastName ?? fd.last_name;
-  
-  const isPopulated = (v: any) => v && typeof v === 'object' && Object.keys(v).length > 0;
 
-  const getPopulated = (...args: any[]) => {
-    for (const arg of args) {
-      const resolved = resolveJson(arg);
-      if (isPopulated(resolved)) return resolved;
-    }
-    return null;
-  };
-
+  const colF2D = resolveJson(data.form2_data ?? data.form2Data ?? {});
   const ipAdd = resolveJson(fd.ip_additional ?? {});
-  let p1 = resolveJson(data.parent1 ?? fd.parent1 ?? fd.parent_1 ?? fd.form1 ?? fd.form_1 ?? ipAdd?.parent1);
-  let p2 = getPopulated(data.parent2, fd.parent2, fd.parent_2, fd.form2, fd.form_2, ipAdd?.parent2);
+
+  let p1 = getPopulated(fd.parent1, ipAdd?.parent1, ipAdd);
+  let p2 = getPopulated(fd.parent2, ipAdd?.parent2, colF2D?.parent2);
   let fer = getPopulated(fd.fertility_questions, fd.fertility, ipAdd?.fertility, ipAdd);
-  let surr = getPopulated(data.surrogate_related, data.surrogateRelated, fd.surrogate_related, fd.surrogateRelated, fd.questions, ipAdd?.surrogate_related);
+  let surrRel = getPopulated(fd.surrogate_related, ipAdd?.surrogate_related, ipAdd);
 
-  // Aggressive Parent 2 resolution: check if colF2D itself is the Parent 2 object
-  if (!isPopulated(p2) && isPopulated(colF2D) && (colF2D.name || colF2D.address || colF2D.occupation)) {
-    p2 = colF2D;
-  }
-
-  // Top-level Parent 1 resolution using given schema
-  const medicalKeys = ['medications', 'smokesVapes', 'hasBirthedChildren', 'onPublicAssistance', 'questions'];
-  const excludedKeys = ['parent2', 'fertility', 'surrogate_related', 'surrogateRelated', ...medicalKeys];
-  
-  let parent1Data: Record<string, unknown> = {};
-  if (isPopulated(p1)) {
-    parent1Data = p1;
-  } else {
-    // If not explicitly set, extract top level from formData
-    Object.keys(fd).forEach(key => {
-      if (!excludedKeys.includes(key)) {
-        parent1Data[key] = fd[key];
-      }
-    });
-    
-    // Add explicitly normalized fallbacks
-    if (!parent1Data.name) {
-      parent1Data.name = [firstName, lastName].filter(Boolean).join(' ');
-    }
-    if (!parent1Data.email) {
-      parent1Data.email = data.email || fd.email;
-    }
-    if (!parent1Data.phone) {
-      parent1Data.phone = data.phone_number || fd.phone || fd.phoneNumber;
-    }
-  }
-
-  p1 = parent1Data;
-
-  // Fallback for Parent 2 if missing but partner fields exist (from initial registration)
-  if (!isPopulated(p2) && (fd.partnerFirstName || fd.partnerLastName)) {
-    p2 = {
-      ...(p2 || {}),
-      name: p2?.name || [fd.partnerFirstName, fd.partnerLastName].filter(Boolean).join(' '),
-      gender: p2?.gender || fd.partnerGender,
-    };
-  }
-
-  // Ensure fer is an object (it might be ipAdd if others are missing)
-  if (fer && typeof fer !== 'object') fer = { details: String(fer) };
-  if (!isPopulated(fer)) {
-     if (fd.clinic) fer = { fertility_doctor: fd.clinic };
-  }
-
-  // Ensure surr is an object (it might be fd.questions string if others are missing)
-  if (surr && typeof surr !== 'object') surr = { additional_info_for_surrogate: String(surr) };
-  if (!isPopulated(surr)) {
-      if (fd.whySurrogate || fd.message) surr = { additional_info_for_surrogate: fd.whySurrogate || fd.message };
-  }
+  // Apply cleaning to remove surrogate-specific fields
+  const cleanFd = cleanParentData(fd);
+  const cleanP1 = cleanParentData(p1);
+  const cleanP2 = cleanParentData(p2);
+  const cleanFer = cleanParentData(fer);
 
   return {
     ...data,
     firstName: firstName ?? data.firstName,
     lastName: lastName ?? data.lastName,
-    formData: fd,
-    ipAdditional: ipAdd || null,
-    parent1: isPopulated(p1) ? p1 : null,
-    parent2: isPopulated(p2) ? p2 : null,
-    fertility: isPopulated(fer) ? fer : null,
-    surrogateRelated: isPopulated(surr) ? surr : null,
+    profileImageUrl: data.profile_image_url ?? data.profileImageUrl,
+    formData: cleanFd,
+    parent1: cleanP1,
+    parent2: cleanP2,
+    fertility: cleanFer,
+    surrogateRelated: cleanParentData(surrRel),
     form2Data: resolveParentAdditionalProfile(fd, data),
-    form2Completed: data.form_2_completed ?? data.form2Completed ?? false,
+    profileCompletedAt: data.profile_completed_at ?? data.profileCompletedAt,
+    form2CompletedAt: data.form_2_completed_at ?? data.form2CompletedAt,
     profileCompleted: data.profile_completed ?? data.profileCompleted ?? false,
+    form2Completed: data.form_2_completed ?? data.form2Completed ?? false,
   };
 }
 
@@ -158,8 +128,7 @@ const TABS = [
 export default function ParentProfileContent({ 
   id, 
   onClose, 
-  showBackButton = true,
-  showCreateMatch = true 
+  showBackButton = true 
 }: ParentProfileContentProps) {
   const navigate = useNavigate();
   const [parent, setParent] = useState<any>(null);
@@ -237,7 +206,7 @@ export default function ParentProfileContent({
   };
 
   const displayName = useMemo(() => {
-    if (!parent) return 'Parent Profile';
+    if (!parent) return 'Intended Parent Inquiry';
     const parentName = (parent.parent1 as any)?.name;
     if (parentName && parentName.trim().length > 0) return parentName;
     const formFirstName = (parent.formData as any)?.firstName;
@@ -246,7 +215,7 @@ export default function ParentProfileContent({
     if (combined.length > 0) return combined;
     const fallbackCombined = [parent.firstName, parent.lastName].filter(Boolean).join(' ');
     if (fallbackCombined.length > 0) return fallbackCombined;
-    return parent.email ?? 'Parent Profile';
+    return parent.email ?? 'Intended Parent Inquiry';
   }, [parent]);
 
   const initials = useMemo(() => {
@@ -292,8 +261,18 @@ export default function ParentProfileContent({
   const createdAtText = useMemo(() => formatDateTime(parent?.createdAt), [parent]);
 
   const heroMeta = useMemo(() => [
-    parent?.email && { icon: 'ri-mail-line', label: 'Email', value: parent.email },
-    phone && { icon: 'ri-phone-line', label: 'Phone', value: phone },
+    parent?.email && { 
+      icon: 'ri-mail-line', 
+      label: 'Email', 
+      value: parent.email,
+      href: `mailto:${parent.email}`
+    },
+    phone && { 
+      icon: 'ri-phone-line', 
+      label: 'Phone', 
+      value: phone,
+      href: `tel:${phone}`
+    },
     location && { icon: 'ri-map-pin-line', label: 'Location', value: location },
     timeline && { icon: 'ri-timer-line', label: 'Intended Timeline', value: timeline }
   ].filter(Boolean) as any[], [location, parent?.email, phone, timeline]);
@@ -303,8 +282,8 @@ export default function ParentProfileContent({
   const summaryCards = useMemo(() => [
     {
       label: 'Profile Status',
-      value: parent?.profileCompleted ? 'Complete' : 'In Progress',
-      icon: parent?.profileCompleted ? 'ri-shield-check-line' : 'ri-time-line',
+      value: parent?.profileCompleted ? 'Ready' : 'In Progress',
+      icon: parent?.profileCompleted ? 'ri-heart-3-line' : 'ri-time-line',
       className: parent?.profileCompleted ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
     },
     {
@@ -313,239 +292,112 @@ export default function ParentProfileContent({
       icon: isEligibleForMatch ? 'ri-links-line' : 'ri-lock-line',
       className: isEligibleForMatch ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
     },
-    { label: 'Created', value: createdAtText, icon: 'ri-calendar-line', className: 'bg-white dark:bg-[#0e0b1a] border border-rose-100/60 dark:border-white/5 text-gray-700 dark:text-gray-200' },
+    { label: 'Timeline', value: timeline ?? '—', icon: 'ri-calendar-line', className: 'bg-white dark:bg-[#0e0b1a] border border-rose-100/60 dark:border-white/5 text-gray-700 dark:text-gray-200' },
     { label: 'Last Updated', value: updatedAtText, icon: 'ri-refresh-line', className: 'bg-white dark:bg-[#0e0b1a] border border-rose-100/60 dark:border-white/5 text-gray-700 dark:text-gray-200' }
-  ], [createdAtText, isEligibleForMatch, parent?.profileCompleted, updatedAtText]);
+  ], [isEligibleForMatch, parent?.profileCompleted, timeline, updatedAtText]);
 
   const handleUpdateField = async (field: string, value: any) => {
     if (!id) return;
-    let updatePayload: any = {};
-    if (field.includes('.')) {
-      const [top, nest] = field.split('.');
-      updatePayload = { [top]: { ...(parent[top] || {}), [nest]: value } };
+
+    const mergedFormData = () => ({ ...(parent.formData || parent.form_data || {}) });
+
+    let updatePayload: Record<string, unknown> = {};
+
+    if (field.startsWith('form_data.')) {
+      const sub = field.slice('form_data.'.length);
+      const fd = mergedFormData();
+      fd[sub] = value;
+      updatePayload = { form_data: fd };
+    } else if (field === 'form2_data') {
+        updatePayload = { form2_data: value };
     } else {
       updatePayload = { [field]: value };
     }
-    const { error } = await supabase.from('users').update(updatePayload).eq('id', id);
-    if (error) setToast({ message: `Failed to update ${field}`, type: 'error' });
-    else {
-      setParent((prev: any) => ({ ...prev, ...updatePayload }));
-      setToast({ message: `${field} updated successfully`, type: 'success' });
-    }
-  };
 
-  const handleUpdateCore = async (value: any) => {
-    if (!id || !parent) return;
-    const filtered = Object.keys(value).reduce((acc: any, key) => {
-      if (PARENT_CORE_FIELDS.includes(key as any)) acc[key] = value[key];
-      return acc;
-    }, {});
-    const dbPayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if ('firstName' in filtered) dbPayload.first_name = filtered.firstName;
-    if ('lastName' in filtered) dbPayload.last_name = filtered.lastName;
-    if ('role' in filtered) dbPayload.role = filtered.role;
-    if ('profileCompleted' in filtered) dbPayload.profile_completed = filtered.profileCompleted;
-    if ('form2Completed' in filtered) dbPayload.form_2_completed = filtered.form2Completed;
-    if ('profileCompletedAt' in filtered) {
-      const v = filtered.profileCompletedAt;
-      dbPayload.profile_completed_at = v === '' || v === undefined || v === null ? null : v;
-    }
-    if ('form2CompletedAt' in filtered) {
-      const v = filtered.form2CompletedAt;
-      dbPayload.form_2_completed_at = v === '' || v === undefined || v === null ? null : v;
-    }
-    if ('profileCompleted' in filtered && filtered.profileCompleted === false) {
-      dbPayload.profile_completed_at = null;
-    }
-    if ('form2Completed' in filtered && filtered.form2Completed === false) {
-      dbPayload.form_2_completed_at = null;
-    }
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ ...updatePayload, updated_at: new Date().toISOString() })
+        .eq('id', id);
 
-    if ('firstName' in filtered || 'lastName' in filtered) {
-      const fd = { ...(parent.formData || {}) };
-      if ('firstName' in filtered) fd.firstName = filtered.firstName;
-      if ('lastName' in filtered) fd.lastName = filtered.lastName;
-      dbPayload.form_data = fd;
-    }
-
-    const { error } = await supabase.from('users').update(dbPayload).eq('id', id);
-    if (error) setToast({ message: 'Failed to update core profile', type: 'error' });
-    else {
-      setParent((prev: any) =>
-        parentStateFromRow({
-          ...prev,
-          ...dbPayload,
-          form_data: (dbPayload.form_data as Record<string, unknown>) ?? prev.form_data ?? prev.formData,
-          first_name: (dbPayload.first_name as string | undefined) ?? prev.first_name,
-          last_name: (dbPayload.last_name as string | undefined) ?? prev.last_name,
-          profile_completed: (dbPayload.profile_completed as boolean | undefined) ?? prev.profile_completed,
-          form_2_completed: (dbPayload.form_2_completed as boolean | undefined) ?? prev.form_2_completed,
-        })
-      );
-      setToast({ message: 'Core profile updated successfully', type: 'success' });
+      if (error) throw error;
+      setToast({ message: 'Inquiry updated successfully', type: 'success' });
+      fetchParent();
+    } catch (err: any) {
+      console.error('Failed to update field', err);
+      setToast({ message: `Update failed: ${err.message}`, type: 'error' });
     }
   };
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!id) return;
-
-    // Per spec: "Declined / Inactive" requires a reason
-    if (newStatus === 'Declined / Inactive') {
-      const reason = window.prompt('Reason for declining (required):');
-      if (!reason?.trim()) {
-        setToast({ message: 'A decline reason is required.', type: 'error' });
-        return;
-      }
-      const { error } = await supabase
-        .from('users')
-        .update({ status: newStatus, decline_reason: reason.trim(), updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (error) setToast({ message: 'Failed to update status', type: 'error' });
-      else {
-        setParent((prev: any) => ({ ...prev, status: newStatus, decline_reason: reason.trim() }));
-        setToast({ message: 'Status updated', type: 'success' });
-        auditService.log(`IP status changed: ${parent?.status} → ${newStatus} (reason: ${reason.trim()})`, 'user', id, {
-          before: { status: parent?.status }, after: { status: newStatus, declineReason: reason.trim() },
-        });
-      }
-      return;
-    }
-
-    const prevStatus = parent?.status;
-    const { error } = await supabase
-      .from('users')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', id);
-    if (error) setToast({ message: 'Failed to update status', type: 'error' });
-    else {
-      setParent((prev: any) => ({ ...prev, status: newStatus }));
-      setToast({ message: 'Status updated successfully', type: 'success' });
-      auditService.log(`IP status changed: ${prevStatus} → ${newStatus}`, 'user', id, {
-        before: { status: prevStatus }, after: { status: newStatus },
-      });
-    }
+    await handleUpdateField('status', newStatus);
   };
-
-  const aboutData = useMemo(() => {
-    if (!parent) return null;
-    const about = parent.about ?? {};
-    const fd = parent.formData ?? {};
-    const f2d = parent.form2Data ?? {};
-    const p1 = parent.parent1 ?? {};
-    const p2 = parent.parent2 ?? {};
-    const getValue = (...args: any[]) => args.find(v => v !== undefined && v !== null && v !== '');
-    const calculateAge = (dob: string | undefined) => {
-        if (!dob) return '';
-        try {
-            const date = new Date(dob);
-            if (isNaN(date.getTime())) return '';
-            return Math.abs(new Date(Date.now() - date.getTime()).getUTCFullYear() - 1970).toString();
-        } catch { return ''; }
-    };
-    const p1Age = p1.age || calculateAge(p1.dob) || calculateAge((f2d.parent1 as any)?.dob);
-    const p2Age = p2.age || calculateAge(p2.dob) || calculateAge((f2d.parent2 as any)?.dob);
-    return {
-        ...ABOUT_PARENT_TEMPLATE,
-        ...about,
-        bio: getValue(about.bio, parent.bio, [(f2d.parent1 as any)?.aboutYourself, (f2d.parent2 as any)?.aboutYourself].filter(Boolean).join('\n\n'), (p1 as any)?.aboutYourself) || '',
-        aboutUs: getValue(about.aboutUs, fd.message, fd.whySurrogate, (f2d.surrogateRelated as any)?.additionalInfoForSurrogate, fd.messageToSurrogate, f2d.familyDescription) || '',
-        relationshipPreference: getValue(about.relationshipPreference, parent.relationshipPreference, (f2d.surrogateRelated as any)?.pregnancyRelationship, fd.relationshipType) || '',
-        occupation: getValue(about.occupation, parent.occupation, [(f2d.parent1 as any)?.occupation, (f2d.parent2 as any)?.occupation].filter(Boolean).join(' & '), [p1.occupation, p2.occupation].filter(Boolean).join(' & ')) || '',
-        education: getValue(about.education, parent.education, [(f2d.parent1 as any)?.education, (f2d.parent2 as any)?.education].filter(Boolean).join(' & '), [p1.education, p2.education].filter(Boolean).join(' & ')) || '',
-        hobbies: getValue(about.hobbies, [(f2d.parent1 as any)?.hobbiesInterests, (f2d.parent2 as any)?.hobbiesInterests].filter(Boolean).join(', ')) || '',
-        religion: getValue(about.religion, [(f2d.parent1 as any)?.religion, (f2d.parent2 as any)?.religion].filter(Boolean).join(' & ')) || '',
-        familyLifestyle: getValue(about.familyLifestyle, [(f2d.parent1 as any)?.personalityDescription, (f2d.parent2 as any)?.personalityDescription].filter(Boolean).join('\n\n')) || '',
-        age: getValue(about.age, parent.age, fd.age, [p1Age, p2Age].filter(a => a && a !== '0').join(' & ')) || ''
-    };
-  }, [parent]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !id) return;
+
+    setIsUploadingImage(true);
     try {
-      setIsUploadingImage(true);
-      const path = `${id}/profile/avatar_${Date.now()}_${file.name}`;
-      const { url } = await storageService.uploadFile(STORAGE_BUCKETS.USERS, path, file);
-      await supabase.from('users').update({ profileImageUrl: url }).eq('id', id);
-      setToast({ message: 'Profile picture updated successfully', type: 'success' });
-    } catch {
-      setToast({ message: 'Failed to upload profile picture', type: 'error' });
+      const { url, error } = await storageService.uploadProfileImage(id, file);
+      if (error) throw error;
+      
+      await handleUpdateField('profile_image_url', url);
+      setToast({ message: 'Profile picture updated', type: 'success' });
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      setToast({ message: `Upload failed: ${err.message}`, type: 'error' });
     } finally {
       setIsUploadingImage(false);
     }
   };
 
-  if (isLoading) return <div className="flex items-center justify-center p-12"><i className="ri-loader-4-line text-3xl animate-spin text-blue-500" /></div>;
-  if (error || !parent) return <Card className="p-6 text-red-600">{error || 'Profile not found.'}</Card>;
-
-  return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      
-      <div className="flex items-center justify-between">
-        {showBackButton && (
-          <Button variant="outline" onClick={() => navigate('/parents')}>
-            <i className="ri-arrow-left-line mr-2"></i> Back to list
-          </Button>
-        )}
-        <div className="flex items-center gap-2">
-           {parent && (
-             <AgencyApprovalToggle
-               userId={id!}
-               approved={parent.agency_approved === true}
-               onChange={(approved) => {
-                 setParent((prev: any) => ({ ...prev, agency_approved: approved }));
-                 setToast({
-                   message: approved ? 'User approved for matching' : 'Approval revoked',
-                   type: 'success',
-                 });
-               }}
-               onError={() => setToast({ message: 'Failed to update approval', type: 'error' })}
-             />
-           )}
-           {parent && showCreateMatch && <CreateMatchDialog user={parent} />}
-           {onClose && (
-             <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-gray-500">
-               <i className="ri-close-line text-xl"></i>
-             </button>
-           )}
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-[#0e0b1a]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-500 font-medium">Loading intended parent inquiry...</p>
         </div>
       </div>
+    );
+  }
 
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 p-8 text-white shadow-2xl">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.28),_transparent_60%)] opacity-70" />
-        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-6">
-            <div className="relative group">
-              <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/30 bg-white/10 text-3xl font-semibold backdrop-blur-xl overflow-hidden">
-                {parent.profileImageUrl ? <img src={parent.profileImageUrl} alt={displayName} className="h-full w-full object-cover"/> : initials}
-              </div>
-              <button onClick={() => fileInputRef.current?.click()} className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity">
-                {isUploadingImage ? <i className="ri-loader-4-line animate-spin text-white text-xl"></i> : <i className="ri-camera-line text-white text-xl"></i>}
-              </button>
-              <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden"/>
+  if (error || !parent) {
+    return (
+      <div className="flex-1 p-6">
+        <Card className="max-w-2xl mx-auto p-12 text-center border-dashed border-2">
+           <i className="ri-error-warning-line text-4xl text-rose-500 mb-4"></i>
+           <h3 className="text-xl font-bold text-gray-900 dark:text-white">Inquiry Not Found</h3>
+           <p className="text-gray-500 mt-2">{error || "The intended parent inquiry you are looking for doesn't exist or has been removed."}</p>
+           <Button className="mt-6" onClick={() => navigate('/parents')}>Back to Parents</Button>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#0e0b1a] relative no-scrollbar">
+      <div className="relative h-64 bg-gradient-to-br from-rose-500 to-indigo-600 overflow-hidden">
+        <div className="absolute inset-0 opacity-20">
+           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.2)_0%,transparent_50%)]"></div>
+        </div>
+        <div className="absolute bottom-0 left-0 w-full p-8 flex flex-col md:flex-row items-end gap-6 bg-gradient-to-t from-black/60 to-transparent">
+          <div className="relative group">
+            <div className="w-32 h-32 rounded-[2.5rem] bg-white border-4 border-white/20 shadow-2xl overflow-hidden flex items-center justify-center text-rose-500 font-bold text-4xl">
+              {parent.profileImageUrl ? (
+                <img src={parent.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
+              ) : initials}
             </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-semibold leading-tight">{displayName}</h1>
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/80">
-                  <i className="ri-parent-line text-sm"></i> Intended Parent
-                </span>
-              </div>
-              <p className="mt-3 text-sm text-white/80">Building their family journey through the Family Matters program.</p>
-              <div className="mt-4 flex flex-wrap gap-3 text-sm font-medium text-white/90">
-                {heroMeta.map((item: any) => (
-                  <span key={item.label} className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur-md">
-                    <i className={`${item.icon} text-base`}></i> <span>{item.value}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
+            <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 w-10 h-10 rounded-2xl bg-white text-gray-900 shadow-xl flex items-center justify-center hover:scale-110 transition-transform">
+               {isUploadingImage ? <i className="ri-loader-4-line animate-spin"></i> : <i className="ri-camera-line"></i>}
+            </button>
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
           </div>
-          <div className="flex flex-col gap-3 text-sm text-white/80">
-             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
-                <i className="ri-donut-chart-line text-base mr-1"></i> <span className="font-medium">Status:</span>
-                <select value={parent.status || 'New Inquiry'} onChange={(e) => handleStatusChange(e.target.value)} className="bg-transparent border-none text-white focus:ring-0 cursor-pointer py-0 pl-0 pr-8 font-semibold [&>option]:text-gray-900">
+          <div className="flex-1 text-white">
+             <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-4xl font-black tracking-tight">{displayName}</h1>
+                <select value={parent.status || 'Inquiry'} onChange={(e) => handleStatusChange(e.target.value)} className="bg-transparent border-none text-white focus:ring-0 cursor-pointer py-0 pl-0 pr-8 font-semibold [&>option]:text-gray-900">
                   {IP_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
              </div>
@@ -562,6 +414,7 @@ export default function ParentProfileContent({
           ))}
       </div>
 
+      <div className="max-w-7xl mx-auto p-6">
       <div className="space-y-6">
             {activeTab === 'overview' && (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -575,28 +428,47 @@ export default function ParentProfileContent({
                             </Card>
                         ))}
                     </div>
-                    <CoreProfileCard
-                        data={Object.fromEntries(PARENT_CORE_FIELDS.map((f) => [f, parent[f]])) as Record<string, unknown>}
-                        fieldOrder={PARENT_CORE_FIELDS}
-                        onSave={handleUpdateCore}
-                        title="Core Profile State"
-                        subtitle="Identity flags & system completion status."
-                    />
-                    <Card><AboutSection title="Public Biography" data={parent.about || {}} type="parent" templateData={ABOUT_PARENT_TEMPLATE} onSave={(v: any) => handleUpdateField('about', v)} /></Card>
+
+                    <Card>
+                        <CoreProfileCard title="Inquiry Core Details" data={parent} fields={PARENT_CORE_FIELDS} onSave={(field, val) => handleUpdateField(field, val)} />
+                    </Card>
+
+                    <Card>
+                       <AboutSection 
+                          title="Inquiry Bio" 
+                          description="Personal background and surrogacy motivation."
+                          data={parent.formData?.about_parent || null} 
+                          templateData={ABOUT_PARENT_TEMPLATE}
+                          onSave={(val) => handleUpdateField('form_data.about_parent', val)}
+                       />
+                    </Card>
+
+                    <Card className="lg:col-span-2">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold">Contact Channel</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-white/5 border border-rose-100/50 dark:border-white/5">
+                                <p className="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">Primary Email</p>
+                                <p className="text-gray-900 dark:text-white font-medium break-all">{parent.email}</p>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-white/5 border border-rose-100/50 dark:border-white/5">
+                                <p className="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">Mobile Phone</p>
+                                <p className="text-gray-900 dark:text-white font-medium">{phone || '—'}</p>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-white/5 border border-rose-100/50 dark:border-white/5">
+                                <p className="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">Inquiry Date</p>
+                                <p className="text-gray-900 dark:text-white font-medium">{createdAtText}</p>
+                            </div>
+                        </div>
+                    </Card>
                 </div>
             )}
 
             {activeTab === 'application' && (
                 <div className="grid grid-cols-1 gap-6">
-                    <Card>
-                        <EditableJsonSection 
-                            title="Initial Application & Signup Info" 
-                            description="Data collected during the initial signup (Form 1 equivalent)."
-                            data={parent.formData || null} 
-                            templateData={INITIAL_APPLICATION_TEMPLATE} 
-                            onSave={(v: any) => handleUpdateField('form_data', v)} 
-                        />
-                    </Card>
+                    <Card><EditableJsonSection title="Registration Form (Signup)" data={parent.formData || null} onSave={(v: any) => handleUpdateField('form_data', v)} /></Card>
+                    <Card><EditableJsonSection title="Parent 1 (Signup App)" data={parent.parent1 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent1', v)} /></Card>
                 </div>
             )}
 
@@ -608,7 +480,6 @@ export default function ParentProfileContent({
                     </div>
                     <Card><EditableJsonSection title="Fertility & Embryos" description="Embryo & fertility information submitted through the mobile app" data={parent.fertility || null} templateData={IP_FERTILITY_QUESTIONS_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.fertility', v)} /></Card>
                     <Card><EditableJsonSection title="Surrogate Preferences" description="Surrogate relationship preferences submitted through the mobile app" data={parent.surrogateRelated || null} templateData={IP_SURROGATE_RELATED_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.surrogate_related', v)} /></Card>
-                    <Card><EditableJsonSection title="Resolved Profile (Form 2 Merge)" description="Combined data resolved from all Form 2 sources" data={parent.form2Data || null} onSave={(v: any) => handleUpdateField('form2_data', v)} /></Card>
                 </div>
             )}
 
@@ -626,7 +497,7 @@ export default function ParentProfileContent({
             {activeTab === 'documents' && (
                 <Card>
                     <FileUploadSection 
-                        title="Document Vault" 
+                        title="Inquiry Document Vault" 
                         userId={id} 
                         bucket={STORAGE_BUCKETS.USERS} 
                         folder={`${id}/documents`} 
@@ -634,6 +505,10 @@ export default function ParentProfileContent({
                 </Card>
             )}
       </div>
+      </div>
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
     </div>
   );
 }

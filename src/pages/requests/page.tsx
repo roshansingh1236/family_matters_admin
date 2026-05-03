@@ -66,7 +66,7 @@ const RequestsPage: React.FC = () => {
   /* New state for action loading */
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  const handleStatusUpdate = async (status: 'approved' | 'rejected') => {
+  const handleStatusUpdate = async (status: string) => {
     if (!selectedRequest) return;
     setIsActionLoading(true);
     try {
@@ -100,311 +100,232 @@ const RequestsPage: React.FC = () => {
     if (!selectedRequest) return;
     setIsActionLoading(true);
     try {
+      // In this system, "Inquiry" is just a status.
+      // If they were 'pending', we move them to 'New Inquiry' or 'New Application'
+      const newStatus = selectedRequest.type === 'Surrogate Application' ? 'New Application' : 'New Inquiry';
+      
       const { error } = await supabase
         .from('users')
         .update({
-          role: 'inquiry',
-          status: 'new',
+          status: newStatus,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedRequest.id);
 
       if (error) throw error;
-      navigate('/inquiries');
+      setSelectedRequest(null);
     } catch (error) {
-       console.error("Error converting to inquiry:", error);
-       alert("Failed to convert to inquiry.");
+      console.error("Error converting to inquiry:", error);
+      alert("Failed to convert request.");
     } finally {
       setIsActionLoading(false);
     }
   };
 
-  const requestsByType = requests.filter(req => req.source === inquiryType);
-
-  const filteredRequests = activeTab === 'all' 
-    ? requestsByType 
-    : requestsByType.filter(request => request.status === activeTab);
-
-  const getCounts = (status: string) => {
-    if (status === 'all') return requestsByType.length;
-    return requestsByType.filter(r => r.status === status).length;
-  };
-
-  const statusRetreived = [
-    { value: 'all', label: 'All Requests' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'under-review', label: 'Under Review' },
-    { value: 'approved', label: 'Approved' },
-    { value: 'rejected', label: 'Rejected' }
-  ];
+  const filteredRequests = requests.filter(req => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'surrogates') return req.type === 'Surrogate Application';
+    if (activeTab === 'parents') return req.type === 'Intended Parents';
+    return true;
+  });
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Badge color="yellow">Pending</Badge>;
-      case 'under-review':
-        return <Badge color="blue">Under Review</Badge>;
-      case 'approved':
-        return <Badge color="green">Approved</Badge>;
-      case 'rejected':
-        return <Badge color="red">Rejected</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
+    switch (status.toLowerCase()) {
+      case 'pending': return <Badge color="yellow">Pending Review</Badge>;
+      case 'reviewed': return <Badge color="blue">Reviewed</Badge>;
+      case 'contacted': return <Badge color="purple">Contacted</Badge>;
+      case 'follow up': return <Badge color="orange">Follow Up</Badge>;
+      case 'denied': return <Badge color="red">Denied</Badge>;
+      case 'new inquiry':
+      case 'new application': return <Badge color="green">Converted</Badge>;
+      default: return <Badge color="gray">{status}</Badge>;
     }
   };
 
   return (
     <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
-      <Sidebar />
+      <Sidebar collapsed={sidebarCollapsed} />
       
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
+        <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Requests Management</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage all incoming surrogacy applications and requests.</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Inbound Requests</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Review and manage new surrogacy applications and parent inquiries.</p>
             </div>
-            <button
-              onClick={() => setIsRecordDialogOpen(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 w-fit shadow-sm"
-            >
-              <i className="ri-phone-line"></i>
-              Record Phone Request
-            </button>
+            <div className="flex gap-3">
+              <Button color="blue" onClick={() => { setInquiryType('phone'); setIsRecordDialogOpen(true); }}>
+                <i className="ri-phone-line mr-2"></i>Record Phone Inquiry
+              </Button>
+            </div>
           </div>
 
-          <RecordInquiryDialog 
-            isOpen={isRecordDialogOpen} 
-            onClose={() => setIsRecordDialogOpen(false)} 
-            onSuccess={() => setInquiryType('phone')}
-            variant="detailed"
-          />
-
-          {/* Top Level Tabs */}
-          <div className="mb-6 border-b border-rose-100/60 dark:border-white/5">
-            <div className="flex space-x-8">
+          <div className="flex items-center gap-1 mb-6 bg-white dark:bg-[#15111f] p-1 rounded-xl w-fit border border-rose-100/60 dark:border-white/5">
+            {[
+              { id: 'all', label: 'All Requests' },
+              { id: 'surrogates', label: 'Surrogates' },
+              { id: 'parents', label: 'Intended Parents' },
+            ].map(tab => (
               <button
-                onClick={() => {
-                   setInquiryType('online');
-                   setActiveTab('all');
-                }}
-                className={`pb-4 px-2 text-sm font-medium transition-colors cursor-pointer relative ${
-                  inquiryType === 'online'
-                    ? 'text-rose-500 dark:text-rose-400'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-rose-500 text-white shadow-md' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
               >
-                Online Inquiries
-                {inquiryType === 'online' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
-                )}
+                {tab.label}
               </button>
-              <button
-                 onClick={() => {
-                  setInquiryType('phone');
-                  setActiveTab('all');
-               }}
-                className={`pb-4 px-2 text-sm font-medium transition-colors cursor-pointer relative ${
-                  inquiryType === 'phone'
-                    ? 'text-rose-500 dark:text-rose-400'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
-              >
-                Phone Inquiries
-                 {inquiryType === 'phone' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
-                )}
-              </button>
-            </div>
+            ))}
           </div>
 
-          {/* Status Tabs */}
-          <div className="mb-6">
-            <div className="flex space-x-1 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
-              {statusRetreived.map((status) => (
-                <button
-                  key={status.value}
-                  onClick={() => setActiveTab(status.value)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                    activeTab === status.value
-                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  {status.label} ({getCounts(status.value)})
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Requests Grid */}
-          {isLoading ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-64 bg-gray-100 dark:bg-[#15111f] rounded-xl animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredRequests.map((request) => (
-                <Card key={request.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedRequest(request)}>
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                        <i className="ri-user-line text-rose-500 dark:text-rose-400 text-lg"></i>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">{request.applicantName}</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{request.type}</p>
-                      </div>
-                    </div>
-                    {getStatusBadge(request.status)}
-                  </div>
-  
-                  <div className="space-y-2 mb-4">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Age:</span>
-                      <span className="text-gray-900 dark:text-white">{request.age}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Location:</span>
-                      <span className="text-gray-900 dark:text-white">{request.location}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Experience:</span>
-                      <span className="text-gray-900 dark:text-white">{request.experience}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Submitted:</span>
-                      <span className="text-gray-900 dark:text-white">{request.submittedDate}</span>
-                    </div>
-                  </div>
-  
-                  <div className="flex gap-2">
-                    <Button size="sm" className="flex-1">
-                      <i className="ri-eye-line mr-1"></i>
-                      View Details
-                    </Button>
-                    {request.status === 'pending' && (
-                      <Button size="sm" color="green" onClick={(e) => {
-                        e.stopPropagation();
-                        // Optimistically or quickly approve without opening modal if desired, but for now just let it open modal or handle here. 
-                        // The user request was about the modal actions, but let's leave this button as is or hook it up if needed.
-                        // For safety, let's just let it open the modal via the card click found on the parent.
-                      }}>
-                        <i className="ri-check-line"></i>
-                      </Button>
-                    )}
-                  </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2 space-y-4">
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center h-64 bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5">
+                  <i className="ri-loader-4-line text-3xl animate-spin text-rose-500"></i>
+                  <p className="text-sm text-gray-500 mt-2">Fetching requests...</p>
+                </div>
+              ) : filteredRequests.length === 0 ? (
+                <Card className="p-12 text-center border-dashed border-2">
+                  <i className="ri-inbox-line text-4xl text-gray-300 mb-4"></i>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">No requests found</h3>
+                  <p className="text-sm text-gray-500 mt-1">New inquiries will appear here as they come in.</p>
                 </Card>
-              ))}
+              ) : (
+                filteredRequests.map(req => (
+                  <Card 
+                    key={req.id} 
+                    className={`group hover:shadow-md transition-all cursor-pointer ${selectedRequest?.id === req.id ? 'ring-2 ring-rose-500 bg-rose-50/30' : ''}`}
+                    onClick={() => setSelectedRequest(req)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-sm ${req.type === 'Surrogate Application' ? 'bg-pink-500' : 'bg-blue-500'}`}>
+                          <i className={`${req.type === 'Surrogate Application' ? 'ri-user-heart-line' : 'ri-parent-line'} text-xl`}></i>
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900 dark:text-white">{req.applicantName}</h3>
+                          <p className="text-xs text-gray-500">{req.type} • {req.source}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        {getStatusBadge(req.status)}
+                        <span className="text-[10px] text-gray-400 font-medium">{req.submittedDate}</span>
+                      </div>
+                    </div>
+                  </Card>
+                ))
+              )}
             </div>
-          )}
 
-          {/* Request Detail Modal */}
-          {selectedRequest && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Request Details</h2>
-                    <button
-                      onClick={() => setSelectedRequest(null)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
-                    >
-                      <i className="ri-close-line text-gray-600 dark:text-gray-400"></i>
+            <div className="space-y-4">
+              {selectedRequest ? (
+                <Card className="sticky top-6">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-white">Request Details</h2>
+                      <p className="text-xs text-gray-500 mt-1">Reviewing: {selectedRequest.applicantName}</p>
+                    </div>
+                    <button onClick={() => setSelectedRequest(null)} className="text-gray-400 hover:text-gray-600">
+                      <i className="ri-close-line text-xl"></i>
                     </button>
                   </div>
 
                   <div className="space-y-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                        <i className="ri-user-line text-rose-500 dark:text-rose-400 text-2xl"></i>
+                    <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-xl space-y-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Contact Info</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">{selectedRequest.email || 'No email provided'}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{selectedRequest.phone || 'No phone provided'}</p>
                       </div>
                       <div>
-                        <h3 className="text-base font-bold text-gray-900 dark:text-white">{selectedRequest.applicantName}</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{selectedRequest.type}</p>
-                        {getStatusBadge(selectedRequest.status)}
+                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Submitted</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">{selectedRequest.submittedDate}</p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Age</label>
-                        <p className="text-gray-900 dark:text-white">{selectedRequest.age || 'N/A'}</p>
+                    <div className="space-y-3">
+                      <p className="text-xs font-bold text-gray-900 dark:text-white">Workflow Actions</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full" 
+                          disabled={isActionLoading}
+                          onClick={() => handleStatusUpdate('Reviewed')}
+                        >
+                          Mark Reviewed
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full" 
+                          disabled={isActionLoading}
+                          onClick={() => handleStatusUpdate('Contacted')}
+                        >
+                          Mark Contacted
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full" 
+                          disabled={isActionLoading}
+                          onClick={() => handleStatusUpdate('Follow Up')}
+                        >
+                          Need Follow-Up
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full" 
+                          color="red"
+                          disabled={isActionLoading}
+                          onClick={() => handleStatusUpdate('Denied')}
+                        >
+                          Deny Request
+                        </Button>
                       </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Location</label>
-                        <p className="text-gray-900 dark:text-white">{selectedRequest.location || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Experience</label>
-                        <p className="text-gray-900 dark:text-white">{selectedRequest.experience || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Submitted Date</label>
-                        <p className="text-gray-900 dark:text-white">{selectedRequest.submittedDate}</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Contact Information</label>
-                      <div className="mt-2 space-y-1">
-                        <p className="text-gray-900 dark:text-white">Email: {selectedRequest.email}</p>
-                        <p className="text-gray-900 dark:text-white">Phone: {selectedRequest.phone}</p>
-                      </div>
-                    </div>
-                    
-                    {/* Render message/notes if available */}
-                    {selectedRequest.message && (
-                        <div>
-                        <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Notes / Message</label>
-                        <p className="text-gray-900 dark:text-white bg-rose-50/40 dark:bg-[#0e0b1a] p-3 rounded mt-2">{selectedRequest.message}</p>
-                        </div>
-                    )}
-
-                    <div className="flex gap-3">
-                         <Button 
-                            color="green" 
-                            className="flex-1"
-                            onClick={() => handleStatusUpdate('approved')}
-                            disabled={isActionLoading || selectedRequest.status === 'approved'}
-                         >
-                        {isActionLoading ? <i className="ri-loader-4-line animate-spin mr-2"></i> : <i className="ri-check-line mr-2"></i>}
-                        Approve
-                      </Button>
+                      
                       <Button 
-                        color="red" 
-                        className="flex-1"
-                        onClick={() => handleStatusUpdate('rejected')}
-                        disabled={isActionLoading || selectedRequest.status === 'rejected'}
-                      >
-                         {isActionLoading ? <i className="ri-loader-4-line animate-spin mr-2"></i> : <i className="ri-close-line mr-2"></i>}
-                        Reject
-                      </Button>
-                      <Button variant="outline" className="flex-1" onClick={handleContact}>
-                        <i className="ri-message-line mr-2"></i>
-                        Contact
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        className="flex-1" 
+                        color="blue" 
+                        className="w-full" 
+                        disabled={isActionLoading || ['new inquiry', 'new application'].includes(selectedRequest.status.toLowerCase())}
                         onClick={handleConvertToInquiry}
-                        disabled={isActionLoading}
                       >
-                         {isActionLoading ? <i className="ri-loader-4-line animate-spin mr-2"></i> : <i className="ri-share-forward-line mr-2"></i>}
-                        Convert to Inquiry
+                        <i className="ri-check-double-line mr-2"></i>
+                        Convert to Lead/Inquiry
+                      </Button>
+                    </div>
+
+                    <div className="pt-6 border-t border-rose-100/60 dark:border-white/5 space-y-3">
+                      <Button variant="outline" className="w-full justify-center" onClick={handleContact}>
+                        <i className="ri-mail-send-line mr-2"></i>Send Email
+                      </Button>
+                      <Button variant="outline" className="w-full justify-center" onClick={() => navigate(selectedRequest.type === 'Surrogate Application' ? `/surrogates/${selectedRequest.id}` : `/parents/${selectedRequest.id}`)}>
+                        <i className="ri-user-settings-line mr-2"></i>View Full Profile
                       </Button>
                     </div>
                   </div>
+                </Card>
+              ) : (
+                <div className="h-64 flex flex-col items-center justify-center text-center p-8 bg-white/50 dark:bg-[#15111f]/50 rounded-2xl border-2 border-dashed border-rose-100 dark:border-white/5">
+                  <div className="w-12 h-12 bg-rose-50 dark:bg-rose-500/10 rounded-full flex items-center justify-center mb-4">
+                    <i className="ri-cursor-line text-rose-400"></i>
+                  </div>
+                  <p className="text-sm text-gray-500">Select a request from the list to view details and take actions.</p>
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          </div>
         </main>
       </div>
+
+      <RecordInquiryDialog 
+        isOpen={isRecordDialogOpen}
+        onClose={() => setIsRecordDialogOpen(false)}
+        onSuccess={fetchRequests}
+        type={inquiryType}
+      />
     </div>
   );
 };

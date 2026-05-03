@@ -171,7 +171,8 @@ export default function ProfilePreviewPage() {
 
   const images = useMemo(() => {
     const imgs: string[] = [];
-    if (user?.profileImageUrl) imgs.push(user.profileImageUrl);
+    const url = user?.profile_image_url ?? user?.profileImageUrl;
+    if (url) imgs.push(url);
     user?.documents?.filter(isImageDoc).forEach((d) => imgs.push(d.url));
     return imgs;
   }, [user]);
@@ -234,8 +235,8 @@ export default function ProfilePreviewPage() {
               <div className="flex flex-col sm:flex-row items-start sm:items-end gap-6">
                 {/* Avatar */}
                 <div className="w-24 h-24 rounded-2xl border-2 border-white/30 bg-white/10 backdrop-blur-xl overflow-hidden flex items-center justify-center text-3xl font-bold text-white shrink-0 shadow-xl">
-                  {user.profileImageUrl ? (
-                    <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
+                  {(user.profile_image_url ?? user.profileImageUrl) ? (
+                    <img src={user.profile_image_url ?? user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
                   ) : (
                     initials
                   )}

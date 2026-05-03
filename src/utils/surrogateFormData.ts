@@ -1,8 +1,8 @@
 /**
  * Resolve surrogate intake JSON for admin UI.
  * Flutter saves the full SurrogacyForm + follow-on steps under form_data.surrogate_profile.
- * Older / alternate rows may use a top-level form2 JSONB column or form_data.form2 — an empty
- * object {} in form2 must not hide surrogate_profile (nullish coalescing treats {} as present).
+ * Older / alternate rows may use a top-level form2 JSONB column or form_data.form2.
+ * Registration data is often at the top level of form_data.
  */
 export function isNonEmptyRecord(v: unknown): v is Record<string, unknown> {
   return (
@@ -22,15 +22,19 @@ export function resolveSurrogateIntakeProfile(
   const fromNested = formData?.form2 as Record<string, unknown> | undefined;
   const fromForm1 = formData?.form1 as Record<string, unknown> | undefined;
 
+  // If a profile exists (Detailed intake), we prefer that
   if (isNonEmptyRecord(fromProfile)) return fromProfile;
   if (isNonEmptyRecord(fromCol)) return fromCol;
   if (isNonEmptyRecord(fromNested)) return fromNested;
   if (isNonEmptyRecord(fromForm1)) return fromForm1;
 
-  if (fromProfile && typeof fromProfile === 'object') return fromProfile;
-  if (fromCol && typeof fromCol === 'object') return fromCol;
-  if (fromNested && typeof fromNested === 'object') return fromNested;
-  if (fromForm1 && typeof fromForm1 === 'object') return fromForm1;
+  // FALLBACK: If "Detailed Intake" information is missing from specific keys, 
+  // use the top-level formData itself (which contains Initial Signup info)
+  if (isNonEmptyRecord(formData)) {
+    // Exclude keys that are known to be containers for other forms
+    const { surrogate_profile, form2, form1, gc_additional, additional_profile, ...initialSignup } = formData;
+    if (Object.keys(initialSignup).length > 0) return initialSignup;
+  }
 
   return null;
 }
@@ -89,4 +93,3 @@ export function resolveParentAdditionalProfile(
 
   return Object.keys(merged).length > 0 ? (merged as Record<string, unknown>) : null;
 }
-

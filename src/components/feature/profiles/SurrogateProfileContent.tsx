@@ -71,6 +71,7 @@ function surrogateStateFromRow(data: Record<string, any>) {
     lastName: lastName ?? data.lastName,
     profileCompletedAt,
     form2CompletedAt,
+    profileImageUrl: data.profile_image_url ?? data.profileImageUrl,
     formData: fd,
     form1: intake,
     form2: additional,
@@ -81,6 +82,8 @@ function surrogateStateFromRow(data: Record<string, any>) {
 
 const TABS = [
     { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line' },
+    { id: 'workflow', label: 'Workflow', icon: 'ri-task-line' },
+    { id: 'gallery', label: 'Photo Gallery', icon: 'ri-image-line' },
     { id: 'application', label: 'Signup & Intake (Form 1)', icon: 'ri-file-user-line' },
     { id: 'personal', label: 'Detailed App (Form 2)', icon: 'ri-profile-line' },
     { id: 'medical_report', label: 'Medical Reports', icon: 'ri-heart-pulse-line' },
@@ -257,8 +260,18 @@ export default function SurrogateProfileContent({
   const createdAtText = useMemo(() => formatDateTime(surrogate?.createdAt), [surrogate]);
 
   const heroMeta = useMemo(() => [
-    surrogate?.email && { icon: 'ri-mail-line', label: 'Email', value: surrogate.email },
-    phone && { icon: 'ri-phone-line', label: 'Phone', value: phone },
+    surrogate?.email && { 
+      icon: 'ri-mail-line', 
+      label: 'Email', 
+      value: surrogate.email,
+      href: `mailto:${surrogate.email}`
+    },
+    phone && { 
+      icon: 'ri-phone-line', 
+      label: 'Phone', 
+      value: phone,
+      href: `tel:${phone}`
+    },
     location && { icon: 'ri-map-pin-line', label: 'Location', value: location },
     availability && { icon: 'ri-calendar-check-line', label: 'Availability', value: availability }
   ].filter(Boolean) as any[], [availability, location, phone, surrogate?.email]);
@@ -299,248 +312,122 @@ export default function SurrogateProfileContent({
       fd[sub] = value;
       updatePayload = { form_data: fd };
     } else if (field.startsWith('form2.')) {
-      const nestKey = field.slice('form2.'.length);
-      const fd = mergedFormData();
-      const sp = {
-        ...(typeof fd.surrogate_profile === 'object' && fd.surrogate_profile
-          ? (fd.surrogate_profile as Record<string, unknown>)
-          : {})
-      };
-      sp[nestKey] = value;
-      fd.surrogate_profile = sp;
-      updatePayload = { form_data: fd };
-    } else if (field === 'form2Data') {
-      updatePayload = { form2_data: value };
-    } else if (field === 'form_data') {
-      const fd = mergedFormData();
-      updatePayload = { form_data: { ...fd, ...value } };
-    } else if (field.includes('.')) {
-      const [top, nest] = field.split('.');
-      updatePayload = { [top]: { ...(surrogate[top] || {}), [nest]: value } };
+        const sub = field.slice('form2.'.length);
+        const fd = mergedFormData();
+        fd[sub] = value;
+        updatePayload = { form_data: fd };
+    } else if (field === 'form2_data') {
+        updatePayload = { form2_data: value };
     } else {
       updatePayload = { [field]: value };
     }
 
-    const { error } = await supabase.from('users').update(updatePayload).eq('id', id);
-    if (error) setToast({ message: `Failed to update ${field}`, type: 'error' });
-    else {
-      setSurrogate((prev: any) =>
-        surrogateStateFromRow({
-          ...prev,
-          ...updatePayload,
-          form_data:
-            (updatePayload.form_data as Record<string, unknown>) ??
-            prev.form_data ??
-            prev.formData,
-          form2_data: (updatePayload.form2_data as Record<string, unknown>) ?? prev.form2_data
-        })
-      );
-      setToast({ message: `${field} updated successfully`, type: 'success' });
-    }
-  };
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ ...updatePayload, updated_at: new Date().toISOString() })
+        .eq('id', id);
 
-  const handleUpdateCore = async (value: any) => {
-    if (!id || !surrogate) return;
-    const filtered = Object.keys(value).reduce((acc: any, key) => {
-      if (SURROGATE_CORE_FIELDS.includes(key as any)) acc[key] = value[key];
-      return acc;
-    }, {});
-    const dbPayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if ('firstName' in filtered) dbPayload.first_name = filtered.firstName;
-    if ('lastName' in filtered) dbPayload.last_name = filtered.lastName;
-    if ('role' in filtered) dbPayload.role = filtered.role;
-    if ('profileCompleted' in filtered) dbPayload.profile_completed = filtered.profileCompleted;
-    if ('form2Completed' in filtered) dbPayload.form_2_completed = filtered.form2Completed;
-    if ('profileCompletedAt' in filtered) {
-      const v = filtered.profileCompletedAt;
-      dbPayload.profile_completed_at = v === '' || v === undefined || v === null ? null : v;
-    }
-    if ('form2CompletedAt' in filtered) {
-      const v = filtered.form2CompletedAt;
-      dbPayload.form_2_completed_at = v === '' || v === undefined || v === null ? null : v;
-    }
-    if ('profileCompleted' in filtered && filtered.profileCompleted === false) {
-      dbPayload.profile_completed_at = null;
-    }
-    if ('form2Completed' in filtered && filtered.form2Completed === false) {
-      dbPayload.form_2_completed_at = null;
-    }
-
-    if ('firstName' in filtered || 'lastName' in filtered) {
-      const fd = { ...(surrogate.formData || {}) };
-      if ('firstName' in filtered) fd.firstName = filtered.firstName;
-      if ('lastName' in filtered) fd.lastName = filtered.lastName;
-      dbPayload.form_data = fd;
-    }
-
-    const { error } = await supabase.from('users').update(dbPayload).eq('id', id);
-    if (error) setToast({ message: 'Failed to update core profile', type: 'error' });
-    else {
-      setSurrogate((prev: any) =>
-        surrogateStateFromRow({
-          ...prev,
-          ...dbPayload,
-          form_data: (dbPayload.form_data as Record<string, unknown>) ?? prev.form_data ?? prev.formData,
-          first_name: (dbPayload.first_name as string | undefined) ?? prev.first_name,
-          last_name: (dbPayload.last_name as string | undefined) ?? prev.last_name,
-          profile_completed: (dbPayload.profile_completed as boolean | undefined) ?? prev.profile_completed,
-          form_2_completed: (dbPayload.form_2_completed as boolean | undefined) ?? prev.form_2_completed,
-        })
-      );
-      setToast({ message: 'Core profile updated successfully', type: 'success' });
+      if (error) throw error;
+      setToast({ message: 'Profile updated successfully', type: 'success' });
+      fetchSurrogate();
+    } catch (err: any) {
+      console.error('Failed to update field', err);
+      setToast({ message: `Update failed: ${err.message}`, type: 'error' });
     }
   };
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!id) return;
-
-    // Per spec: GC cannot be "Accepted to Program" unless medically cleared
-    if (newStatus === 'Accepted to Program') {
-      const screeningStatus = surrogate?.medical_screening_status ?? surrogate?.medicalScreeningStatus;
-      if (screeningStatus !== 'Medically Cleared for Program') {
-        setToast({
-          message: `Cannot set "Accepted to Program": Medical Screening must be "Medically Cleared for Program" first. Current: "${screeningStatus || 'Not Started'}".`,
-          type: 'error',
-        });
-        return;
-      }
-    }
-
-    // Per spec: "Declined / Inactive" requires a reason
-    if (newStatus === 'Declined / Inactive') {
-      const reason = window.prompt('Reason for declining (required):');
-      if (!reason?.trim()) {
-        setToast({ message: 'A decline reason is required.', type: 'error' });
-        return;
-      }
-      const { error } = await supabase
-        .from('users')
-        .update({ status: newStatus, decline_reason: reason.trim(), updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (error) setToast({ message: 'Failed to update status', type: 'error' });
-      else {
-        setSurrogate((prev: any) => ({ ...prev, status: newStatus, decline_reason: reason.trim() }));
-        setToast({ message: 'Status updated', type: 'success' });
-      }
-      return;
-    }
-
-    const prevStatus = surrogate?.status;
-    const { error } = await supabase
-      .from('users')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', id);
-    if (error) setToast({ message: 'Failed to update status', type: 'error' });
-    else {
-      setSurrogate((prev: any) => ({ ...prev, status: newStatus }));
-      setToast({ message: 'Status updated successfully', type: 'success' });
-      auditService.log(`GC status changed: ${prevStatus} → ${newStatus}`, 'user', id, {
-        before: { status: prevStatus }, after: { status: newStatus },
-      });
-    }
+    await handleUpdateField('status', newStatus);
   };
-
-  const aboutData = useMemo(() => {
-    if (!surrogate) return null;
-    const about = surrogate.about ?? {};
-    const fd = surrogate.formData ?? {};
-    const nF2 = (surrogate.form2 as Record<string, unknown>) ?? fd.surrogate_profile ?? fd.form2 ?? {};
-    const getValue = (...args: any[]) => args.find(v => v !== undefined && v !== null && v !== '');
-    const age = getValue(about.age, surrogate.age, fd.age, nF2.age);
-    let calcAge = '';
-    if (!age && fd.dateOfBirth) {
-      try {
-        const dob = new Date(fd.dateOfBirth);
-        calcAge = String(Math.abs(new Date(Date.now() - dob.getTime()).getUTCFullYear() - 1970));
-      } catch {}
-    }
-    return {
-      ...ABOUT_SURROGATE_TEMPLATE,
-      ...about,
-      age: age ? String(age) : calcAge,
-      height: getValue(about.height, surrogate.height, fd.height, nF2.height) ?? '',
-      education: getValue(about.education, surrogate.education, fd.educationLevel, nF2.educationLevel, fd['Education Level']) || '',
-      occupation: getValue(about.occupation, surrogate.occupation, fd.occupation, nF2.occupation, fd['Occupation']) || '',
-      bioMotherHeritage: getValue(about.bioMotherHeritage, surrogate.bioMotherHeritage, fd.ethnicity, nF2.ethnicity, fd['Ethnicity']) || '',
-      bioFatherHeritage: about.bioFatherHeritage || '',
-      relationshipPreference: getValue(about.relationshipPreference, surrogate.relationshipPreference, fd.relationshipStatus, nF2.relationshipStatus, fd['Relationship Status']) || '',
-      bio: getValue(about.bio, surrogate.bio, fd.messageToParents, nF2.messageToParents, fd['Message To Parents'], fd.surrogacyReasons, nF2.surrogacyReasons) || ''
-    };
-  }, [surrogate]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !id) return;
+
+    setIsUploadingImage(true);
     try {
-      setIsUploadingImage(true);
-      const path = `${id}/profile/avatar_${Date.now()}_${file.name}`;
-      const { url } = await storageService.uploadFile(STORAGE_BUCKETS.USERS, path, file);
-      await supabase.from('users').update({ profileImageUrl: url }).eq('id', id);
-      setToast({ message: 'Profile picture updated successfully', type: 'success' });
-    } catch {
-      setToast({ message: 'Failed to upload profile picture', type: 'error' });
+      const { url, error } = await storageService.uploadProfileImage(id, file);
+      if (error) throw error;
+      
+      await handleUpdateField('profile_image_url', url);
+      setToast({ message: 'Profile picture updated', type: 'success' });
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      setToast({ message: `Upload failed: ${err.message}`, type: 'error' });
     } finally {
       setIsUploadingImage(false);
     }
   };
 
-  const getPaymentStatusColor = (status: string): any => {
-    switch(status) {
-        case 'Paid': return 'green';
-        case 'Pending': return 'yellow';
-        case 'Overdue': return 'red';
-        default: return 'gray';
+  const getPaymentStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed': return 'green';
+      case 'pending': return 'yellow';
+      case 'failed': return 'red';
+      default: return 'gray';
     }
   };
 
-  if (isLoading) return <div className="flex items-center justify-center p-12"><i className="ri-loader-4-line text-3xl animate-spin text-blue-500" /></div>;
-  if (error || !surrogate) return <Card className="p-6 text-red-600">{error || 'Profile not found.'}</Card>;
-
-  return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      
-      <div className="flex items-center justify-between">
-        {showBackButton && (
-          <Button variant="outline" onClick={() => navigate('/surrogates')}>
-            <i className="ri-arrow-left-line mr-2"></i> Back to list
-          </Button>
-        )}
-        <div className="flex items-center gap-2">
-           {surrogate && (
-             <AgencyApprovalToggle
-               userId={id!}
-               approved={surrogate.agency_approved === true}
-               onChange={(approved) => {
-                 setSurrogate((prev: any) => ({ ...prev, agency_approved: approved }));
-                 setToast({
-                   message: approved ? 'Surrogate approved for matching' : 'Approval revoked',
-                   type: 'success',
-                 });
-               }}
-               onError={() => setToast({ message: 'Failed to update approval', type: 'error' })}
-             />
-           )}
-           {surrogate && showCreateMatch && <CreateMatchDialog user={surrogate} />}
-           {onClose && (
-             <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-gray-500">
-               <i className="ri-close-line text-xl"></i>
-             </button>
-           )}
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-[#0e0b1a]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-500 font-medium">Loading surrogate profile...</p>
         </div>
       </div>
+    );
+  }
 
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-indigo-500 p-8 text-white shadow-2xl">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.3),_transparent_65%)] opacity-80" />
-        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-6">
+  if (error || !surrogate) {
+    return (
+      <div className="flex-1 p-6">
+        <Card className="max-w-2xl mx-auto p-12 text-center border-dashed border-2">
+           <i className="ri-error-warning-line text-4xl text-rose-500 mb-4"></i>
+           <h3 className="text-xl font-bold text-gray-900 dark:text-white">Profile Not Found</h3>
+           <p className="text-gray-500 mt-2">{error || "The surrogate profile you are looking for doesn't exist or has been removed."}</p>
+           <Button className="mt-6" onClick={() => navigate('/surrogates')}>Back to Surrogates</Button>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#0e0b1a] relative no-scrollbar">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      {/* Hero Header */}
+      <div className="relative h-64 bg-rose-500 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-rose-600 to-rose-400 opacity-90"></div>
+        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '32px 32px' }}></div>
+        
+        <div className="relative h-full max-w-7xl mx-auto px-6 flex items-end pb-12">
+          {showBackButton && (
+            <button 
+              onClick={() => navigate(-1)}
+              className="absolute top-6 left-6 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all backdrop-blur-md border border-white/10"
+            >
+              <i className="ri-arrow-left-line text-xl"></i>
+            </button>
+          )}
+
+          <div className="flex items-center gap-8 text-white w-full">
             <div className="relative group">
-              <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-white/40 bg-white/10 text-3xl font-semibold backdrop-blur-xl overflow-hidden">
-                {surrogate.profileImageUrl ? <img src={surrogate.profileImageUrl} alt={displayName} className="h-full w-full object-cover"/> : initials}
+              <div className="w-32 h-32 rounded-3xl bg-white/20 backdrop-blur-xl border-4 border-white/30 overflow-hidden flex items-center justify-center text-4xl font-bold shadow-2xl">
+                {surrogate.profileImageUrl ? (
+                  <img src={surrogate.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
+                ) : (
+                  initials
+                )}
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingImage}
+                  className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <i className={`${isUploadingImage ? 'ri-loader-4-line animate-spin' : 'ri-camera-line'} text-2xl`}></i>
+                </button>
               </div>
-              <button onClick={() => fileInputRef.current?.click()} className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity">
-                {isUploadingImage ? <i className="ri-loader-4-line animate-spin text-white text-xl"></i> : <i className="ri-camera-line text-white text-xl"></i>}
-              </button>
               <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden"/>
             </div>
             <div>
@@ -550,12 +437,21 @@ export default function SurrogateProfileContent({
                   <i className="ri-user-heart-line text-sm"></i> Surrogate
                 </span>
               </div>
-              <p className="mt-3 text-sm text-white/80">Compassionate partner ready to support intended parents throughout the journey.</p>
               <div className="mt-4 flex flex-wrap gap-3 text-sm font-medium text-white/90">
                 {heroMeta.map((item: any) => (
-                  <span key={item.label} className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur-md">
-                    <i className={`${item.icon} text-base`}></i> <span>{item.value}</span>
-                  </span>
+                  item.href ? (
+                    <a 
+                      key={item.label} 
+                      href={item.href}
+                      className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur-md hover:bg-white/20 transition-all"
+                    >
+                      <i className={`${item.icon} text-base`}></i> <span>{item.value}</span>
+                    </a>
+                  ) : (
+                    <span key={item.label} className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur-md">
+                      <i className={`${item.icon} text-base`}></i> <span>{item.value}</span>
+                    </span>
+                  )
                 ))}
               </div>
             </div>
@@ -601,72 +497,114 @@ export default function SurrogateProfileContent({
                   {GC_MEDICAL_SCREENING_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
              </div>
-             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur"><i className="ri-hashtag text-base"></i> ID: {surrogate.id}</div>
-             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur"><i className="ri-time-line text-base"></i> Joined: {createdAtText}</div>
+             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur"><i className="ri-hashtag text-base"></i> ID: {surrogate.id.split('-')[0]}</div>
           </div>
         </div>
       </div>
 
-      <div className="flex overflow-x-auto border-b border-rose-100/60 dark:border-white/5 no-scrollbar">
+      {/* Tabs Navigation */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-[#15111f] border-b border-rose-100/60 dark:border-white/5 flex overflow-x-auto no-scrollbar backdrop-blur-xl bg-opacity-80">
           {TABS.map((tab) => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.id ? 'border-rose-500 text-rose-600 dark:text-rose-400' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                  <i className={tab.icon}></i> {tab.label}
+              <button 
+                  key={tab.id} 
+                  onClick={() => setActiveTab(tab.id)} 
+                  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all border-b-2 whitespace-nowrap ${activeTab === tab.id ? 'border-rose-500 text-rose-600 dark:text-rose-400 bg-rose-50/30 dark:bg-rose-500/5' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-white/5'}`}
+              >
+                  <i className={`${tab.icon} text-base`}></i> {tab.label}
               </button>
           ))}
       </div>
 
-      <div className="space-y-6">
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
         {activeTab === 'overview' && (
-            <>
-                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 lg:col-span-2">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 lg:col-span-2">
                     {summaryCards.map((card) => (
                         <Card key={card.label} padding="sm" className={`${card.className} border-none shadow-sm backdrop-blur`}>
                             <div className="flex items-start justify-between">
-                                <div><p className="text-xs font-semibold uppercase opacity-70">{card.label}</p><p className="mt-2 text-lg font-semibold">{card.value}</p></div>
+                                <div>
+                                    <p className="text-xs font-semibold uppercase opacity-70">{card.label}</p>
+                                    <p className="mt-2 text-lg font-semibold">{card.value}</p>
+                                </div>
                                 <span className="text-xl opacity-70"><i className={card.icon}></i></span>
                             </div>
                         </Card>
                     ))}
                 </div>
-                <div className="grid grid-cols-1 gap-6">
-                  <CoreProfileCard
-                    data={Object.fromEntries(SURROGATE_CORE_FIELDS.map((f) => [f, surrogate[f]])) as Record<string, unknown>}
-                    fieldOrder={SURROGATE_CORE_FIELDS}
-                    onSave={handleUpdateCore}
-                    title="Profile Lifecycle"
-                    subtitle="Identity flags & system completion status."
-                  />
+
+                <Card className="lg:col-span-1">
+                    <CoreProfileCard 
+                        title="Core Details" 
+                        data={surrogate} 
+                        fields={SURROGATE_CORE_FIELDS} 
+                        onSave={(field, val) => handleUpdateField(field, val)} 
+                    />
+                </Card>
+
+                <Card className="lg:col-span-1">
+                   <AboutSection 
+                      title="About Me" 
+                      description="Bio and background story for matching."
+                      data={surrogate.formData?.about_surrogate || null} 
+                      templateData={ABOUT_SURROGATE_TEMPLATE}
+                      onSave={(val) => handleUpdateField('form_data.about_surrogate', val)}
+                   />
+                </Card>
+
+                <Card className="lg:col-span-2">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-bold">Quick Contact</h3>
+                        <div className="flex gap-2">
+                           <Button size="sm" variant="outline" onClick={() => window.open(`mailto:${surrogate.email}`)}>Email</Button>
+                           <Button size="sm" variant="outline" onClick={() => window.open(`tel:${phone}`)}>Call</Button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-white/5 border border-rose-100/50 dark:border-white/5">
+                            <p className="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">Email</p>
+                            <p className="text-gray-900 dark:text-white font-medium break-all">{surrogate.email}</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-white/5 border border-rose-100/50 dark:border-white/5">
+                            <p className="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">Phone</p>
+                            <p className="text-gray-900 dark:text-white font-medium">{phone || '—'}</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-white/5 border border-rose-100/50 dark:border-white/5">
+                            <p className="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">Joined</p>
+                            <p className="text-gray-900 dark:text-white font-medium">{createdAtText}</p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        )}
+
+        {activeTab === 'workflow' && (
+            <Card>
+                <div className="p-12 text-center border-dashed border-2">
+                    <i className="ri-flow-chart text-4xl text-gray-300 mb-4"></i>
+                    <h3 className="text-lg font-bold">Workflow Tracking</h3>
+                    <p className="text-gray-500 mt-2">Active journey milestones and checklist coming soon.</p>
                 </div>
-            </>
+            </Card>
+        )}
+
+        {activeTab === 'gallery' && (
+            <Card>
+                <div className="p-12 text-center border-dashed border-2">
+                    <i className="ri-image-2-line text-4xl text-gray-300 mb-4"></i>
+                    <h3 className="text-lg font-bold">Photo Gallery</h3>
+                    <p className="text-gray-500 mt-2">Surrogate lifestyle and family photos will appear here.</p>
+                </div>
+            </Card>
         )}
 
         {activeTab === 'application' && (
               <div className="grid grid-cols-1 gap-6">
                   <Card>
-                      <EditableJsonSection 
-                          title="Initial Signup & Application Info" 
-                          description="Data collected during the initial signup phase."
-                          data={surrogate.formData || null} 
-                          templateData={INITIAL_APPLICATION_TEMPLATE} 
-                          onSave={(v: any) => handleUpdateField('form_data', v)} 
-                      />
-                  </Card>
-                  
-                  <Card className="overflow-hidden border-rose-100/70 shadow-md shadow-rose-500/5 dark:border-white/5 dark:shadow-none">
-                    <div className="relative overflow-hidden border-b border-rose-100/60 bg-gradient-to-r from-rose-500/[0.08] via-fuchsia-500/[0.06] to-indigo-500/[0.05] px-6 py-5 dark:border-white/5 dark:from-rose-500/15 dark:via-fuchsia-500/10 dark:to-indigo-500/10">
-                      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-fuchsia-600 text-white shadow-lg shadow-rose-500/30">
-                            <i className="ri-smartphone-line text-2xl" />
-                          </div>
-                          <div>
-                            <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Detailed Intake (Form 1)</h2>
-                            <p className="mt-1 max-w-xl text-sm text-gray-600 dark:text-gray-400">Exhaustive answers from the primary intake questionnaire.</p>
-                          </div>
-                        </div>
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold">Intake Questionnaire</h3>
+                        <Button size="sm" variant="outline" onClick={() => handleUpdateField('form_data.surrogate_profile', surrogate.form1)}>Copy to Profile</Button>
                       </div>
-                    </div>
-                    <div className="bg-[#fdf4f6]/30 p-5 dark:bg-[#0e0b1a]/40 md:p-6">
                       <SurrogateIntakeFormView data={surrogate.form1 as Record<string, unknown> | null} />
                     </div>
                   </Card>
@@ -742,6 +680,13 @@ export default function SurrogateProfileContent({
             </div>
         )}
 
+        {activeTab === 'medical_report' && (
+            <div className="grid grid-cols-1 gap-6">
+                <Card>
+                    <MedicalReportView userType="surrogate" data={surrogate} name={displayName} userId={surrogate.id} />
+                </Card>
+            </div>
+        )}
 
         {activeTab === 'medical_intake' && (
              <div className="space-y-6">
@@ -783,7 +728,7 @@ export default function SurrogateProfileContent({
                                 setNewRequest(p => ({ ...p, pregnancyNumber: entry.n, providerName: entry.provider || '', facilityName: entry.facility || '' }));
                               }} className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-3 py-1.5 text-sm">
                                 <option value="">— select pregnancy to auto-fill —</option>
-                                {obEntries.map((e, i) => <option key={i} value={i}>Pregnancy #{e.n} – {e.provider || e.facility}</option>)}
+                                {obEntries.map((e, i) => <option key={i} value={i}>Pregnancy #${e.n} – ${e.provider || e.facility}</option>)}
                               </select>
                             </div>
                           );
@@ -824,8 +769,7 @@ export default function SurrogateProfileContent({
                             setRecordRequests(updated);
                             setShowAddRequest(false);
                             setNewRequest({ status: 'Not Requested', authorizationOnFile: false, recordType: 'OB delivery records' });
-                          }}>Save</Button>
-                          <Button size="sm" variant="outline" onClick={() => setShowAddRequest(false)}>Cancel</Button>
+                          }}>Save Request</Button>
                         </div>
                       </div>
                     )}

@@ -25,7 +25,8 @@ const menuItems: NavItem[] = [
   { icon: 'ri-user-heart-line',          label: 'Surrogates',        path: '/surrogates' },
   { icon: 'ri-links-line',               label: 'Matches',           path: '/matches' },
   { icon: 'ri-route-line',               label: 'Journeys',          path: '/journeys' },
-  { icon: 'ri-question-answer-line',     label: 'Inquiries',         path: '/inquiries' },
+  { icon: 'ri-question-answer-line',     label: 'Online Inquiries',  path: '/inquiries?source=online' },
+  { icon: 'ri-phone-line',               label: 'Phone Inquiries',   path: '/inquiries?source=phone' },
 
   { type: 'divider', label: 'Operations' },
   { icon: 'ri-task-line',                label: 'Tasks',             path: '/tasks' },
@@ -34,6 +35,7 @@ const menuItems: NavItem[] = [
   { icon: 'ri-heart-pulse-line',         label: 'Baby Watch',        path: '/baby-watch' },
   { icon: 'ri-hospital-line',            label: 'Medical',           path: '/medical' },
   { icon: 'ri-stethoscope-line',         label: 'Screening',         path: '/screening' },
+  { icon: 'ri-advertisement-line',       label: 'Marketing Assets',  path: '/marketing' },
 
   { type: 'divider', label: 'Finance & Legal' },
   { icon: 'ri-money-dollar-circle-line', label: 'Compensation',      path: '/payments' },
@@ -41,6 +43,7 @@ const menuItems: NavItem[] = [
   { icon: 'ri-file-text-line',           label: 'Contracts',         path: '/contracts' },
 
   { type: 'divider', label: 'Communicate' },
+  { icon: 'ri-contacts-book-line',       label: 'Contacts',          path: '/contacts' },
   { icon: 'ri-message-3-line',           label: 'Messages',          path: '/messages' },
   { icon: 'ri-file-chart-line',          label: 'Reports',           path: '/reports' },
   { icon: 'ri-shield-check-line',        label: 'Audit Log',         path: '/audit' },
@@ -138,7 +141,7 @@ export const Sidebar: React.FC = () => {
 
           const isActive = item.path === '/'
             ? location.pathname === '/'
-            : location.pathname.startsWith(item.path);
+            : (location.pathname + location.search).startsWith(item.path);
 
           return (
             <NavLink

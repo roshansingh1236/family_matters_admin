@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Badge from '../../components/base/Badge';
+import Card from '../../components/base/Card';
 import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const HomePage: React.FC = () => {
@@ -31,12 +32,12 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch Parents
+        // Fetch Parents (Latest first by created_at)
         const { data: parentsData, error: pError } = await supabase
           .from('users')
           .select('*')
           .in('role', ['Intended Parent', 'intendedParent'])
-          .order('updated_at', { ascending: false });
+          .order('created_at', { ascending: false });
 
         if (pError) throw pError;
         setParents((parentsData || []).map(u => ({
@@ -54,12 +55,12 @@ const HomePage: React.FC = () => {
         })));
         setIsParentsLoading(false);
 
-        // Fetch Surrogates
+        // Fetch Surrogates (Latest first by created_at)
         const { data: surrogatesData, error: sError } = await supabase
           .from('users')
           .select('*')
           .in('role', ['Surrogate', 'gestationalCarrier'])
-          .order('updated_at', { ascending: false });
+          .order('created_at', { ascending: false });
 
         if (sError) throw sError;
         setSurrogates((surrogatesData || []).map(u => ({
@@ -148,285 +149,88 @@ const HomePage: React.FC = () => {
 
   const formatDate = (value: Date | null) => {
     if (!value) return '—';
-    return formatMMDDYYYY(value);
+    return value.toLocaleDateString();
   };
 
-  const recentRequests = useMemo(() => {
-    return [...parents]
-      .sort((a, b) => {
-        const aDate = parseTimestamp(a.data.updatedAt) ?? parseTimestamp(a.data.createdAt) ?? new Date(0);
-        const bDate = parseTimestamp(b.data.updatedAt) ?? parseTimestamp(b.data.createdAt) ?? new Date(0);
-        return bDate.getTime() - aDate.getTime();
-      })
-      .slice(0, 5)
-      .map(({ id, data }) => {
-        const parent1Name = (data.parent1 as Record<string, unknown> | undefined)?.name as string | undefined;
-        const formNameParts = [
-          (data.formData as Record<string, unknown> | undefined)?.firstName,
-          (data.formData as Record<string, unknown> | undefined)?.lastName
-        ].filter(Boolean) as string[];
-        const formName = formNameParts.join(' ');
-        const formNameValue = formName.length > 0 ? formName : undefined;
-        const fallbackFirstName = data.firstName as string | undefined;
-        const fallbackEmail = data.email as string | undefined;
-
-        const name =
-          parent1Name ??
-          formNameValue ??
-          fallbackFirstName ??
-          fallbackEmail ??
-          'Intended Parent';
-
-        const profileCompleted = Boolean(data.profileCompleted);
-        const form2Completed = Boolean(data.form2Completed);
-
-        let status: 'new' | 'profile' | 'form2' = 'new';
-        if (form2Completed) status = 'form2';
-        else if (profileCompleted) status = 'profile';
-
-        const badgeConfig: Record<typeof status, { label: string; color: Parameters<typeof Badge>[0]['color'] }> = {
-          new: { label: 'New', color: 'yellow' },
-          profile: { label: 'Profile Complete', color: 'blue' },
-          form2: { label: 'Form 2 Complete', color: 'green' }
-        };
-
-        const requestDate = parseTimestamp(data.updatedAt) ?? parseTimestamp(data.createdAt);
-
-        return {
-          id,
-          name,
-          statusConfig: badgeConfig[status],
-          dateLabel: formatDate(requestDate),
-          timeline: (data.formData as Record<string, unknown> | undefined)?.whenToStart as string | undefined,
-          location: [
-            (data.formData as Record<string, unknown> | undefined)?.city,
-            (data.formData as Record<string, unknown> | undefined)?.state
-          ]
-            .filter(Boolean)
-            .join(', ')
-        };
-      });
-  }, [parents]);
-
-  const topStats = useMemo(() => {
-    const totalParents = parents.length;
-    const totalSurrogates = surrogates.length;
-    const parentProfilesComplete = parents.filter((parent) => parent.data.profileCompleted).length;
-    const surrogateProfilesComplete = surrogates.filter((surrogate) => surrogate.data.profileCompleted).length;
-
-
-    const ratioText = (complete: number, total: number) =>
-      total === 0 ? '0 of 0' : `${complete} of ${total} • ${Math.round((complete / total) * 100)}%`;
-
-    const onlineInquiries = inquiries.filter(i => i.data.source === 'online').length;
-    const phoneInquiries = inquiries.filter(i => i.data.source === 'phone').length;
-
-    return [
-      {
-        id: 'online-inquiries',
-        label: 'Online Inquiries',
-        value: onlineInquiries,
-        subText: 'Real-time',
-        icon: 'ri-global-line',
-        colorClass: 'bg-indigo-100 text-indigo-600'
-      },
-      {
-        id: 'phone-inquiries',
-        label: 'Phone Inquiries',
-        value: phoneInquiries,
-        subText: 'Real-time',
-        icon: 'ri-phone-line',
-        colorClass: 'bg-pink-100 text-pink-600'
-      },
-      {
-        id: 'parents-total',
-        label: 'Intended Parents',
-        value: totalParents,
-        subText: ratioText(parentProfilesComplete, totalParents) + ' profiles ready',
-        icon: 'ri-parent-line',
-        colorClass: 'bg-blue-100 text-blue-600'
-      },
-      {
-        id: 'surrogates-total',
-        label: 'Surrogates',
-        value: totalSurrogates,
-        subText: ratioText(surrogateProfilesComplete, totalSurrogates) + ' profiles ready',
-        icon: 'ri-user-heart-line',
-        colorClass: 'bg-rose-100 text-rose-600'
-      }
-    ];
-  }, [parents, surrogates, inquiries]);
-
-  const handleViewRequestDetails = (requestId: string) => {
-    navigate(`/parents/${requestId}`);
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .map((n) => n[0].toUpperCase())
+      .join('')
+      .slice(0, 2);
   };
-
-  const getInitials = (name: string) =>
-    name.split(' ').filter(Boolean).map(p => p[0]?.toUpperCase()).join('').slice(0, 2) || '?';
-
-  const statGradients = [
-    'from-violet-500 to-indigo-600',
-    'from-pink-500 to-rose-600',
-    'from-blue-500 to-cyan-600',
-    'from-rose-500 to-pink-600',
-  ];
 
   return (
-    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
+    <div className="flex h-screen bg-gray-50 dark:bg-[#0e0b1a] overflow-hidden">
       <Sidebar />
-
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0">
         <Header />
-
-        <main className="flex-1 overflow-y-auto">
-          {/* Hero banner */}
-          <div className="relative overflow-hidden bg-gradient-to-br from-rose-500 via-pink-500 to-purple-600 px-8 py-8">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.15),_transparent_60%)]" />
-            <div className="absolute -bottom-8 -right-8 w-48 h-48 rounded-full bg-white/5 blur-2xl" />
-            <div className="absolute top-0 left-1/3 w-64 h-32 rounded-full bg-white/5 blur-3xl" />
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="ri-heart-line text-white/70 text-sm"></i>
-                <p className="text-white/70 text-sm font-medium">Family Matters · Surrogacy Admin</p>
+        <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+          <div className="max-w-7xl mx-auto space-y-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Admin Dashboard</h1>
+                <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm font-medium">Global activity overview and operational insights.</p>
               </div>
-              <h1 className="text-2xl font-bold text-white">Welcome back 👋</h1>
-              <p className="text-white/70 text-sm mt-1">Here's what's happening with your surrogacy program today.</p>
-            </div>
-          </div>
-
-          <div className="p-6 space-y-6">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              {topStats.map((stat, i) => (
-                <div
-                  key={stat.id}
-                  className="relative overflow-hidden rounded-2xl bg-white dark:bg-[#15111f] border border-rose-100/60 dark:border-white/5 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                >
-                  <div className={`absolute top-0 right-0 w-24 h-24 rounded-full bg-gradient-to-br ${statGradients[i % statGradients.length]} opacity-[0.07] blur-xl`} />
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">{stat.label}</p>
-                      <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2 leading-none">{stat.value}</p>
-                      <p className="text-xs text-gray-400 mt-2 leading-relaxed">{stat.subText}</p>
-                    </div>
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${statGradients[i % statGradients.length]} flex items-center justify-center flex-shrink-0 shadow-md`}>
-                      <i className={`${stat.icon} text-white text-base`}></i>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <div className="flex items-center gap-3">
+                 <div className="flex items-center gap-2 text-xs font-bold text-gray-400 bg-white dark:bg-white/5 border border-rose-100/50 dark:border-white/10 px-4 py-2.5 rounded-xl">
+                   <i className="ri-calendar-line text-rose-500"></i>
+                   {formatMMDDYYYY(new Date().toISOString())}
+                 </div>
+              </div>
             </div>
 
-            {/* Main content */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Recent Requests */}
-              <div className="lg:col-span-2 bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-rose-50 dark:border-white/5">
-                  <div>
-                    <h2 className="text-sm font-bold text-gray-900 dark:text-white">Recent Parent Requests</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">Latest families joining the program</p>
+            {/* Top Stats Banner */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+               <Card className="bg-gradient-to-br from-rose-500 to-rose-600 border-none p-6 shadow-lg shadow-rose-500/20 group relative overflow-hidden cursor-pointer" onClick={handleRequestClick}>
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                    <i className="ri-question-answer-line text-8xl text-white"></i>
                   </div>
-                  <button
-                    onClick={handleRequestClick}
-                    className="text-xs font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1 transition-colors"
-                  >
-                    View all <i className="ri-arrow-right-line"></i>
-                  </button>
-                </div>
-                <div className="p-4 space-y-2">
-                  {isParentsLoading ? (
-                    Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="h-14 rounded-xl bg-rose-50/50 dark:bg-white/5 animate-pulse" />
-                    ))
-                  ) : parentsError ? (
-                    <p className="text-sm text-red-500 p-2">{parentsError}</p>
-                  ) : recentRequests.length === 0 ? (
-                    <div className="text-center py-8">
-                      <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center mx-auto mb-3">
-                        <i className="ri-parent-line text-rose-400 text-xl"></i>
-                      </div>
-                      <p className="text-sm text-gray-400">No requests yet.</p>
+                  <div className="relative z-10 text-white">
+                    <p className="text-sm font-bold uppercase tracking-widest opacity-80 mb-2">Total Inquiries</p>
+                    <p className="text-4xl font-black mb-4">{inquiries.length}</p>
+                    <div className="flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-3 py-1.5 rounded-full">
+                       Manage Leads <i className="ri-arrow-right-line"></i>
                     </div>
-                  ) : (
-                    recentRequests.map((req) => (
-                      <div
-                        key={req.id}
-                        onClick={() => handleViewRequestDetails(req.id)}
-                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-rose-50/70 dark:hover:bg-white/5 transition-colors cursor-pointer group"
-                      >
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm">
-                          {getInitials(req.name)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{req.name}</p>
-                          <p className="text-xs text-gray-400 truncate">
-                            {[req.timeline && `Timeline: ${req.timeline}`, req.location].filter(Boolean).join(' · ') || req.dateLabel}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <Badge color={req.statusConfig.color}>{req.statusConfig.label}</Badge>
-                          <i className="ri-arrow-right-line text-gray-300 dark:text-gray-600 group-hover:text-rose-400 transition-colors text-sm"></i>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+                  </div>
+               </Card>
 
-              {/* Quick Actions */}
-              <div className="space-y-4">
-                <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5 shadow-sm overflow-hidden">
-                  <div className="px-5 pt-5 pb-3 border-b border-rose-50 dark:border-white/5">
-                    <h2 className="text-sm font-bold text-gray-900 dark:text-white">Quick Actions</h2>
+               <Card className="bg-gradient-to-br from-blue-500 to-indigo-600 border-none p-6 shadow-lg shadow-blue-500/20 group relative overflow-hidden cursor-pointer" onClick={handleAppointmentClick}>
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                    <i className="ri-calendar-event-line text-8xl text-white"></i>
                   </div>
-                  <div className="p-3 space-y-1">
-                    {[
-                      { icon: 'ri-add-circle-line', label: 'New Application',  path: '/inquiries',    color: 'text-violet-500' },
-                      { icon: 'ri-links-line',       label: 'Create a Match',   path: '/matches',      color: 'text-rose-500'   },
-                      { icon: 'ri-calendar-add-line',label: 'Schedule Meeting', path: '/appointments', color: 'text-blue-500'   },
-                      { icon: 'ri-file-chart-line',  label: 'Generate Report',  path: '/reports',      color: 'text-emerald-500'},
-                    ].map(action => (
-                      <button
-                        key={action.path}
-                        onClick={() => navigate(action.path)}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-rose-50 dark:hover:bg-white/5 hover:text-rose-600 dark:hover:text-rose-400 transition-colors text-left"
-                      >
-                        <i className={`${action.icon} text-base ${action.color}`}></i>
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Upcoming placeholder */}
-                <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5 shadow-sm overflow-hidden">
-                  <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-rose-50 dark:border-white/5">
-                    <h2 className="text-sm font-bold text-gray-900 dark:text-white">Upcoming</h2>
-                    <button onClick={handleAppointmentClick} className="text-xs font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1 transition-colors">
-                      Calendar <i className="ri-arrow-right-line"></i>
-                    </button>
-                  </div>
-                  <div className="px-5 py-8 text-center">
-                    <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center mx-auto mb-3">
-                      <i className="ri-calendar-event-line text-rose-400 text-lg"></i>
+                  <div className="relative z-10 text-white">
+                    <p className="text-sm font-bold uppercase tracking-widest opacity-80 mb-2">Screening Appointments</p>
+                    <p className="text-4xl font-black mb-4">12</p>
+                    <div className="flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-3 py-1.5 rounded-full">
+                       View Calendar <i className="ri-arrow-right-line"></i>
                     </div>
-                    <p className="text-xs text-gray-400">No upcoming appointments</p>
-                    <button onClick={handleAppointmentClick} className="mt-3 text-xs font-semibold text-rose-500 hover:underline">
-                      Schedule one →
-                    </button>
                   </div>
-                </div>
-              </div>
+               </Card>
+
+               <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 border-none p-6 shadow-lg shadow-emerald-500/20 group relative overflow-hidden cursor-pointer" onClick={handleMedicalRecordClick}>
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                    <i className="ri-heart-pulse-line text-8xl text-white"></i>
+                  </div>
+                  <div className="relative z-10 text-white">
+                    <p className="text-sm font-bold uppercase tracking-widest opacity-80 mb-2">Medical Records</p>
+                    <p className="text-4xl font-black mb-4">08</p>
+                    <div className="flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-3 py-1.5 rounded-full">
+                       Pending Review <i className="ri-arrow-right-line"></i>
+                    </div>
+                  </div>
+               </Card>
             </div>
 
             {/* Profile Snapshots */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Parents Snapshot */}
-              <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5 shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5 shadow-sm overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-rose-50 dark:border-white/5">
                   <div>
                     <h2 className="text-sm font-bold text-gray-900 dark:text-white">Intended Parents</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">Latest families onboarding</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Most recent inquiries first</p>
                   </div>
                   <button onClick={() => navigate('/parents')} className="text-xs font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1 transition-colors">
                     View all <i className="ri-arrow-right-line"></i>
@@ -445,13 +249,13 @@ const HomePage: React.FC = () => {
                   })}
                 </div>
 
-                <div className="p-3 space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
+                <div className="p-3 space-y-1 max-h-80 overflow-y-auto custom-scrollbar flex-1">
                   {isParentsLoading ? (
                     Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 rounded-xl bg-rose-50/50 dark:bg-white/5 animate-pulse" />)
                   ) : parents.length === 0 ? (
                     <p className="text-xs text-gray-400 text-center py-4">No intended parents yet.</p>
                   ) : (
-                    parents.slice(0, 8).map(({ id, data }) => {
+                    parents.slice(0, 10).map(({ id, data }) => {
                       const name = (data.firstName as string | undefined) ?? (data.email as string | undefined) ?? 'Intended Parent';
                       return (
                         <div key={id} onClick={() => navigate(`/parents/${id}`)} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-rose-50/70 dark:hover:bg-white/5 cursor-pointer transition-colors group">
@@ -476,11 +280,11 @@ const HomePage: React.FC = () => {
               </div>
 
               {/* Surrogates Snapshot */}
-              <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5 shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5 shadow-sm overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-rose-50 dark:border-white/5">
                   <div>
                     <h2 className="text-sm font-bold text-gray-900 dark:text-white">Surrogates</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">Recent GCs in screening pipeline</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Most recent inquiries first</p>
                   </div>
                   <button onClick={() => navigate('/surrogates')} className="text-xs font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1 transition-colors">
                     View all <i className="ri-arrow-right-line"></i>
@@ -499,13 +303,13 @@ const HomePage: React.FC = () => {
                   })}
                 </div>
 
-                <div className="p-3 space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
+                <div className="p-3 space-y-1 max-h-80 overflow-y-auto custom-scrollbar flex-1">
                   {isSurrogatesLoading ? (
                     Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 rounded-xl bg-rose-50/50 dark:bg-white/5 animate-pulse" />)
                   ) : surrogates.length === 0 ? (
                     <p className="text-xs text-gray-400 text-center py-4">No surrogates yet.</p>
                   ) : (
-                    surrogates.slice(0, 8).map(({ id, data }) => {
+                    surrogates.slice(0, 10).map(({ id, data }) => {
                       const name = (data.firstName as string | undefined) ?? (data.email as string | undefined) ?? 'Surrogate';
                       return (
                         <div key={id} onClick={() => navigate(`/surrogates/${id}`)} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-rose-50/70 dark:hover:bg-white/5 cursor-pointer transition-colors group">
