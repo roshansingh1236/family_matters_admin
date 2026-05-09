@@ -324,11 +324,31 @@ export default function MedicalReportView({
   ] : [];
 
   const ipInfectiousRows: LabRow[] = userType === 'parent' ? [
-    { test: 'HIV', result: data?.form2Data?.infectiousDisease?.hiv ?? data?.infectiousDisease?.hiv ?? fd?.infectiousDisease?.hiv ?? fd?.ip_additional?.hiv ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.hiv ?? data?.infectiousDisease?.hiv ?? fd?.infectiousDisease?.hiv ?? fd?.ip_additional?.hiv) },
-    { test: 'HBsAg', result: data?.form2Data?.infectiousDisease?.hbsag ?? data?.infectiousDisease?.hbsag ?? fd?.infectiousDisease?.hbsag ?? fd?.ip_additional?.hbsag ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.hbsag ?? data?.infectiousDisease?.hbsag ?? fd?.infectiousDisease?.hbsag ?? fd?.ip_additional?.hbsag) },
-    { test: 'HCV', result: data?.form2Data?.infectiousDisease?.hcv ?? data?.infectiousDisease?.hcv ?? fd?.infectiousDisease?.hcv ?? fd?.ip_additional?.hcv ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.hcv ?? data?.infectiousDisease?.hcv ?? fd?.infectiousDisease?.hcv ?? fd?.ip_additional?.hcv) },
-    { test: 'VDRL (Syphilis)', result: data?.form2Data?.infectiousDisease?.vdrl ?? data?.infectiousDisease?.vdrl ?? fd?.infectiousDisease?.vdrl ?? fd?.ip_additional?.vdrl ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.vdrl ?? data?.infectiousDisease?.vdrl ?? fd?.infectiousDisease?.vdrl ?? fd?.ip_additional?.vdrl) },
-    { test: 'CMV (Cytomegalovirus)', result: data?.form2Data?.infectiousDisease?.cmv ?? data?.infectiousDisease?.cmv ?? fd?.infectiousDisease?.cmv ?? fd?.ip_additional?.cmv ?? '', status: inferStatus(data?.form2Data?.infectiousDisease?.cmv ?? data?.infectiousDisease?.cmv ?? fd?.infectiousDisease?.cmv ?? fd?.ip_additional?.cmv) },
+    { 
+      test: 'HIV', 
+      result: fd?.ip_additional?.hiv_result === true ? 'Positive' : fd?.ip_additional?.hiv_result === false ? 'Negative' : fd?.ip_additional?.hiv ?? '', 
+      status: fd?.ip_additional?.hiv_result === true ? 'positive' : fd?.ip_additional?.hiv_result === false ? 'negative' : inferStatus(fd?.ip_additional?.hiv) 
+    },
+    { 
+      test: 'HBsAg (Hepatitis B)', 
+      result: fd?.ip_additional?.hbs_ag_result === true ? 'Positive' : fd?.ip_additional?.hbs_ag_result === false ? 'Negative' : fd?.ip_additional?.hbsag ?? '', 
+      status: fd?.ip_additional?.hbs_ag_result === true ? 'positive' : fd?.ip_additional?.hbs_ag_result === false ? 'negative' : inferStatus(fd?.ip_additional?.hbsag) 
+    },
+    { 
+      test: 'HCV (Hepatitis C)', 
+      result: fd?.ip_additional?.hcv_result === true ? 'Positive' : fd?.ip_additional?.hcv_result === false ? 'Negative' : fd?.ip_additional?.hcv ?? '', 
+      status: fd?.ip_additional?.hcv_result === true ? 'positive' : fd?.ip_additional?.hcv_result === false ? 'negative' : inferStatus(fd?.ip_additional?.hcv) 
+    },
+    { 
+      test: 'VDRL (Syphilis)', 
+      result: fd?.ip_additional?.vdrl_result === true ? 'Positive' : fd?.ip_additional?.vdrl_result === false ? 'Negative' : fd?.ip_additional?.vdrl ?? '', 
+      status: fd?.ip_additional?.vdrl_result === true ? 'positive' : fd?.ip_additional?.vdrl_result === false ? 'negative' : inferStatus(fd?.ip_additional?.vdrl) 
+    },
+    { 
+      test: 'CMV (Cytomegalovirus)', 
+      result: fd?.ip_additional?.cmv_result === true ? 'Positive' : fd?.ip_additional?.cmv_result === false ? 'Negative' : fd?.ip_additional?.cmv ?? '', 
+      status: fd?.ip_additional?.cmv_result === true ? 'positive' : fd?.ip_additional?.cmv_result === false ? 'negative' : inferStatus(fd?.ip_additional?.cmv) 
+    },
   ] : [];
 
   const overallClearanceStatus: ResultStatus = (() => {
@@ -429,9 +449,9 @@ export default function MedicalReportView({
         {userType === 'parent' && (
           <div className="mt-5 pt-4 border-t border-rose-100/60 dark:border-white/5 grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[
-              { label: 'Fertility Clinic', value: data?.fertility?.clinicName ?? data?.form2Data?.fertilityClinic ?? '—', icon: 'ri-hospital-line' },
-              { label: 'Embryos Available', value: data?.form2Data?.embryosAvailable ?? '—', icon: 'ri-test-tube-line' },
-              { label: 'Embryo Quality', value: data?.form2Data?.embryoQuality ?? '—', icon: 'ri-seedling-line' },
+              { label: 'Fertility Clinic', value: fd?.fertility?.fertility_doctor ?? data?.fertility?.clinicName ?? data?.form2Data?.fertilityClinic ?? '—', icon: 'ri-hospital-line' },
+              { label: 'Embryos Available', value: fd?.fertility?.number_of_embryos ?? data?.form2Data?.embryosAvailable ?? '—', icon: 'ri-test-tube-line' },
+              { label: 'Embryo Quality', value: fd?.fertility?.pgd_pgs_testing_info ?? data?.form2Data?.embryoQuality ?? '—', icon: 'ri-seedling-line' },
             ].map(s => (
               <div key={s.label} className="bg-rose-50/60 dark:bg-white/5 rounded-xl px-3 py-2.5 text-center">
                 <i className={`${s.icon} text-rose-400 text-base block mb-1`}></i>
@@ -495,30 +515,30 @@ export default function MedicalReportView({
         <>
           {/* Fertility Clinic */}
           <SectionCard title="Fertility Clinic & Physician" icon="ri-hospital-line" accentColor="from-emerald-50 to-teal-50/50 dark:from-emerald-500/10 dark:to-transparent text-emerald-700 dark:text-emerald-300">
-            <FieldRow label="Clinic Name" value={data?.fertility?.clinicName ?? data?.form2Data?.fertilityClinic} />
-            <FieldRow label="Physician" value={data?.fertility?.physician} />
-            <FieldRow label="Clinic Contact" value={data?.fertility?.clinicContact} />
-            <FieldRow label="Legal Counsel" value={data?.form2Data?.legalCounsel} />
-            <FieldRow label="Timeline" value={data?.form2Data?.timeline} />
+            <FieldRow label="Clinic Name" value={fd?.fertility?.fertility_doctor ?? data?.fertility?.clinicName ?? data?.form2Data?.fertilityClinic} />
+            <FieldRow label="Physician" value={fd?.fertility?.fertility_doctor ?? data?.fertility?.physician} />
+            <FieldRow label="Clinic Contact" value={fd?.ip_additional?.clinic_contact ?? data?.fertility?.clinicContact} />
+            <FieldRow label="Legal Counsel" value={fd?.ip_additional?.legal_counsel ?? data?.form2Data?.legalCounsel} />
+            <FieldRow label="Timeline" value={fd?.fertility?.fertility_history_info ?? data?.form2Data?.timeline} />
           </SectionCard>
 
           {/* Fertility Assessment */}
           <SectionCard title="Fertility Assessment" icon="ri-test-tube-line" accentColor="from-pink-50 to-rose-50/50 dark:from-pink-500/10 dark:to-transparent text-pink-700 dark:text-pink-300">
-            <FieldRow label="IVF Evaluation Summary" value={data?.form2Data?.fertility?.ivfEvaluationSummary ?? data?.fertility?.ivfEvaluationSummary ?? data?.medicalReports?.ivfEvaluationSummary ?? fd?.ip_additional?.ivf_evaluation_summary} />
-            <FieldRow label="Ovarian Reserve (AMH)" value={data?.form2Data?.fertility?.ovarianReserveAMH ?? data?.fertility?.ovarianReserveAMH ?? data?.medicalReports?.ovarianReserveAMH ?? fd?.ip_additional?.ovarian_reserve_amh} />
-            <FieldRow label="Semen Analysis" value={data?.form2Data?.fertility?.semenAnalysis ?? data?.fertility?.semenAnalysis ?? data?.medicalReports?.semenAnalysis ?? fd?.ip_additional?.semen_analysis} />
-            <FieldRow label="Diagnosis" value={data?.form2Data?.fertility?.diagnosis ?? data?.fertility?.diagnosis ?? data?.medicalReports?.diagnosis ?? fd?.ip_additional?.diagnosis} />
-            <FieldRow label="Embryo Report" value={data?.fertility?.embryoReport ?? data?.form2Data?.fertility?.embryoReport} />
-            <FieldRow label="Genetic Testing" value={data?.fertility?.geneticTesting ?? data?.form2Data?.fertility?.geneticTesting} />
+            <FieldRow label="IVF Evaluation Summary" value={fd?.ip_additional?.ivf_evaluation_summary ?? data?.form2Data?.fertility?.ivfEvaluationSummary} />
+            <FieldRow label="Ovarian Reserve (AMH)" value={fd?.ip_additional?.ovarian_reserve_amh ?? data?.form2Data?.fertility?.ovarianReserveAMH} />
+            <FieldRow label="Semen Analysis" value={fd?.ip_additional?.semen_analysis ?? data?.form2Data?.fertility?.semenAnalysis} />
+            <FieldRow label="Diagnosis" value={fd?.ip_additional?.diagnosis ?? data?.form2Data?.fertility?.diagnosis} />
+            <FieldRow label="Embryo Report" value={fd?.fertility?.pgd_pgs_testing_info ?? data?.fertility?.embryoReport} />
+            <FieldRow label="Genetic Testing" value={fd?.fertility?.pgd_pgs_tested ? 'Yes' : fd?.fertility?.pgd_pgs_tested === false ? 'No' : undefined} />
           </SectionCard>
 
            {/* Embryo Records */}
           <SectionCard title="Embryo Records" icon="ri-seedling-line" accentColor="from-amber-50 to-yellow-50/50 dark:from-amber-500/10 dark:to-transparent text-amber-700 dark:text-amber-300">
-            <FieldRow label="Embryos Available" value={data?.form2Data?.embryosAvailable} />
-            <FieldRow label="Embryo Quality" value={data?.form2Data?.embryoQuality} />
-            <FieldRow label="Embryo Freezing Report" value={data?.embryoRecords?.embryoFreezingReport ?? data?.medicalReports?.embryoFreezingReport} />
-            <FieldRow label="Donor Screening Report" value={data?.embryoRecords?.donorScreeningReport ?? data?.medicalReports?.donorScreeningReport} />
-            <DocumentLinks urls={data?.ipAdditional?.embryo_records_urls || fd?.ip_additional?.embryo_records_urls} label="Uploaded Embryo Records" onPreview={setPreviewUrl} />
+            <FieldRow label="Embryos Available" value={fd?.fertility?.number_of_embryos ?? data?.form2Data?.embryosAvailable} />
+            <FieldRow label="Embryo Quality" value={fd?.fertility?.pgd_pgs_testing_info ?? data?.form2Data?.embryoQuality} />
+            <FieldRow label="Embryo Freezing Report" value={fd?.fertility?.using_frozen_embryos ? `Frozen on ${fd.fertility.embryos_frozen_date}` : 'Not Available'} />
+            <FieldRow label="Donor Screening Report" value={fd?.fertility?.egg_provider} />
+            <DocumentLinks urls={fd?.ip_additional?.embryo_records_urls || data?.ipAdditional?.embryo_records_urls} label="Uploaded Embryo Records" onPreview={setPreviewUrl} />
           </SectionCard>
           
           {/* Infectious Disease */}
@@ -535,14 +555,14 @@ export default function MedicalReportView({
             }
           >
             {ipInfectiousRows.map(row => <LabTestRow key={row.test} row={row} />)}
-            <DocumentLinks urls={data?.ipAdditional?.disease_screening_urls || fd?.ip_additional?.disease_screening_urls} label="Uploaded Screening Reports" onPreview={setPreviewUrl} />
+            <DocumentLinks urls={fd?.ip_additional?.disease_screening_urls || data?.ipAdditional?.disease_screening_urls} label="Uploaded Screening Reports" onPreview={setPreviewUrl} />
           </SectionCard>
           
           {/* Medical History */}
           <SectionCard title="Medical History" icon="ri-file-text-line" accentColor="from-blue-50 to-indigo-50/50 dark:from-blue-500/10 dark:to-transparent text-blue-700 dark:text-blue-300">
-            <FieldRow label="General Medical History" value={data?.form2Data?.medicalHistory} />
-            <FieldRow label="Budget" value={data?.form2Data?.surrogacyBudget} />
-            <DocumentLinks urls={data?.ipAdditional?.fertility_report_urls || fd?.ip_additional?.fertility_report_urls} label="Uploaded Fertility Reports" onPreview={setPreviewUrl} />
+            <FieldRow label="General Medical History" value={fd?.ip_additional?.medical_history ?? data?.form2Data?.medicalHistory} />
+            <FieldRow label="Budget" value={fd?.ip_additional?.budget ?? data?.form2Data?.surrogacyBudget} />
+            <DocumentLinks urls={fd?.ip_additional?.fertility_report_urls || data?.ipAdditional?.fertility_report_urls} label="Uploaded Fertility Reports" onPreview={setPreviewUrl} />
           </SectionCard>
         </>
       )}

@@ -79,6 +79,7 @@ export const IP_STATUSES: UserStatus[] = [
   'Profile Complete',
   'Match Pending',
   'Matched',
+  'Accepted to Program',
   'On Hold',
   'Declined / Inactive'
 ];

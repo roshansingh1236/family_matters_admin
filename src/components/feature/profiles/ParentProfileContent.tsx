@@ -13,7 +13,9 @@ import MedicalReportView from '../MedicalReportView';
 import { storageService } from '../../../services/storageService';
 import { IP_STATUSES } from '../../../types';
 import {
-  resolveParentAdditionalProfile
+  resolveParentAdditionalProfile,
+  resolveParent1Profile,
+  resolveParent2Profile
 } from '../../../utils/surrogateFormData';
 import {
   IP_PARENT_FORM_TEMPLATE,
@@ -87,30 +89,50 @@ function parentStateFromRow(data: Record<string, any>) {
   const firstName = data.first_name ?? data.firstName ?? fd.firstName ?? fd.first_name;
   const lastName = data.last_name ?? data.lastName ?? fd.lastName ?? fd.last_name;
 
-  const colF2D = resolveJson(data.form2_data ?? data.form2Data ?? {});
+  const p1 = resolveParent1Profile(fd, data);
+  const p2 = resolveParent2Profile(fd, data);
+
+  const calculateAge = (dob: any) => {
+    if (!dob) return '';
+    try {
+      const birthDate = new Date(dob);
+      if (isNaN(birthDate.getTime())) return '';
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age.toString();
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const processParentData = (p: any) => {
+    if (!p) return null;
+    const cleaned = cleanParentData(p);
+    if (cleaned && cleaned.dob && !cleaned.age) {
+        cleaned.age = calculateAge(cleaned.dob);
+    }
+    return cleaned;
+  };
+
+  const cleanP1 = processParentData(p1);
+  const cleanP2 = processParentData(p2);
+
   const ipAdd = resolveJson(fd.ip_additional ?? {});
-
-  let p1 = getPopulated(fd.parent1, ipAdd?.parent1, ipAdd);
-  let p2 = getPopulated(fd.parent2, ipAdd?.parent2, colF2D?.parent2);
-  let fer = getPopulated(fd.fertility_questions, fd.fertility, ipAdd?.fertility, ipAdd);
-  let surrRel = getPopulated(fd.surrogate_related, ipAdd?.surrogate_related, ipAdd);
-
-  // Apply cleaning to remove surrogate-specific fields
-  const cleanFd = cleanParentData(fd);
-  const cleanP1 = cleanParentData(p1);
-  const cleanP2 = cleanParentData(p2);
-  const cleanFer = cleanParentData(fer);
 
   return {
     ...data,
-    firstName: firstName ?? data.firstName,
-    lastName: lastName ?? data.lastName,
+    firstName: firstName ?? data.firstName ?? (cleanP1 as any)?.name?.split(' ')[0],
+    lastName: lastName ?? data.lastName ?? (cleanP1 as any)?.name?.split(' ').slice(1).join(' '),
     profileImageUrl: data.profile_image_url ?? data.profileImageUrl,
-    formData: cleanFd,
+    formData: fd,
     parent1: cleanP1,
     parent2: cleanP2,
-    fertility: cleanFer,
-    surrogateRelated: cleanParentData(surrRel),
+    fertility: processParentData(getPopulated(fd.fertility_questions, fd.fertility, ipAdd?.fertility, ipAdd)),
+    surrogateRelated: cleanParentData(getPopulated(fd.surrogate_related, ipAdd?.surrogate_related, ipAdd)),
     form2Data: resolveParentAdditionalProfile(fd, data),
     profileCompletedAt: data.profile_completed_at ?? data.profileCompletedAt,
     form2CompletedAt: data.form_2_completed_at ?? data.form2CompletedAt,
@@ -440,9 +462,9 @@ export default function ParentProfileContent({
                        <AboutSection 
                           title="Inquiry Bio" 
                           description="Personal background and surrogacy motivation."
-                          data={parent.formData?.about_parent || null} 
+                          data={parent.formData?.about_parent || parent.parent1?.about_yourself || null} 
                           templateData={ABOUT_PARENT_TEMPLATE}
-                          onSave={(val) => handleUpdateField('form_data.about_parent', val)}
+                          onSave={(val) => handleUpdateField(parent.formData?.about_parent ? 'form_data.about_parent' : 'form_data.parent1.about_yourself', val)}
                        />
                     </Card>
 
@@ -501,29 +523,41 @@ export default function ParentProfileContent({
             {activeTab === 'application' && (
                 <div className="grid grid-cols-1 gap-6">
                     <Card><EditableJsonSection title="Registration Form (Signup)" data={parent.formData || null} onSave={(v: any) => handleUpdateField('form_data', v)} /></Card>
-                    <Card><EditableJsonSection title="Parent 1 (Signup App)" data={parent.parent1 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent1', v)} /></Card>
                 </div>
             )}
 
             {activeTab === 'personal' && (
                 <div className="grid grid-cols-1 gap-6">
-                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                        <Card><EditableJsonSection title="Parent 1 (from App)" description="Personal information submitted by Parent 1 through the mobile app" data={parent.parent1 || null} onSave={(v: any) => handleUpdateField('form_data.parent1', v)} /></Card>
-                        <Card><EditableJsonSection title="Parent 2 (from App)" description="Personal information submitted by Parent 2 through the mobile app" data={parent.parent2 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent2', v)} /></Card>
-                    </div>
-                    <Card><EditableJsonSection title="Fertility & Embryos" description="Embryo & fertility information submitted through the mobile app" data={parent.fertility || null} templateData={IP_FERTILITY_QUESTIONS_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.fertility', v)} /></Card>
+                    <Card><EditableJsonSection title="Parent 2 (from App)" description="Personal information submitted by Parent 2 through the mobile app" data={parent.parent2 || null} templateData={IP_PARENT_FORM_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.parent2', v)} /></Card>
                     <Card><EditableJsonSection title="Surrogate Preferences" description="Surrogate relationship preferences submitted through the mobile app" data={parent.surrogateRelated || null} templateData={IP_SURROGATE_RELATED_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.surrogate_related', v)} /></Card>
                 </div>
             )}
 
             {activeTab === 'medical' && (
-                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                    <Card className="xl:col-span-2">
+                 <div className="grid grid-cols-1 gap-6">
+                    <Card>
                         <MedicalReportView userType="parent" data={parent} name={displayName} userId={parent.id} />
                     </Card>
-                    <Card><EditableJsonSection title="Medical Reports (Raw)" description="Raw medical data structure stored in form_data" data={parent.formData?.medical_reports || null} templateData={IP_MEDICAL_REPORTS_TEMPLATE} onSave={(v: any) => handleUpdateField('form_data.medical_reports', v)} /></Card>
-                    <Card><EditableJsonSection title="Infectious Disease" data={parent.form2Data?.infectiousDisease || null} templateData={IP_INFECTIOUS_DISEASE_TEMPLATE} onSave={(v: any) => handleUpdateField('form2Data.infectiousDisease', v)} /></Card>
-                    <Card><EditableJsonSection title="Embryo Records" data={parent.form2Data?.embryoRecords || null} templateData={IP_EMBRYO_RECORDS_TEMPLATE} onSave={(v: any) => handleUpdateField('form2Data.embryoRecords', v)} /></Card>
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                        <Card>
+                            <EditableJsonSection 
+                                title="Medical Reports (from App)" 
+                                description="Screening results and summary information from the Medical Reports form"
+                                data={parent.formData?.ip_additional || null} 
+                                templateData={IP_MEDICAL_REPORTS_TEMPLATE}
+                                onSave={(v: any) => handleUpdateField('form_data.ip_additional', v)} 
+                            />
+                        </Card>
+                        <Card>
+                            <EditableJsonSection 
+                                title="Fertility Questions" 
+                                description="Information about fertility clinic, embryos, and family planning"
+                                data={parent.formData?.fertility || null} 
+                                templateData={IP_FERTILITY_QUESTIONS_TEMPLATE}
+                                onSave={(v: any) => handleUpdateField('form_data.fertility', v)} 
+                            />
+                        </Card>
+                    </div>
                 </div>
             )}
 

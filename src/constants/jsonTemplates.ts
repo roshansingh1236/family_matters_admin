@@ -273,12 +273,6 @@ export const IP_PARENT_FORM_TEMPLATE = {
   attend_ob_appointments: false, attend_delivery_room: false
 };
 
-// Matches Flutter form_data.medical_reports (medical_reports_form.dart)
-export const IP_MEDICAL_REPORTS_TEMPLATE = {
-  ivf_evaluation_summary: '', ovarian_reserve_amh: '', semen_analysis: '', diagnosis: '',
-  hiv_result: '', hbs_ag_result: '', hcv_result: '', vdrl_result: '', cmv_result: '',
-  fertility_report_files_count: 0, disease_screening_files_count: 0, embryo_records_files_count: 0
-};
 
 // Matches Flutter form_data.surrogate_related (surrogate_related_question.dart)
 export const IP_SURROGATE_RELATED_TEMPLATE = {
@@ -314,4 +308,23 @@ export const IP_FERTILITY_QUESTIONS_TEMPLATE = {
   abort_or_reduce_pregnancy: false,
   abnormality_definition: '',
   fertility_history_info: ''
+};
+
+export const IP_MEDICAL_REPORTS_TEMPLATE = {
+  ivf_evaluation_summary: '',
+  ovarian_reserve_amh: '',
+  semen_analysis: '',
+  diagnosis: '',
+  hiv_result: false,
+  hbs_ag_result: false,
+  hcv_result: false,
+  vdrl_result: false,
+  cmv_result: false,
+  clinic_contact: '',
+  legal_counsel: '',
+  medical_history: '',
+  budget: '',
+  fertility_report_urls: [],
+  disease_screening_urls: [],
+  embryo_records_urls: []
 };

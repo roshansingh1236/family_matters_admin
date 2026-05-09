@@ -93,3 +93,52 @@ export function resolveParentAdditionalProfile(
 
   return Object.keys(merged).length > 0 ? (merged as Record<string, unknown>) : null;
 }
+
+/**
+ * Resolve Parent 1 profile data from form_data.
+ * Handles parent1, ip_additional.parent1, and fallback to ip_additional.
+ */
+export function resolveParent1Profile(
+  formData: Record<string, unknown>,
+  row: Record<string, unknown>
+): Record<string, unknown> | null {
+  const fd = isNonEmptyRecord(formData?.form_data) 
+    ? (formData.form_data as Record<string, unknown>) 
+    : formData;
+
+  const ipAdd = fd?.ip_additional as Record<string, unknown> | undefined;
+  
+  const fromP1 = fd?.parent1 as Record<string, unknown> | undefined;
+  const fromIpP1 = ipAdd?.parent1 as Record<string, unknown> | undefined;
+
+  if (isNonEmptyRecord(fromP1)) return fromP1;
+  if (isNonEmptyRecord(fromIpP1)) return fromIpP1;
+  if (isNonEmptyRecord(ipAdd)) return ipAdd;
+
+  return null;
+}
+
+/**
+ * Resolve Parent 2 profile data from form_data.
+ */
+export function resolveParent2Profile(
+  formData: Record<string, unknown>,
+  row: Record<string, unknown>
+): Record<string, unknown> | null {
+  const fd = isNonEmptyRecord(formData?.form_data) 
+    ? (formData.form_data as Record<string, unknown>) 
+    : formData;
+
+  const col = (row?.form2_data ?? row?.form2Data) as Record<string, unknown> | undefined;
+  const ipAdd = fd?.ip_additional as Record<string, unknown> | undefined;
+  const fromP2 = fd?.parent2 as Record<string, unknown> | undefined;
+  const fromIpP2 = ipAdd?.parent2 as Record<string, unknown> | undefined;
+  const fromColP2 = col?.parent2 as Record<string, unknown> | undefined;
+
+  if (isNonEmptyRecord(fromP2)) return fromP2;
+  if (isNonEmptyRecord(fromIpP2)) return fromIpP2;
+  if (isNonEmptyRecord(fromColP2)) return fromColP2;
+  if (isNonEmptyRecord(col)) return col;
+
+  return null;
+}

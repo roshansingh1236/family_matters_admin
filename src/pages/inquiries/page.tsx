@@ -163,6 +163,8 @@ const InquiriesPage: React.FC = () => {
                 Review and process new inbound leads.
               </p>
             </div>
+          </div>
+
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex bg-white dark:bg-[#15111f] p-1 rounded-2xl border border-rose-100/60 dark:border-white/5 shadow-sm">
                 <button 
