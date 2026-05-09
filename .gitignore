@@ -6,3 +6,7 @@ dist/
 .idea/
 *.log
 coverage/
+firebase.json
+/out/*
+.firebaserc
+.firebase/*
