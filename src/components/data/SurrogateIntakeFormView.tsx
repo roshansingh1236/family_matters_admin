@@ -338,19 +338,36 @@ export default function SurrogateIntakeFormView({ data }: Props) {
             <span className="text-xs text-gray-400">from app / legacy keys</span>
           </div>
           <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
-            {otherEntries.map(([key, text]) => (
-              <div
-                key={key}
-                className={`flex flex-col gap-1.5 rounded-xl border border-gray-200/80 bg-white px-4 py-3 dark:border-white/5 dark:bg-white/[0.02] ${text.includes('\n') ? 'sm:col-span-2' : ''}`}
-              >
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                  {formatLabel(key)}
-                </span>
-                <span className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-gray-800 dark:text-gray-200">
-                  {text}
-                </span>
-              </div>
-            ))}
+            {otherEntries.map(([key, text]) => {
+              const isPhotosKey = key.toLowerCase().includes('photo');
+              const urls = isPhotosKey && text.includes('http') 
+                ? text.split(',').map(u => u.trim()).filter(u => u.startsWith('http')) 
+                : [];
+
+              return (
+                <div
+                  key={key}
+                  className={`flex flex-col gap-1.5 rounded-xl border border-gray-200/80 bg-white px-4 py-3 dark:border-white/5 dark:bg-white/[0.02] ${text.includes('\n') || urls.length > 0 ? 'sm:col-span-2' : ''}`}
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                    {formatLabel(key)}
+                  </span>
+                  {urls.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-3">
+                      {urls.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noreferrer" className="group block h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 shadow-sm dark:border-white/10 dark:bg-gray-800 sm:h-24 sm:w-24">
+                          <img src={url} alt={`${formatLabel(key)} ${i + 1}`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-gray-800 dark:text-gray-200">
+                      {text}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
