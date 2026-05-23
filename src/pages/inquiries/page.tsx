@@ -21,10 +21,14 @@ const INQUIRY_STATUSES = [
 ];
 
 const InquiriesPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const sourceParam = searchParams.get('source');
-  
+  // Per client review: declined/inactive inquiries are archived. Show only
+  // when the admin opts in via ?archived=1.
+  const showArchived = searchParams.get('archived') === '1';
+
   const [inquiries, setInquiries] = useState<User[]>([]);
+  const [archivedInquiries, setArchivedInquiries] = useState<User[]>([]);
   const [surrogateInquiries, setSurrogateInquiries] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'parents' | 'surrogates'>('parents');
   const [filteredInquiries, setFilteredInquiries] = useState<User[]>([]);
@@ -38,18 +42,19 @@ const InquiriesPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let filteredParents = inquiries;
+    let filteredParents = showArchived ? archivedInquiries : inquiries;
     if (sourceParam) {
       filteredParents = filteredParents.filter(inquiry => {
         const source = inquirySourceOf(inquiry).toLowerCase();
         if (sourceParam === 'online') return source === 'online' || source === 'website' || source === 'app' || source === '—';
         if (sourceParam === 'phone') return source === 'phone' || source === 'manual' || source === 'call';
+        if (sourceParam === 'app') return source === 'app' || source === 'mobile';
         return true;
       });
     }
     const statusParam = searchParams.get('status');
     if (statusParam) {
-      filteredParents = filteredParents.filter(inquiry => 
+      filteredParents = filteredParents.filter(inquiry =>
         (inquiry.status as string).toLowerCase() === statusParam.toLowerCase()
       );
     }
@@ -57,26 +62,38 @@ const InquiriesPage: React.FC = () => {
 
     let filteredSurrogates = surrogateInquiries;
     if (statusParam) {
-      filteredSurrogates = filteredSurrogates.filter(inquiry => 
+      filteredSurrogates = filteredSurrogates.filter(inquiry =>
         (inquiry.status as string).toLowerCase() === statusParam.toLowerCase()
       );
     }
     setFilteredSurrogateInquiries(filteredSurrogates);
-  }, [inquiries, surrogateInquiries, sourceParam, searchParams]);
+  }, [inquiries, archivedInquiries, surrogateInquiries, sourceParam, searchParams, showArchived]);
 
   const fetchInquiries = async () => {
     setIsLoading(true);
     try {
-      const [parents, surrogates] = await Promise.all([
+      const [parents, archived, surrogates] = await Promise.all([
         inquiryService.getNewInquiries(),
+        inquiryService.getArchivedInquiries(),
         inquiryService.getSurrogateInquiries()
       ]);
       setInquiries(parents);
+      setArchivedInquiries(archived);
       setSurrogateInquiries(surrogates);
     } catch (error) {
       console.error('Error fetching inquiries:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRestore = async (userId: string) => {
+    if (!window.confirm('Restore this archived inquiry?')) return;
+    try {
+      await inquiryService.restoreInquiry(userId);
+      fetchInquiries();
+    } catch (error) {
+      console.error('Error restoring inquiry:', error);
     }
   };
 
@@ -90,16 +107,29 @@ const InquiriesPage: React.FC = () => {
   };
 
   // Resolves the human-readable inquiry source for a user. Prefers the
-  // dedicated `inquiry_source` column but falls back to `data.inquirySource`
-  // for rows written before the column existed.
+  // dedicated `inquiry_source` column but falls back to `data.inquirySource`,
+  // `form_data.inquirySource`, or `form_data.source` for rows written before
+  // the column existed. App signups set source = "App".
   const inquirySourceOf = (user: User): string => {
-    const direct = (user as Record<string, unknown>).inquiry_source;
+    const u = user as Record<string, unknown>;
+    const direct = u.inquiry_source;
     if (typeof direct === 'string' && direct.trim()) return direct;
-    const blob = (user as Record<string, unknown>).data as Record<string, unknown> | undefined;
+    const blob = u.data as Record<string, unknown> | undefined;
     if (blob && typeof blob.inquirySource === 'string' && blob.inquirySource.trim()) {
       return blob.inquirySource;
     }
-    return '—';
+    const fd = u.form_data as Record<string, unknown> | undefined;
+    if (fd) {
+      if (typeof fd.inquirySource === 'string' && (fd.inquirySource as string).trim()) {
+        return fd.inquirySource as string;
+      }
+      if (typeof fd.source === 'string' && (fd.source as string).trim()) {
+        return fd.source as string;
+      }
+    }
+    // If this user signed up through the app, we won't have a source yet.
+    // Default to "App" so the inquiry list reveals where it came from.
+    return 'App';
   };
 
   const handleArchive = async (userId: string) => {
@@ -157,12 +187,28 @@ const InquiriesPage: React.FC = () => {
           <div className="mb-8 flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {sourceParam === 'online' ? 'Online Inquiries' : sourceParam === 'phone' ? 'Phone Inquiries' : 'All Inquiries'}
+                {showArchived ? 'Archived Inquiries' : (sourceParam === 'online' ? 'Online Inquiries' : sourceParam === 'phone' ? 'Phone Inquiries' : sourceParam === 'app' ? 'App Inquiries' : 'All Inquiries')}
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Review and process new inbound leads.
+                {showArchived
+                  ? 'Declined / Inactive — restore by changing status back, or by clicking Restore.'
+                  : 'Review and process new inbound leads. Sources include web form, mobile app, and phone (manual entry).'}
               </p>
             </div>
+            <button
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                if (showArchived) next.delete('archived');
+                else next.set('archived', '1');
+                setSearchParams(next);
+              }}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border ${showArchived
+                ? 'bg-rose-500 text-white border-rose-500 shadow-sm'
+                : 'bg-white dark:bg-white/5 text-gray-700 dark:text-gray-200 border-rose-100/50 dark:border-white/10 hover:border-rose-200'}`}
+            >
+              <i className={`${showArchived ? 'ri-arrow-go-back-line' : 'ri-archive-line'} mr-1`}></i>
+              {showArchived ? 'Back to Active' : 'View Archived'}
+            </button>
           </div>
 
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -340,13 +386,23 @@ const InquiriesPage: React.FC = () => {
                              >
                                 {(activeTab === 'parents' ? INQUIRY_STATUSES : ['pending', 'reviewed', 'contacted', 'declined', 'converted']).map(s => <option key={s} value={s}>{s}</option>)}
                              </select>
-                             <button 
-                               className="p-2 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                               onClick={() => activeTab === 'parents' ? handleArchive(item.id) : alert('Archive not implemented')}
-                               title="Archive Inquiry"
-                             >
-                               <i className="ri-delete-bin-line text-base"></i>
-                             </button>
+                             {showArchived && activeTab === 'parents' ? (
+                               <button
+                                 className="p-2 text-emerald-500 hover:text-emerald-700 transition-colors"
+                                 onClick={() => handleRestore(item.id)}
+                                 title="Restore from Archive"
+                               >
+                                 <i className="ri-arrow-go-back-line text-base"></i>
+                               </button>
+                             ) : (
+                               <button
+                                 className="p-2 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                 onClick={() => activeTab === 'parents' ? handleArchive(item.id) : alert('Archive not implemented')}
+                                 title="Archive Inquiry"
+                               >
+                                 <i className="ri-delete-bin-line text-base"></i>
+                               </button>
+                             )}
                            </div>
                         </td>
                       </tr>

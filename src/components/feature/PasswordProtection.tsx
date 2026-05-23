@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../base/Card';
 import Button from '../base/Button';
+import {
+  ACCESS_CODE_STORAGE_KEY,
+  DEFAULT_ACCESS_CODES,
+  getStoredAccessCodes,
+  type AccessCodeKey
+} from '../../utils/accessCodes';
 
 interface PasswordProtectionProps {
   children: React.ReactNode;
@@ -11,16 +17,27 @@ const PasswordProtection: React.FC<PasswordProtectionProps> = ({ children, menuN
   const [password, setPassword] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [error, setError] = useState('');
+  const [currentPassword, setCurrentPassword] = useState<string>(() => {
+    const stored = getStoredAccessCodes();
+    const key = menuName.toLowerCase() as AccessCodeKey;
+    return stored[key] ?? DEFAULT_ACCESS_CODES[key] ?? 'admin123';
+  });
 
-  // Mapping of menu names to passwords - in a real app, this might come from a secure setting
-  const menuPasswords: Record<string, string> = {
-    'contacts': 'agency2026',
-    'contracts': 'legal2026',
-    'financials': 'money2026',
-    'medical': 'health2026',
-  };
-
-  const currentPassword = menuPasswords[menuName.toLowerCase()] || 'admin123';
+  // Per client review: access codes are now configurable from Settings.
+  // Refresh when the saved codes change.
+  useEffect(() => {
+    const refresh = () => {
+      const stored = getStoredAccessCodes();
+      const key = menuName.toLowerCase() as AccessCodeKey;
+      setCurrentPassword(stored[key] ?? DEFAULT_ACCESS_CODES[key] ?? 'admin123');
+    };
+    refresh();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === ACCESS_CODE_STORAGE_KEY) refresh();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [menuName]);
 
   useEffect(() => {
     // Check if recently unlocked (valid for 30 minutes)
@@ -60,6 +77,7 @@ const PasswordProtection: React.FC<PasswordProtectionProps> = ({ children, menuN
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
           This section contains sensitive information. Please enter the access code to continue.
+          {' '}Codes can be changed in <strong>Settings → Access Codes</strong>.
         </p>
 
         <form onSubmit={handleUnlock} className="space-y-4 text-left">
@@ -77,15 +95,15 @@ const PasswordProtection: React.FC<PasswordProtectionProps> = ({ children, menuN
             />
             {error && <p className="text-xs text-red-500 mt-2 ml-1">{error}</p>}
           </div>
-          
-          <Button 
-            type="submit" 
+
+          <Button
+            type="submit"
             className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-500 to-indigo-600 shadow-lg shadow-rose-500/20"
           >
             Unlock Section
           </Button>
         </form>
-        
+
         <p className="mt-8 text-[10px] text-gray-400 font-medium">
           Authorized personnel only. Access attempts are logged.
         </p>

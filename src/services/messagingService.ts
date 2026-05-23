@@ -116,17 +116,34 @@ export const messagingService = {
             sender:sender_id ( full_name )
         `)
         .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-      
+        .order('created_at', { ascending: true, nullsFirst: false });
+
       if (msgError) throw msgError;
 
-      const messages: Message[] = (msgData || []).map(m => ({
+      // Per client review: portal messages sometimes appeared above app-user
+      // messages because the two clients populate different timestamp columns
+      // ('created_at' vs 'timestamp'). Resort by whichever is newer to enforce
+      // a consistent chronological order regardless of source.
+      const resolveTs = (m: any): number => {
+        const created = m?.created_at ? Date.parse(m.created_at) : NaN;
+        const ts = m?.timestamp ? Date.parse(m.timestamp) : NaN;
+        if (Number.isNaN(created) && Number.isNaN(ts)) return 0;
+        if (Number.isNaN(created)) return ts;
+        if (Number.isNaN(ts)) return created;
+        return Math.max(created, ts);
+      };
+
+      const sortedMsgs = [...(msgData || [])].sort(
+        (a: any, b: any) => resolveTs(a) - resolveTs(b)
+      );
+
+      const messages: Message[] = sortedMsgs.map(m => ({
           id: m.id,
           senderId: m.sender_id,
           senderName: m.sender?.full_name || 'Unknown',
           text: m.content,
           mediaUrl: m.attachments?.[0],
-          timestamp: m.created_at,
+          timestamp: m.created_at || m.timestamp,
           read: m.is_read
       }));
 

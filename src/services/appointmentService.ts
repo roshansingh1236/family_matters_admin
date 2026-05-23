@@ -83,11 +83,15 @@ export const appointmentService = {
         : [];
       const primaryUserId = appointment.userId || participantIds[0] || null;
 
+      // Per client review: appointments only saved the first participant.
+      // Persist the full participants array (the column exists on the DB row
+      // — see mergeParticipantIds above).
       const { data, error } = await supabase
         .from(TABLE_NAME)
         .insert({
           journey_id: appointment.caseId || null,
           user_id: primaryUserId,
+          participants: participantIds,
           title: appointment.title,
           description: appointment.notes,
           date: new Date(timestamp).toISOString(),
@@ -118,7 +122,19 @@ export const appointmentService = {
       if (updates.userId !== undefined) {
         mappedUpdates.user_id = updates.userId || null;
       }
-      
+
+      // Per client review: edits weren't saving extra participants. Persist
+      // the full array — and keep user_id in sync with primary participant.
+      if (updates.participants !== undefined) {
+        const participantIds = Array.isArray(updates.participants)
+          ? [...new Set(updates.participants.filter(Boolean))]
+          : [];
+        mappedUpdates.participants = participantIds;
+        if (updates.userId === undefined && participantIds.length > 0) {
+          mappedUpdates.user_id = participantIds[0];
+        }
+      }
+
       if (updates.date || updates.time) {
           const d = updates.date || new Date().toISOString().split('T')[0];
           const t = updates.time || '00:00:00';

@@ -51,6 +51,74 @@ const CalendarPage: React.FC = () => {
     fetchEvents();
   }, []);
 
+  // Per client review: pop up a notification 1 hour before each calendar
+  // event. Re-evaluate every minute against today's events. Once an event has
+  // been reminded for, remember it for the rest of the session so we don't
+  // spam the admin.
+  useEffect(() => {
+    if (events.length === 0) return;
+
+    const remindedKey = 'fms_calendar_reminded_v1';
+    const loadReminded = (): Set<string> => {
+      try {
+        const raw = sessionStorage.getItem(remindedKey);
+        if (!raw) return new Set();
+        return new Set(JSON.parse(raw));
+      } catch {
+        return new Set();
+      }
+    };
+    const saveReminded = (s: Set<string>) => {
+      try { sessionStorage.setItem(remindedKey, JSON.stringify([...s])); } catch { /* ignore */ }
+    };
+
+    // Best-effort: ask permission once so OS-level notifications can fire.
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      try { Notification.requestPermission(); } catch { /* ignore */ }
+    }
+
+    const tick = () => {
+      const reminded = loadReminded();
+      const now = Date.now();
+      // 1 hour window with a 60s grace period so the tick interval can catch it.
+      const WINDOW_MS = 60 * 60 * 1000;
+      const GRACE_MS = 60 * 1000;
+
+      for (const ev of events) {
+        if (!ev.id || reminded.has(ev.id)) continue;
+        const isoDate = (ev as any).date as string | undefined;
+        const time = (ev as any).time as string | undefined;
+        const startStr = time && isoDate && !isoDate.includes('T')
+          ? `${isoDate}T${time}`
+          : isoDate;
+        if (!startStr) continue;
+        const start = Date.parse(startStr);
+        if (Number.isNaN(start)) continue;
+        const delta = start - now;
+        if (delta > WINDOW_MS - GRACE_MS && delta < WINDOW_MS + GRACE_MS) {
+          const title = ev.title || 'Upcoming appointment';
+          const whenLabel = new Date(start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          const body = `${title} in 1 hour (at ${whenLabel}).`;
+
+          // OS notification when allowed
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try { new Notification('Appointment reminder', { body }); } catch { /* ignore */ }
+          }
+          // In-page fallback so it works even without OS notifications.
+          // eslint-disable-next-line no-alert
+          window.alert(`⏰ Appointment reminder\n${body}`);
+
+          reminded.add(ev.id);
+          saveReminded(reminded);
+        }
+      }
+    };
+
+    tick();
+    const handle = setInterval(tick, 60 * 1000);
+    return () => clearInterval(handle);
+  }, [events]);
+
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'

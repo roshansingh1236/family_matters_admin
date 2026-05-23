@@ -27,6 +27,9 @@ const mapMatchFromDb = (dbMatch: any): Match => ({
   journeyId: dbMatch.journey_id,
   intendedParentData: dbMatch.intendedParentData,
   gestationalCarrierData: dbMatch.gestationalCarrierData,
+  // Per client review: progression checklist lives on the JSONB `data` blob —
+  // expose it so the Matches page can read selectedMatch.data?.checklist.
+  data: dbMatch.data ?? undefined,
 });
 
 // ─── Status Transition Guardrails ──────────────────────────────────────────────
@@ -433,6 +436,26 @@ export const matchService = {
       if (error) throw error;
     } catch (error) {
       console.error('Error updating match:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update the JSON `data` blob on a match ────────────────────────────────
+  // Per client review: the Match Progression checklist failed because the page
+  // called matchService.updateMatchData but no such method existed (silent
+  // import-side ReferenceError). Provide it so toggles persist.
+  updateMatchData: async (id: string, data: Record<string, any>): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .update({
+          data,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating match data:', error);
       throw error;
     }
   },
