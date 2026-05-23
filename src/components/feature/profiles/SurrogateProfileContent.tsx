@@ -278,11 +278,8 @@ export default function SurrogateProfileContent({
     availability && { icon: 'ri-calendar-check-line', label: 'Availability', value: availability }
   ].filter(Boolean) as any[], [availability, location, phone, surrogate?.email]);
 
-  const isEligibleForMatch = useMemo(() => {
-    const screeningOk = (surrogate?.medical_screening_status ?? surrogate?.medicalScreeningStatus) === 'Medically Cleared for Program';
-    const statusOk = surrogate?.status === 'Accepted to Program';
-    return screeningOk && statusOk;
-  }, [surrogate]);
+  // Per client review: surrogate is match-eligible when status is "Ready to Match"
+  const isEligibleForMatch = useMemo(() => surrogate?.status === 'Ready to Match', [surrogate]);
 
   const summaryCards = useMemo(() => [
     {
@@ -634,10 +631,27 @@ export default function SurrogateProfileContent({
                   <Card>
                     <div className="p-4">
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold">Intake Questionnaire</h3>
+                        <div>
+                          <h3 className="text-lg font-bold">Intake Questionnaire</h3>
+                          <p className="text-xs text-gray-500 mt-0.5">Hover any field and click <i className="ri-edit-line"></i> Edit to correct values (e.g. weight, height).</p>
+                        </div>
                         <Button size="sm" variant="outline" onClick={() => handleUpdateField('form_data.surrogate_profile', surrogate.form1)}>Copy to Profile</Button>
                       </div>
-                      <SurrogateIntakeFormView data={surrogate.form1 as Record<string, unknown> | null} />
+                      <SurrogateIntakeFormView
+                        data={surrogate.form1 as Record<string, unknown> | null}
+                        onSaveField={async (key, value) => {
+                          // Save back into whichever container originally held the field.
+                          // Priority: form_data.surrogate_profile -> top-level form_data.
+                          const fd = (surrogate.formData || {}) as Record<string, any>;
+                          const sp = (fd.surrogate_profile && typeof fd.surrogate_profile === 'object') ? fd.surrogate_profile : null;
+                          if (sp && Object.prototype.hasOwnProperty.call(sp, key)) {
+                            const next = { ...sp, [key]: value };
+                            await handleUpdateField('form_data.surrogate_profile', next);
+                          } else {
+                            await handleUpdateField(`form_data.${key}`, value);
+                          }
+                        }}
+                      />
                     </div>
                   </Card>
               </div>

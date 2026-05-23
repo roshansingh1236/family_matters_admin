@@ -46,14 +46,15 @@ export interface User {
   profileCompleted?: boolean;
 }
 
-export type MatchStatus = 
-  | 'Proposed' 
-  | 'Presented' 
-  | 'Accepted' 
-  | 'Active' 
-  | 'Delivered' 
-  | 'Escrow Closure' 
-  | 'Completed' 
+export type MatchStatus =
+  | 'Proposed'
+  | 'Presented'
+  | 'MR Review'
+  | 'Accepted'
+  | 'Active'
+  | 'Delivered'
+  | 'Escrow Closure'
+  | 'Completed'
   | 'Cancelled';
 
 export interface Match {
@@ -79,8 +80,6 @@ export const IP_STATUSES: UserStatus[] = [
   'Profile Complete',
   'Match Pending',
   'Matched',
-  'Accepted to Program',
-  'On Hold',
   'Declined / Inactive'
 ];
 
@@ -94,14 +93,10 @@ export const GC_STATUSES: UserStatus[] = [
   'Medical Records Requested',
   'Medical Records Received',
   'Medical Records Reviewed',
-  'Medical Screening Scheduled',
-  'Medically Cleared for Program',
   'Background Check Pending',
   'Background Check Complete',
   'Psychological Evaluation Scheduled',
   'Psychological Evaluation Complete',
-  'Home Study Pending',
-  'Home Study Complete',
   'Accepted to Program',
   'Ready to Match',
   'On Hold',

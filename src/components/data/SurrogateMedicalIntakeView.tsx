@@ -3,7 +3,6 @@ import Button from '../base/Button';
 import EditableJsonSection from './EditableJsonSection';
 import {
   flatScreeningEntries,
-  infectiousDiseaseFromProfile,
   medicalFitnessFromProfile,
   medicalIntakeProfileSource,
   psychClearanceFromProfile
@@ -15,7 +14,6 @@ import {
   type UserDocumentRecord
 } from '../../utils/userDocuments';
 import {
-  SURROGATE_INFECTIOUS_DISEASE_TEMPLATE,
   SURROGATE_MEDICAL_FITNESS_TEMPLATE,
   SURROGATE_PSYCH_CLEARANCE_TEMPLATE
 } from '../../constants/jsonTemplates';
@@ -172,7 +170,8 @@ function DocumentTile({
 type SurrogateMedicalIntakeViewProps = {
   surrogate: Record<string, unknown>;
   onSaveFitness: (v: Record<string, unknown>) => void | Promise<void>;
-  onSaveInfectious: (v: Record<string, unknown>) => void | Promise<void>;
+  /** @deprecated retained for backward compatibility — Infectious Disease panel removed per client review. */
+  onSaveInfectious?: (v: Record<string, unknown>) => void | Promise<void>;
   onSavePsych: (v: Record<string, unknown>) => void | Promise<void>;
   onOpenDocumentsTab?: () => void;
 };
@@ -180,7 +179,6 @@ type SurrogateMedicalIntakeViewProps = {
 export default function SurrogateMedicalIntakeView({
   surrogate,
   onSaveFitness,
-  onSaveInfectious,
   onSavePsych,
   onOpenDocumentsTab
 }: SurrogateMedicalIntakeViewProps) {
@@ -189,7 +187,6 @@ export default function SurrogateMedicalIntakeView({
   const profileSource = useMemo(() => medicalIntakeProfileSource(surrogate), [surrogate]);
 
   const fitness = useMemo(() => medicalFitnessFromProfile(profileSource), [profileSource]);
-  const infectious = useMemo(() => infectiousDiseaseFromProfile(profileSource), [profileSource]);
   const psych = useMemo(() => psychClearanceFromProfile(profileSource), [profileSource]);
   const flatRows = useMemo(() => flatScreeningEntries(profileSource), [profileSource]);
 
@@ -197,7 +194,6 @@ export default function SurrogateMedicalIntakeView({
   const medicalDocs = useMemo(() => allDocs.filter(isMedicalUserDocument), [allDocs]);
 
   const fitnessKeys = Object.keys(SURROGATE_MEDICAL_FITNESS_TEMPLATE);
-  const infectiousKeys = Object.keys(SURROGATE_INFECTIOUS_DISEASE_TEMPLATE);
   const psychKeys = Object.keys(SURROGATE_PSYCH_CLEARANCE_TEMPLATE);
 
   return (
@@ -243,7 +239,8 @@ export default function SurrogateMedicalIntakeView({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* Per client review: removed "Infectious disease" panel for surrogates */}
+      <div className="grid gap-6 lg:grid-cols-2">
         <MedicalPanel
           title="Medical fitness"
           subtitle="Exam, history, vitals, clearance"
@@ -253,16 +250,6 @@ export default function SurrogateMedicalIntakeView({
           fieldKeys={fitnessKeys}
           template={SURROGATE_MEDICAL_FITNESS_TEMPLATE}
           data={fitness}
-        />
-        <MedicalPanel
-          title="Infectious disease"
-          subtitle="Screening results (HIV, hepatitis, VDRL, TORCH)"
-          icon="ri-virus-line"
-          accent="from-violet-500 to-indigo-600"
-          ring="border-violet-100/70 dark:border-violet-900/30"
-          fieldKeys={infectiousKeys}
-          template={SURROGATE_INFECTIOUS_DISEASE_TEMPLATE}
-          data={infectious}
         />
         <MedicalPanel
           title="Psychological clearance"
@@ -369,12 +356,7 @@ export default function SurrogateMedicalIntakeView({
             templateData={SURROGATE_MEDICAL_FITNESS_TEMPLATE}
             onSave={onSaveFitness}
           />
-          <EditableJsonSection
-            title="Infectious Disease (JSON)"
-            data={infectious}
-            templateData={SURROGATE_INFECTIOUS_DISEASE_TEMPLATE}
-            onSave={onSaveInfectious}
-          />
+          {/* Per client review: Infectious Disease JSON editor removed for surrogates. */}
           <EditableJsonSection
             title="Psychological Clearance (JSON)"
             data={psych}
