@@ -20,6 +20,9 @@ const ParentsPage: React.FC = () => {
   const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('table');
 
   const activeStatus = searchParams.get('status');
+  // Per client review: declined/inactive IPs are archived. Show only when the
+  // user explicitly opts in via the "archived=1" query param.
+  const showArchived = searchParams.get('archived') === '1';
 
   const fetchParents = async () => {
     setIsLoading(true);
@@ -44,9 +47,18 @@ const ParentsPage: React.FC = () => {
   }, []);
 
   const filteredParents = useMemo(() => {
-    if (!activeStatus) return parents;
-    return parents.filter(p => (p.status as string).toLowerCase() === activeStatus.toLowerCase());
-  }, [parents, activeStatus]);
+    let list = parents;
+    // Default view hides archived rows. Archived view shows ONLY them.
+    if (showArchived) {
+      list = list.filter(p => (p.status as string)?.toLowerCase() === 'declined / inactive');
+    } else {
+      list = list.filter(p => (p.status as string)?.toLowerCase() !== 'declined / inactive');
+    }
+    if (activeStatus) {
+      list = list.filter(p => (p.status as string).toLowerCase() === activeStatus.toLowerCase());
+    }
+    return list;
+  }, [parents, activeStatus, showArchived]);
 
   const handleStatusUpdate = async (userId: string, newStatus: UserStatus) => {
     try {
@@ -101,19 +113,34 @@ const ParentsPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Intended Parents Dashboard</h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm font-medium">Manage family building inquiries and active journeys.</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+                {showArchived ? 'Archived Intended Parents' : 'Intended Parents Dashboard'}
+              </h1>
+              <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm font-medium">
+                {showArchived
+                  ? 'Declined / Inactive parents — restored when status is changed to anything else.'
+                  : 'Manage family building inquiries and active journeys.'}
+              </p>
             </div>
-            
+
             <div className="flex items-center gap-3">
+               <button
+                 onClick={() => navigate(showArchived ? '/parents' : '/parents?archived=1')}
+                 className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border ${showArchived
+                   ? 'bg-rose-500 text-white border-rose-500 shadow-sm'
+                   : 'bg-white dark:bg-white/5 text-gray-700 dark:text-gray-200 border-rose-100/50 dark:border-white/10 hover:border-rose-200'}`}
+               >
+                 <i className={`${showArchived ? 'ri-arrow-go-back-line' : 'ri-archive-line'} mr-1`}></i>
+                 {showArchived ? 'Back to Active' : 'View Archived'}
+               </button>
                <div className="flex bg-white dark:bg-white/5 p-1 rounded-xl border border-rose-100/50 dark:border-white/10">
-                 <button 
+                 <button
                    onClick={() => setViewStyle('table')}
                    className={`p-2 rounded-lg transition-all ${viewStyle === 'table' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
                  >
                    <i className="ri-table-line text-lg"></i>
                  </button>
-                 <button 
+                 <button
                    onClick={() => setViewStyle('grid')}
                    className={`p-2 rounded-lg transition-all ${viewStyle === 'grid' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
                  >

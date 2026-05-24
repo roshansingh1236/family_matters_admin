@@ -302,7 +302,8 @@ export default function ParentProfileContent({
     timeline && { icon: 'ri-timer-line', label: 'Intended Timeline', value: timeline }
   ].filter(Boolean) as any[], [location, parent?.email, phone, timeline]);
 
-  const isEligibleForMatch = useMemo(() => parent?.status === 'Accepted to Program', [parent?.status]);
+  // Per client review: IP is match-eligible when status is "Match Pending"
+  const isEligibleForMatch = useMemo(() => parent?.status === 'Match Pending', [parent?.status]);
 
   const summaryCards = useMemo(() => [
     {

@@ -264,6 +264,47 @@ const MessagesPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Per client review: portal didn't update in real time — required refresh.
+  // Subscribe to message + conversation inserts/updates so the UI live-updates.
+  useEffect(() => {
+    if (!adminId) return;
+
+    const messagesChannel = supabase
+      .channel(`portal-messages-${adminId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'messages' },
+        (_payload: any) => {
+          // If the change affects the currently open conversation, reload it.
+          const row = (_payload?.new ?? _payload?.old) as any;
+          const convId = row?.conversation_id;
+          if (selectedConversation && convId === selectedConversation.id) {
+            messagingService
+              .getConversationById(selectedConversation.id!)
+              .then(({ messages: msgs }) => setMessages(msgs))
+              .catch((e) => console.error('Live reload failed', e));
+          }
+          // Always refresh the conversation list (unread counts, last message)
+          fetchConversations();
+        }
+      )
+      .subscribe();
+
+    const convChannel = supabase
+      .channel(`portal-conversations-${adminId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'conversations' },
+        () => fetchConversations()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(convChannel);
+    };
+  }, [adminId, selectedConversation?.id]);
+
 
   const getOtherParticipantName = (conversation: Conversation) => {
     const otherParticipantId = conversation.participants.find(p => p !== adminId);

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 type SectionDef = {
@@ -195,6 +195,75 @@ const SECTIONS: SectionDef[] = [
 
 const SKIP_OTHER_KEYS = new Set(['surrogate_profile', 'form2', 'gc_additional']);
 
+const BOOLEAN_KEYS = new Set([
+  'receivedVaccination',
+  'openToVaccination',
+  'hasTransportation',
+  'canTravelForIVF',
+  'hasFlexibleSchedule',
+  'hasCustody',
+  'hasCollegeDegree',
+  'isEmployed',
+  'partnerEmployed',
+  'regularCycles',
+  'onBirthControl',
+  'isBreastfeeding',
+  'usedTHC',
+  'postpartumDepression',
+  'bedrest',
+  'hepatitisBVaccination',
+  'rhogamInjection',
+  'fertilityTreatments',
+  'hadMiscarriage',
+  'understandsAppointments',
+  'allowOBAppointments',
+  'allowDeliveryRoom',
+  'helpCoupleWithChildren',
+  'helpSameSexCouple',
+  'helpSingleParent',
+  'reduceTripletsToTwins',
+  'reduceTwinsToSingleton',
+  'terminateIfNecessary',
+  'terminateDownSyndrome',
+  'amniocentesis',
+  'agreeToFetalTesting',
+  'willingForSplitTwins',
+  'smoker'
+]);
+
+const NUMERIC_KEYS = new Set([
+  'height',
+  'weight',
+  'age',
+  'bmi',
+  'yearsTogether',
+  'childrenBirthed',
+  'surrogacyChildren',
+  'numberOfPregnancies',
+  'pregnancy1Weight',
+  'pregnancy2Weight',
+  'pregnancy3Weight'
+]);
+
+const DATE_KEYS = new Set([
+  'dob',
+  'lastPapSmear',
+  'pregnancy1DOB',
+  'pregnancy2DOB',
+  'pregnancy3DOB'
+]);
+
+const LONG_TEXT_KEYS = new Set([
+  'messageToParents',
+  'surrogacyReasons',
+  'surrogacyExcitement',
+  'childhoodMemory',
+  'hobbies',
+  'personality',
+  'additionalPregnancyInfo',
+  'miscarriageDetails'
+]);
+
 const formatLabel = (key: string) =>
   key
     .replace(/([A-Z])/g, ' $1')
@@ -231,48 +300,202 @@ const allSectionKeys = new Set(SECTIONS.flatMap((s) => s.keys));
 
 type Props = {
   data: Record<string, unknown> | null | undefined;
+  onSaveField?: (key: string, value: unknown) => Promise<void> | void;
+  readOnly?: boolean;
 };
 
-export default function SurrogateIntakeFormView({ data }: Props) {
+type FieldEditorProps = {
+  fieldKey: string;
+  rawValue: unknown;
+  displayValue: string;
+  onSave: (value: unknown) => Promise<void> | void;
+  variant?: 'section' | 'other';
+};
+
+function FieldEditor({ fieldKey, rawValue, displayValue, onSave, variant = 'section' }: FieldEditorProps) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const initialString = useMemo(() => {
+    if (rawValue === null || rawValue === undefined) return '';
+    if (typeof rawValue === 'boolean') return rawValue ? 'true' : 'false';
+    if (Array.isArray(rawValue)) return rawValue.join(', ');
+    if (typeof rawValue === 'object') return JSON.stringify(rawValue, null, 2);
+    return String(rawValue);
+  }, [rawValue]);
+  const [draft, setDraft] = useState(initialString);
+
+  useEffect(() => {
+    if (!editing) setDraft(initialString);
+  }, [editing, initialString]);
+
+  const isBool = BOOLEAN_KEYS.has(fieldKey);
+  const isNum = NUMERIC_KEYS.has(fieldKey);
+  const isDate = DATE_KEYS.has(fieldKey);
+  const isLong = LONG_TEXT_KEYS.has(fieldKey);
+
+  const beginEdit = () => {
+    setDraft(initialString);
+    setEditing(true);
+  };
+
+  const cancel = () => {
+    setEditing(false);
+    setDraft(initialString);
+  };
+
+  const parsed = (): unknown => {
+    if (isBool) return draft === 'true';
+    if (isNum) {
+      const t = draft.trim();
+      if (t === '') return null;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : draft;
+    }
+    if (isDate) {
+      // accept YYYY-MM-DD as-is
+      return draft.trim() || null;
+    }
+    return draft;
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave(parsed());
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const labelCls = variant === 'section'
+    ? 'text-[11px] font-semibold uppercase tracking-wide text-rose-600/80 dark:text-rose-400/90'
+    : 'text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500';
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-2">
+        <span className={labelCls}>{formatLabel(fieldKey)}</span>
+        {isBool ? (
+          <select
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="text-sm rounded-lg border border-rose-200 dark:border-white/10 bg-white dark:bg-[#0e0b1a] px-2 py-1.5 text-gray-900 dark:text-gray-100"
+          >
+            <option value="">—</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        ) : isLong ? (
+          <textarea
+            value={draft}
+            rows={4}
+            onChange={(e) => setDraft(e.target.value)}
+            className="text-sm rounded-lg border border-rose-200 dark:border-white/10 bg-white dark:bg-[#0e0b1a] px-2 py-1.5 text-gray-900 dark:text-gray-100"
+          />
+        ) : (
+          <input
+            type={isNum ? 'number' : isDate ? 'date' : 'text'}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="text-sm rounded-lg border border-rose-200 dark:border-white/10 bg-white dark:bg-[#0e0b1a] px-2 py-1.5 text-gray-900 dark:text-gray-100"
+          />
+        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={save}
+            className="px-3 py-1 text-xs font-semibold rounded-md bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={saving}
+            className="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-white/20"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 group">
+      <div className="flex items-center justify-between gap-2">
+        <span className={labelCls}>{formatLabel(fieldKey)}</span>
+        <button
+          type="button"
+          onClick={beginEdit}
+          className="text-xs text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 opacity-0 group-hover:opacity-100 transition-opacity"
+          aria-label={`Edit ${formatLabel(fieldKey)}`}
+        >
+          <i className="ri-edit-line"></i> Edit
+        </button>
+      </div>
+      <span className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900 dark:text-gray-100">
+        {displayValue || <span className="text-gray-400 italic">— empty —</span>}
+      </span>
+    </div>
+  );
+}
+
+export default function SurrogateIntakeFormView({ data, onSaveField, readOnly = false }: Props) {
+  const editable = !readOnly && typeof onSaveField === 'function';
+
   const { sectionRows, otherEntries, hasAny } = useMemo(() => {
     if (!data || typeof data !== 'object') {
-      return { sectionRows: [] as { section: SectionDef; entries: [string, string][] }[], otherEntries: [] as [string, string][], hasAny: false };
+      return { sectionRows: [] as { section: SectionDef; entries: [string, unknown, string][] }[], otherEntries: [] as [string, unknown, string][], hasAny: false };
     }
 
     const used = new Set<string>();
-    const sectionRows: { section: SectionDef; entries: [string, string][] }[] = [];
+    const sectionRows: { section: SectionDef; entries: [string, unknown, string][] }[] = [];
 
     for (const section of SECTIONS) {
-      const entries: [string, string][] = [];
+      const entries: [string, unknown, string][] = [];
       for (const key of section.keys) {
         const raw = data[key];
         if (raw !== undefined && raw !== null && typeof raw === 'object' && !Array.isArray(raw)) continue;
         const text = formatValue(raw);
-        if (!text) continue;
-        entries.push([key, text]);
+        // When editable, include all fields so admin can fill empty ones too
+        if (!text && !editable) continue;
+        entries.push([key, raw, text]);
         used.add(key);
       }
       if (entries.length > 0) sectionRows.push({ section, entries });
     }
 
-    const otherEntries: [string, string][] = [];
+    // If editable and a section had no data, still surface it so admins can fill it in
+    if (editable) {
+      for (const section of SECTIONS) {
+        const hasSection = sectionRows.some((s) => s.section.id === section.id);
+        if (hasSection) continue;
+        const entries: [string, unknown, string][] = section.keys.map((k) => [k, data[k], formatValue(data[k])]);
+        sectionRows.push({ section, entries });
+      }
+    }
+
+    const otherEntries: [string, unknown, string][] = [];
     for (const key of Object.keys(data)) {
       if (used.has(key) || allSectionKeys.has(key)) continue;
       if (SKIP_OTHER_KEYS.has(key)) continue;
       const raw = data[key];
       if (raw !== undefined && raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
-        otherEntries.push([key, JSON.stringify(raw, null, 2)]);
+        otherEntries.push([key, raw, JSON.stringify(raw, null, 2)]);
         continue;
       }
       const text = formatValue(raw);
-      if (text) otherEntries.push([key, text]);
+      if (text) otherEntries.push([key, raw, text]);
     }
 
     otherEntries.sort(([a], [b]) => a.localeCompare(b));
 
     const hasAny = sectionRows.length > 0 || otherEntries.length > 0;
     return { sectionRows, otherEntries, hasAny };
-  }, [data]);
+  }, [data, editable]);
 
   if (!hasAny) {
     return (
@@ -310,19 +533,31 @@ export default function SurrogateIntakeFormView({ data }: Props) {
             </span>
           </div>
           <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
-            {entries.map(([key, text]) => {
-              const long = text.length > 140 || key === 'messageToParents' || text.includes('\n');
+            {entries.map(([key, raw, text]) => {
+              const long = text.length > 140 || key === 'messageToParents' || text.includes('\n') || LONG_TEXT_KEYS.has(key);
               return (
                 <div
                   key={key}
                   className={`flex flex-col gap-1.5 rounded-xl border border-gray-100/90 bg-gray-50/50 px-4 py-3 dark:border-white/5 dark:bg-white/[0.03] ${long ? 'sm:col-span-2' : ''}`}
                 >
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-600/80 dark:text-rose-400/90">
-                    {formatLabel(key)}
-                  </span>
-                  <span className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900 dark:text-gray-100">
-                    {text}
-                  </span>
+                  {editable ? (
+                    <FieldEditor
+                      fieldKey={key}
+                      rawValue={raw}
+                      displayValue={text}
+                      onSave={(v) => onSaveField!(key, v)}
+                      variant="section"
+                    />
+                  ) : (
+                    <>
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-600/80 dark:text-rose-400/90">
+                        {formatLabel(key)}
+                      </span>
+                      <span className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900 dark:text-gray-100">
+                        {text}
+                      </span>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -338,10 +573,10 @@ export default function SurrogateIntakeFormView({ data }: Props) {
             <span className="text-xs text-gray-400">from app / legacy keys</span>
           </div>
           <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
-            {otherEntries.map(([key, text]) => {
+            {otherEntries.map(([key, raw, text]) => {
               const isPhotosKey = key.toLowerCase().includes('photo');
-              const urls = isPhotosKey && text.includes('http') 
-                ? text.split(',').map(u => u.trim()).filter(u => u.startsWith('http')) 
+              const urls = isPhotosKey && text.includes('http')
+                ? text.split(',').map((u) => u.trim()).filter((u) => u.startsWith('http'))
                 : [];
 
               return (
@@ -349,21 +584,36 @@ export default function SurrogateIntakeFormView({ data }: Props) {
                   key={key}
                   className={`flex flex-col gap-1.5 rounded-xl border border-gray-200/80 bg-white px-4 py-3 dark:border-white/5 dark:bg-white/[0.02] ${text.includes('\n') || urls.length > 0 ? 'sm:col-span-2' : ''}`}
                 >
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                    {formatLabel(key)}
-                  </span>
                   {urls.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-3">
-                      {urls.map((url, i) => (
-                        <a key={i} href={url} target="_blank" rel="noreferrer" className="group block h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 shadow-sm dark:border-white/10 dark:bg-gray-800 sm:h-24 sm:w-24">
-                          <img src={url} alt={`${formatLabel(key)} ${i + 1}`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
-                        </a>
-                      ))}
-                    </div>
+                    <>
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                        {formatLabel(key)}
+                      </span>
+                      <div className="mt-2 flex flex-wrap gap-3">
+                        {urls.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noreferrer" className="group block h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 shadow-sm dark:border-white/10 dark:bg-gray-800 sm:h-24 sm:w-24">
+                            <img src={url} alt={`${formatLabel(key)} ${i + 1}`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
+                          </a>
+                        ))}
+                      </div>
+                    </>
+                  ) : editable ? (
+                    <FieldEditor
+                      fieldKey={key}
+                      rawValue={raw}
+                      displayValue={text}
+                      onSave={(v) => onSaveField!(key, v)}
+                      variant="other"
+                    />
                   ) : (
-                    <span className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-gray-800 dark:text-gray-200">
-                      {text}
-                    </span>
+                    <>
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                        {formatLabel(key)}
+                      </span>
+                      <span className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-gray-800 dark:text-gray-200">
+                        {text}
+                      </span>
+                    </>
                   )}
                 </div>
               );

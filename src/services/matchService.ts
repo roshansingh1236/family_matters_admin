@@ -27,6 +27,9 @@ const mapMatchFromDb = (dbMatch: any): Match => ({
   journeyId: dbMatch.journey_id,
   intendedParentData: dbMatch.intendedParentData,
   gestationalCarrierData: dbMatch.gestationalCarrierData,
+  // Per client review: progression checklist lives on the JSONB `data` blob —
+  // expose it so the Matches page can read selectedMatch.data?.checklist.
+  data: dbMatch.data ?? undefined,
 });
 
 // ─── Status Transition Guardrails ──────────────────────────────────────────────
@@ -84,40 +87,33 @@ export const matchService = {
     }
   },
 
-  // ─── Get eligible surrogates (Accepted to Program + Medically Cleared) ──────
+  // ─── Get eligible surrogates ("Ready to Match" per client review) ─────────
   getEligibleSurrogates: async (): Promise<User[]> => {
     try {
-      // Per spec: GC must be Accepted to Program AND Medically Cleared
+      // Per client review: surrogates eligible to match must be "Ready to Match"
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .in('role', ['Surrogate', 'gestationalCarrier'])
-        .eq('status', 'Accepted to Program')
+        .eq('status', 'Ready to Match')
         .order('first_name', { ascending: true });
 
       if (error) throw error;
-
-      // Filter for medical clearance on the client side
-      // (medical_screening_status may be a column OR inside form_data)
-      return (data || []).filter(gc => {
-        const screeningStatus = gc.medical_screening_status
-          || (gc.form_data as any)?.medical_screening_status;
-        return screeningStatus === 'Medically Cleared for Program';
-      });
+      return data || [];
     } catch (error) {
       console.error('Error fetching eligible surrogates:', error);
       throw error;
     }
   },
 
-  // ─── Get eligible intended parents (Accepted to Program only) ──────────────
+  // ─── Get eligible intended parents ("Match Pending" per client review) ────
   getEligibleParents: async (): Promise<User[]> => {
     try {
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .in('role', ['Intended Parent', 'intendedParent'])
-        .eq('status', 'Accepted to Program')
+        .eq('status', 'Match Pending')
         .order('first_name', { ascending: true });
 
       if (error) throw error;
@@ -145,11 +141,11 @@ export const matchService = {
         .single();
 
       if (ipError) throw new Error('Could not verify IP eligibility');
-      if (!['Intended Parent', 'intendedParent'].includes(ipData.role) || ipData.status !== 'Accepted to Program') {
-        throw new Error('Intended Parent is not eligible for matching. Status must be "Accepted to Program".');
+      if (!['Intended Parent', 'intendedParent'].includes(ipData.role) || ipData.status !== 'Match Pending') {
+        throw new Error('Intended Parent is not eligible for matching. Status must be "Match Pending".');
       }
 
-      // Validate GC eligibility (must be Accepted + Medically Cleared per spec)
+      // Validate GC eligibility (must be Ready to Match per client review)
       const { data: gcData, error: gcError } = await supabase
         .from('users')
         .select('status, role, medical_screening_status, form_data')
@@ -157,17 +153,8 @@ export const matchService = {
         .single();
 
       if (gcError) throw new Error('Could not verify GC eligibility');
-      if (!['Surrogate', 'gestationalCarrier'].includes(gcData.role) || gcData.status !== 'Accepted to Program') {
-        throw new Error('Gestational Carrier is not eligible for matching. Status must be "Accepted to Program".');
-      }
-
-      // Check medical clearance — GC must be Medically Cleared for Program (per spec)
-      const screeningStatus = gcData.medical_screening_status
-        || (gcData.form_data as any)?.medical_screening_status;
-      if (screeningStatus !== 'Medically Cleared for Program') {
-        throw new Error(
-          `Gestational Carrier must be "Medically Cleared for Program" before matching. Current status: "${screeningStatus || 'Not Started'}".`
-        );
+      if (!['Surrogate', 'gestationalCarrier'].includes(gcData.role) || gcData.status !== 'Ready to Match') {
+        throw new Error('Gestational Carrier is not eligible for matching. Status must be "Ready to Match".');
       }
 
       // Per spec: prevent an IP or GC from being in two concurrent active matches
@@ -449,6 +436,26 @@ export const matchService = {
       if (error) throw error;
     } catch (error) {
       console.error('Error updating match:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update the JSON `data` blob on a match ────────────────────────────────
+  // Per client review: the Match Progression checklist failed because the page
+  // called matchService.updateMatchData but no such method existed (silent
+  // import-side ReferenceError). Provide it so toggles persist.
+  updateMatchData: async (id: string, data: Record<string, any>): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .update({
+          data,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating match data:', error);
       throw error;
     }
   },

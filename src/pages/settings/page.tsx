@@ -5,6 +5,7 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Toast from '../../components/base/Toast';
+import AccessCodesSection from '../../components/feature/AccessCodesSection';
 import { useAuth } from '../../contexts/AuthContext';
 import DataSection from '../../components/data/DataSection';
 import { formatMMDDYYYY } from '../../utils/dateFormat';
@@ -121,6 +122,7 @@ const SettingsPage: React.FC = () => {
     { id: 'general', label: 'General', icon: 'ri-settings-3-line' },
     { id: 'notifications', label: 'Notifications', icon: 'ri-notification-3-line' },
     { id: 'security', label: 'Security', icon: 'ri-shield-check-line' },
+    { id: 'access', label: 'Access Codes', icon: 'ri-lock-2-line' },
     { id: 'matching', label: 'Matching Rules', icon: 'ri-links-line' },
     { id: 'billing', label: 'Billing', icon: 'ri-money-dollar-circle-line' },
     { id: 'integrations', label: 'Integrations', icon: 'ri-plug-line' }
@@ -342,6 +344,8 @@ const SettingsPage: React.FC = () => {
         return renderNotificationSettings();
       case 'security':
         return renderSecuritySettings();
+      case 'access':
+        return <AccessCodesSection onToast={setToast} />;
       case 'matching':
         return (
           <div className="space-y-6">

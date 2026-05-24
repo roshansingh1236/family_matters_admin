@@ -9,6 +9,7 @@ import ProfileDetailDialog from "./ProfileDetailDialog";
 const MATCH_STATUSES: MatchStatus[] = [
   "Proposed",
   "Presented",
+  "MR Review",
   "Accepted",
   "Active",
   "Delivered",
@@ -16,6 +17,12 @@ const MATCH_STATUSES: MatchStatus[] = [
   "Cancelled",
   "Completed",
 ];
+
+// Per client review: surrogates must be "Ready to Match"; IPs must be "Match Pending"
+const ELIGIBLE_STATUS_FOR_ROLE: Record<UserRole, string> = {
+  Surrogate: "Ready to Match",
+  "Intended Parent": "Match Pending",
+} as Record<UserRole, string>;
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -99,11 +106,12 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
         setLoadingMore(true);
       }
 
+      const eligibleStatus = ELIGIBLE_STATUS_FOR_ROLE[oppositeRole];
       let query = supabase
         .from("users")
         .select("id, role, email, first_name, last_name, status, medical_screening_status", { count: "exact" })
         .eq("role", oppositeRole)
-        .eq("status", "Accepted to Program");
+        .eq("status", eligibleStatus);
 
       if (debouncedSearch) {
         query = query.or(
@@ -206,7 +214,9 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
   const inputCls =
     "w-full px-3 py-2 text-sm rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-transparent bg-white dark:bg-black border border-rose-100/60 dark:border-white/10";
 
-  const isDisabled = user.status !== "Accepted to Program";
+  // Per client review: surrogate must be "Ready to Match"; IP must be "Match Pending"
+  const requiredStatusForUser = isIntendedParent ? "Match Pending" : "Ready to Match";
+  const isDisabled = user.status !== requiredStatusForUser;
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -243,7 +253,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                 <p className="text-xs font-bold text-white leading-snug mb-1">Match creation locked</p>
                 <p className="text-[11px] text-white/60 leading-relaxed">
                   Status must be{" "}
-                  <span className="text-emerald-400 font-semibold">"Accepted to Program"</span>{" "}
+                  <span className="text-emerald-400 font-semibold">"{requiredStatusForUser}"</span>{" "}
                   to create a match.
                 </p>
                 <div className="mt-2 flex items-center gap-1.5">
@@ -302,8 +312,8 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                 </label>
                 <p className="text-xs text-gray-500 dark:text-white/50 mb-2">
                   {isIntendedParent
-                    ? <>Showing surrogates with status <span className="font-medium text-gray-700 dark:text-white/80">"Accepted to Program"</span>.</>
-                    : <>Showing intended parents with status <span className="font-medium text-gray-700 dark:text-white/80">"Accepted to Program"</span>.</>
+                    ? <>Showing surrogates with status <span className="font-medium text-gray-700 dark:text-white/80">"Ready to Match"</span>.</>
+                    : <>Showing intended parents with status <span className="font-medium text-gray-700 dark:text-white/80">"Match Pending"</span>.</>
                   }
                 </p>
 

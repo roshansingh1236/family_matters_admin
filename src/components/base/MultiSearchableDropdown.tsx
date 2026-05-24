@@ -14,6 +14,9 @@ interface MultiSearchableDropdownProps {
   label?: string;
   className?: string;
   required?: boolean;
+  /** Per client review: show an extra "+ Add new..." entry at the top of the list. */
+  onAddNew?: (suggestedName: string) => void | Promise<void>;
+  addNewLabel?: string;
 }
 
 const MultiSearchableDropdown: React.FC<MultiSearchableDropdownProps> = ({
@@ -23,7 +26,9 @@ const MultiSearchableDropdown: React.FC<MultiSearchableDropdownProps> = ({
   placeholder = "Select options...",
   label,
   className = "",
-  required = false
+  required = false,
+  onAddNew,
+  addNewLabel = "Add new participant…"
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -116,6 +121,18 @@ const MultiSearchableDropdown: React.FC<MultiSearchableDropdownProps> = ({
       {isOpen && (
         <div className="absolute z-[60] mt-1 w-full bg-white dark:bg-[#15111f] border border-rose-100/60 dark:border-white/5 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
           <div className="max-h-60 overflow-y-auto">
+            {onAddNew && (
+              <div
+                onClick={() => {
+                  setIsOpen(false);
+                  onAddNew(searchTerm);
+                }}
+                className="px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center gap-2 border-b border-gray-100 dark:border-white/10 bg-blue-50/30 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100/40 dark:hover:bg-blue-900/40 font-medium"
+              >
+                <i className="ri-user-add-line"></i>
+                <span>{addNewLabel}{searchTerm ? ` "${searchTerm}"` : ''}</span>
+              </div>
+            )}
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option) => {
                 const isSelected = value.includes(option.id);
@@ -135,9 +152,11 @@ const MultiSearchableDropdown: React.FC<MultiSearchableDropdownProps> = ({
                 );
               })
             ) : (
-              <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center italic">
-                No results found
-              </div>
+              !onAddNew && (
+                <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center italic">
+                  No results found
+                </div>
+              )
             )}
           </div>
         </div>

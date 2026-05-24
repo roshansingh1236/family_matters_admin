@@ -4,7 +4,9 @@ import type { User } from '../types';
 const TABLE_NAME = 'users';
 
 export const inquiryService = {
-  // Fetch all new inquiries (Intended Parents in the initial lifecycle)
+  // Fetch all new inquiries (Intended Parents in the initial lifecycle).
+  // Per client review: declined/inactive inquiries are excluded — they live
+  // in the archive view (see getArchivedInquiries).
   getNewInquiries: async (): Promise<User[]> => {
     try {
       // Include all early-stage statuses for Intended Parents.
@@ -15,19 +17,19 @@ export const inquiryService = {
         .select('*')
         .eq('role', 'Intended Parent')
         .in('status', [
-          'Inquiry', 
-          'Consultation Pending', 
-          'Consultation Scheduled', 
+          'Inquiry',
+          'Consultation Pending',
+          'Consultation Scheduled',
           'Consultation Complete',
-          'new', 
-          'pending', 
-          'New Inquiry', 
-          'Reviewed', 
-          'Contacted', 
+          'new',
+          'pending',
+          'New Inquiry',
+          'Reviewed',
+          'Contacted',
           'Follow-Up'
         ])
         .order('created_at', { ascending: false });
-      
+
       if (fetchError) throw fetchError;
 
       const mappedData: User[] = (data || []).map(u => ({
@@ -42,6 +44,35 @@ export const inquiryService = {
       console.error('Error fetching inquiries:', error);
       throw error;
     }
+  },
+
+  // Fetch archived (Declined / Inactive) inquiries so admins can retrieve
+  // them later. The Inquiries page exposes this through an Archived tab.
+  getArchivedInquiries: async (): Promise<User[]> => {
+    try {
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('role', 'Intended Parent')
+        .eq('status', 'Declined / Inactive')
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(u => ({
+        ...u,
+        firstName: u.full_name?.split(' ')[0] || u.first_name || '',
+        lastName: u.full_name?.split(' ').slice(1).join(' ') || u.last_name || '',
+        createdAt: u.created_at,
+        updatedAt: u.updated_at,
+      }));
+    } catch (error) {
+      console.error('Error fetching archived inquiries:', error);
+      throw error;
+    }
+  },
+
+  // Restore an archived inquiry by setting it back to the default Inquiry state.
+  restoreInquiry: async (userId: string): Promise<void> => {
+    await inquiryService.updateInquiryStatus(userId, 'Inquiry');
   },
 
   // Update Inquiry Status
