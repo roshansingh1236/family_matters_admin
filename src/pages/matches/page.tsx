@@ -14,6 +14,7 @@ import { formatMMDDYYYY } from '../../utils/dateFormat';
 const MATCH_STATUSES: MatchStatus[] = [
   'Proposed',
   'Presented',
+  'MR Review',
   'Accepted',
   'Active',
   'Delivered',
@@ -34,7 +35,8 @@ const CHECKLIST_ITEMS = [
 // Valid transitions for UI guardrails
 const VALID_TRANSITIONS: Record<string, MatchStatus[]> = {
   'Proposed':       ['Presented', 'Cancelled', 'Accepted'],
-  'Presented':      ['Accepted', 'Cancelled'],
+  'Presented':      ['MR Review', 'Accepted', 'Cancelled'],
+  'MR Review':      ['Accepted', 'Cancelled'],
   'Accepted':       ['Active', 'Cancelled'],
   'Active':         ['Delivered', 'Cancelled'],
   'Delivered':      ['Escrow Closure', 'Cancelled'],
@@ -338,6 +340,7 @@ const MatchesPage: React.FC = () => {
     if (s === 'active') return <Badge color="green">{status}</Badge>;
     if (s === 'proposed') return <Badge color="blue">{status}</Badge>;
     if (s === 'presented') return <Badge color="purple">{status}</Badge>;
+    if (s === 'mr review') return <Badge color="orange">{status}</Badge>;
     if (s === 'accepted') return <Badge color="indigo">{status}</Badge>;
     if (s === 'delivered') return <Badge color="emerald">{status}</Badge>;
     if (s === 'cancelled') return <Badge color="red">{status}</Badge>;
@@ -431,6 +434,7 @@ const MatchesPage: React.FC = () => {
                   className={`hover:shadow-lg transition-all cursor-pointer border-t-4 ${
                     match.status === 'Active' ? 'border-t-emerald-500' : 
                     match.status === 'Proposed' ? 'border-t-blue-500' : 
+                    match.status === 'MR Review' ? 'border-t-orange-500' : 
                     'border-t-gray-200 dark:border-t-white/10'
                   }`}
                   onClick={() => setSelectedMatch(match)}

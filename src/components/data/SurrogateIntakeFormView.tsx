@@ -232,7 +232,6 @@ const BOOLEAN_KEYS = new Set([
 ]);
 
 const NUMERIC_KEYS = new Set([
-  'height',
   'weight',
   'age',
   'bmi',
@@ -280,8 +279,25 @@ const isEmpty = (v: unknown): boolean => {
   return false;
 };
 
-const formatValue = (value: unknown): string => {
+const formatHeight = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  const str = String(value).trim();
+  if (!str) return '';
+  
+  const num = Number(str);
+  if (!isNaN(num) && num > 0 && num < 120) {
+    const feet = Math.floor(num / 12);
+    const inches = Math.round(num % 12);
+    return `${feet}ft ${inches}inches`;
+  }
+  return str;
+};
+
+const formatValue = (value: unknown, key?: string): string => {
   if (isEmpty(value)) return '';
+  if (key === 'height') {
+    return formatHeight(value);
+  }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
   if (typeof value === 'string') {
@@ -292,7 +308,7 @@ const formatValue = (value: unknown): string => {
     }
     return t;
   }
-  if (Array.isArray(value)) return value.map((x) => formatValue(x)).filter(Boolean).join(', ');
+  if (Array.isArray(value)) return value.map((x) => formatValue(x, key)).filter(Boolean).join(', ');
   return JSON.stringify(value);
 };
 
@@ -459,7 +475,7 @@ export default function SurrogateIntakeFormView({ data, onSaveField, readOnly = 
       for (const key of section.keys) {
         const raw = data[key];
         if (raw !== undefined && raw !== null && typeof raw === 'object' && !Array.isArray(raw)) continue;
-        const text = formatValue(raw);
+        const text = formatValue(raw, key);
         // When editable, include all fields so admin can fill empty ones too
         if (!text && !editable) continue;
         entries.push([key, raw, text]);
@@ -473,7 +489,7 @@ export default function SurrogateIntakeFormView({ data, onSaveField, readOnly = 
       for (const section of SECTIONS) {
         const hasSection = sectionRows.some((s) => s.section.id === section.id);
         if (hasSection) continue;
-        const entries: [string, unknown, string][] = section.keys.map((k) => [k, data[k], formatValue(data[k])]);
+        const entries: [string, unknown, string][] = section.keys.map((k) => [k, data[k], formatValue(data[k], k)]);
         sectionRows.push({ section, entries });
       }
     }
@@ -487,7 +503,7 @@ export default function SurrogateIntakeFormView({ data, onSaveField, readOnly = 
         otherEntries.push([key, raw, JSON.stringify(raw, null, 2)]);
         continue;
       }
-      const text = formatValue(raw);
+      const text = formatValue(raw, key);
       if (text) otherEntries.push([key, raw, text]);
     }
 

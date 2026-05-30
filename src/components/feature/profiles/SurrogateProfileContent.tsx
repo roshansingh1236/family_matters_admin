@@ -85,13 +85,13 @@ function surrogateStateFromRow(data: Record<string, any>) {
 const TABS = [
     { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line' },
     { id: 'workflow', label: 'Workflow', icon: 'ri-task-line' },
-    { id: 'gallery', label: 'Photo Gallery', icon: 'ri-image-line' },
-    { id: 'application', label: 'Signup & Intake (Form 1)', icon: 'ri-file-user-line' },
-    { id: 'personal', label: 'Detailed App (Form 2)', icon: 'ri-profile-line' },
+    { id: 'gallery', label: 'Gallery', icon: 'ri-image-line' },
+    { id: 'application', label: 'Form 1 (Intake)', icon: 'ri-file-user-line' },
+    { id: 'personal', label: 'Form 2 (Detailed)', icon: 'ri-profile-line' },
     { id: 'medical_report', label: 'Medical Reports', icon: 'ri-heart-pulse-line' },
     { id: 'medical_intake', label: 'Medical Intake', icon: 'ri-file-shield-line' },
     { id: 'clinical', label: 'Clinical Care', icon: 'ri-stethoscope-line' },
-    { id: 'finances', label: 'Finances & Expenses', icon: 'ri-money-dollar-circle-line' },
+    { id: 'finances', label: 'Finances', icon: 'ri-money-dollar-circle-line' },
     { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
 ] as const;
 
@@ -502,7 +502,7 @@ export default function SurrogateProfileContent({
       </div>
 
       {/* Tabs Navigation */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-[#15111f] border-b border-rose-100/60 dark:border-white/5 flex overflow-x-auto no-scrollbar backdrop-blur-xl bg-opacity-80">
+      <div className="sticky top-0 z-10 bg-white dark:bg-[#15111f] border-b border-rose-100/60 dark:border-white/5 flex flex-wrap gap-y-1 backdrop-blur-xl bg-opacity-80">
           {TABS.map((tab) => (
               <button 
                   key={tab.id} 

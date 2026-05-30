@@ -316,7 +316,7 @@ const InquiriesPage: React.FC = () => {
                      <div className="flex gap-2">
                         {activeTab === 'surrogates' && item.status !== 'converted' && (
                           <Button size="sm" color="emerald" onClick={() => handleConvertToProfile(item)}>
-                            Convert
+                            Surrogate Profile
                           </Button>
                         )}
                         <Button 
@@ -371,7 +371,7 @@ const InquiriesPage: React.FC = () => {
                            <div className="flex items-center justify-end gap-3">
                              {activeTab === 'surrogates' && item.status !== 'converted' && (
                                <Button size="xs" color="emerald" onClick={() => handleConvertToProfile(item)}>
-                                 Convert
+                                 Surrogate Profile
                                </Button>
                              )}
                              <select 
