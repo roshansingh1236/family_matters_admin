@@ -101,6 +101,7 @@ const MultiUserSelector: React.FC<MultiUserSelectorProps> = ({
       const { data, error } = await supabase
         .from('users')
         .insert({
+          id: crypto.randomUUID(),
           first_name: first,
           last_name: last || null,
           full_name: trimmedName,

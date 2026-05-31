@@ -36,7 +36,8 @@ const mapMatchFromDb = (dbMatch: any): Match => ({
 // Defines which statuses can transition to which other statuses
 const VALID_TRANSITIONS: Record<string, MatchStatus[]> = {
   'Proposed':       ['Presented', 'Cancelled'],
-  'Presented':      ['Accepted', 'Cancelled'],
+  'Presented':      ['MR Review', 'Accepted', 'Cancelled'],
+  'MR Review':      ['Accepted', 'Cancelled'],
   'Accepted':       ['Active', 'Cancelled'],
   'Active':         ['Delivered', 'Cancelled'],
   'Delivered':      ['Escrow Closure', 'Cancelled'],
