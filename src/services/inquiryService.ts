@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { User } from '../types';
+import { approvalSyncFields } from '../utils/approvalStatus';
 
 const TABLE_NAME = 'users';
 
@@ -80,9 +81,10 @@ export const inquiryService = {
     try {
       const updates: any = {
         status,
+        ...approvalSyncFields(status),
         updated_at: new Date().toISOString(),
       };
-      
+
       if (notes) {
         updates['admin_notes'] = notes;
       }

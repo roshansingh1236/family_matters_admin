@@ -10,6 +10,7 @@ import type { User, UserStatus } from '../../types';
 import { GC_STATUSES } from '../../types';
 import AddUserDialog from '../../components/feature/AddUserDialog';
 import { formatMMDDYYYY } from '../../utils/dateFormat';
+import { approvalSyncFields } from '../../utils/approvalStatus';
 
 const SurrogatesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -52,7 +53,7 @@ const SurrogatesPage: React.FC = () => {
     try {
       const { error } = await supabase
         .from('users')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .update({ status: newStatus, ...approvalSyncFields(newStatus), updated_at: new Date().toISOString() })
         .eq('id', userId);
 
       if (error) throw error;

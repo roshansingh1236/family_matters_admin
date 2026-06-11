@@ -8,6 +8,7 @@ import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import RecordInquiryDialog from '../../components/feature/RecordInquiryDialog';
 import { formatMMDDYYYYOr } from '../../utils/dateFormat';
+import { approvalSyncFields } from '../../utils/approvalStatus';
 
 const RequestsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -74,6 +75,7 @@ const RequestsPage: React.FC = () => {
         .from('users')
         .update({
           status: status,
+          ...approvalSyncFields(status),
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedRequest.id);

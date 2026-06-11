@@ -11,6 +11,7 @@ import Toast from '../../base/Toast';
 import Badge from '../../base/Badge';
 import MedicalReportView from '../MedicalReportView';
 import { storageService } from '../../../services/storageService';
+import { approvalSyncFields } from '../../../utils/approvalStatus';
 import { IP_STATUSES } from '../../../types';
 import {
   resolveParentAdditionalProfile,
@@ -338,6 +339,10 @@ export default function ParentProfileContent({
         updatePayload = { form2_data: value };
     } else {
       updatePayload = { [field]: value };
+      // Keep agency_approved in sync when an admin advances the lifecycle status.
+      if (field === 'status') {
+        updatePayload = { ...updatePayload, ...approvalSyncFields(value as string) };
+      }
     }
 
     try {
