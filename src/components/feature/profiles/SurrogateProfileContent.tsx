@@ -11,6 +11,7 @@ import FileUploadSection from '../../data/FileUploadSection';
 import Toast from '../../base/Toast';
 import Badge from '../../base/Badge';
 import { storageService, STORAGE_BUCKETS } from '../../../services/storageService';
+import { approvalSyncFields } from '../../../utils/approvalStatus';
 import { medicalService, type Medication } from '../../../services/medicalService';
 import { paymentService } from '../../../services/paymentService';
 import { screeningService } from '../../../services/screeningService';
@@ -319,6 +320,10 @@ export default function SurrogateProfileContent({
         updatePayload = { form2_data: value };
     } else {
       updatePayload = { [field]: value };
+      // Keep agency_approved in sync when an admin advances the lifecycle status.
+      if (field === 'status') {
+        updatePayload = { ...updatePayload, ...approvalSyncFields(value as string) };
+      }
     }
 
     try {
