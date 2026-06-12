@@ -64,6 +64,16 @@ export interface Match {
   status: MatchStatus;
   journeyId?: string;
   agencyNotes?: string;
+  internalNotes?: string;
+  parentAccepted?: boolean;
+  surrogateAccepted?: boolean;
+  parentDeclined?: boolean;
+  surrogateDeclined?: boolean;
+  deliveryDate?: string;
+  escrowClosedAt?: string;
+  cancellationReason?: string;
+  coordinatorId?: string;
+  matchedAt?: string;
   createdAt: string;
   updatedAt: string;
   intendedParentData?: User;

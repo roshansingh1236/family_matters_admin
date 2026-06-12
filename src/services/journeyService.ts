@@ -14,6 +14,65 @@ export const JOURNEY_STAGES: JourneyStage[] = [
   'Postpartum',
 ];
 
+// ─── Per-stage progression checklists ──────────────────────────────────────
+// The admin must complete every item for the CURRENT stage before the journey
+// can advance to the next stage.
+//
+// NOTE: these are PLACEHOLDER items. Replace the lists below with Breann's
+// finalized checklist for each stage — only the `label` text needs to change
+// (and add/remove rows). Keep `id` stable once items are in production so saved
+// progress is preserved.
+export const STAGE_CHECKLISTS: Record<JourneyStage, { id: string; label: string }[]> = {
+  'Medical Screening': [
+    { id: 'ms_records_collected', label: 'Medical records collected' },
+    { id: 'ms_screening_scheduled', label: 'Medical screening scheduled' },
+    { id: 'ms_cleared', label: 'Medically cleared for program' },
+  ],
+  'Legal': [
+    { id: 'legal_contract_sent', label: 'Legal contract sent to both parties' },
+    { id: 'legal_contract_signed', label: 'Contract signed by both parties' },
+    { id: 'legal_clearance', label: 'Legal clearance issued' },
+  ],
+  'Embryo Transfer': [
+    { id: 'et_protocol_started', label: 'Transfer protocol / medications started' },
+    { id: 'et_transfer_done', label: 'Embryo transfer completed' },
+    { id: 'et_beta_confirmed', label: 'Beta / pregnancy confirmed' },
+  ],
+  'Pregnancy': [
+    { id: 'preg_first_trimester', label: 'First trimester cleared' },
+    { id: 'preg_anatomy_scan', label: 'Anatomy scan complete' },
+    { id: 'preg_birth_plan', label: 'Third trimester / birth plan ready' },
+  ],
+  'Birth': [
+    { id: 'birth_delivered', label: 'Baby delivered' },
+    { id: 'birth_docs', label: 'Birth documentation complete' },
+  ],
+  'Postpartum': [
+    { id: 'pp_recovery', label: 'Postpartum recovery confirmed' },
+    { id: 'pp_escrow', label: 'Final payments / escrow reconciled' },
+  ],
+};
+
+/** Saved checklist state ({itemId: true}) for a given stage on a journey. */
+export function getStageChecklistState(
+  journey: Pick<Journey, 'journeyNotes'>,
+  stage: JourneyStage,
+): Record<string, boolean> {
+  const notes = (journey.journeyNotes as any) || {};
+  return (notes.stageChecklists?.[stage] as Record<string, boolean>) || {};
+}
+
+/** True when every checklist item for [stage] is checked. */
+export function isStageChecklistComplete(
+  journey: Pick<Journey, 'journeyNotes'>,
+  stage: JourneyStage,
+): boolean {
+  const items = STAGE_CHECKLISTS[stage] || [];
+  if (items.length === 0) return true;
+  const state = getStageChecklistState(journey, stage);
+  return items.every((i) => state[i.id] === true);
+}
+
 // Helper to map DB snake_case to Frontend camelCase
 const mapJourneyFromDb = (dbJourney: any): Journey => ({
   id: dbJourney.id,
@@ -281,6 +340,20 @@ export const journeyService = {
     }
   },
 
+  // ─── Update documents array ───────────────────────────────────────────────
+  updateJourneyDocuments: async (id: string, documents: any[]): Promise<void> => {
+    try {
+      const { error } = await supabase.from(TABLE_NAME).update({
+        documents: documents,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating documents:', error);
+      throw error;
+    }
+  },
+
   // ─── Update legal agreements section ──────────────────────────────────────
   updateLegalAgreements: async (id: string, legalAgreements: Record<string, unknown>): Promise<void> => {
     try {
@@ -291,6 +364,31 @@ export const journeyService = {
       if (error) throw error;
     } catch (error) {
       console.error('Error updating legal agreements:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update a stage's progression checklist (stored in journey_notes) ─────
+  updateStageChecklist: async (
+    journeyId: string,
+    stage: JourneyStage,
+    checklist: Record<string, boolean>,
+  ): Promise<void> => {
+    try {
+      const journey = (await journeyService.getJourneyById(journeyId)) as any;
+      if (!journey) throw new Error('Journey not found');
+      const notes = (journey.journeyNotes as any) || {};
+      const stageChecklists = notes.stageChecklists || {};
+      stageChecklists[stage] = checklist;
+      notes.stageChecklists = stageChecklists;
+
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .update({ journey_notes: notes, updated_at: new Date().toISOString() })
+        .eq('id', journeyId);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating stage checklist:', error);
       throw error;
     }
   },

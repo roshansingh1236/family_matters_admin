@@ -307,8 +307,17 @@ const MessagesPage: React.FC = () => {
 
 
   const getOtherParticipantName = (conversation: Conversation) => {
-    const otherParticipantId = conversation.participants.find(p => p !== adminId);
-    return otherParticipantId ? conversation.participantNames[otherParticipantId] : 'Unknown';
+    // Named threads (e.g. the "Care Team" group) show their name.
+    if (conversation.name && conversation.name.trim()) return conversation.name.trim();
+    const others = conversation.participants.filter(p => p !== adminId);
+    // Group thread (more than one non-admin participant): list the members.
+    if (others.length > 1) {
+      const names = others
+        .map(id => conversation.participantNames[id])
+        .filter(Boolean);
+      return names.length ? `Group: ${names.join(', ')}` : 'Group chat';
+    }
+    return others[0] ? conversation.participantNames[others[0]] : 'Unknown';
   };
 
   const formatTime = (date: Date) => {

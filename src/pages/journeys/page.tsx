@@ -5,13 +5,15 @@ import Header from "../../components/feature/Header";
 import Card from "../../components/base/Card";
 import Button from "../../components/base/Button";
 import Badge from "../../components/base/Badge";
-import { journeyService, JOURNEY_STAGES } from "../../services/journeyService";
+import { journeyService, JOURNEY_STAGES, STAGE_CHECKLISTS, isStageChecklistComplete, getStageChecklistState } from "../../services/journeyService";
 import type { Journey, JourneyStatus, JourneyStage } from "../../types";
 import { useAuth } from "../../contexts/AuthContext";
 import Toast from "../../components/base/Toast";
 import ConfirmationDialog from "../../components/base/ConfirmationDialog";
 import { canViewFinancials } from "../../utils/permissions";
 import { formatMMDDYYYY } from "../../utils/dateFormat";
+import FileUploadSection, { FileRecord } from "../../components/data/FileUploadSection";
+import { STORAGE_BUCKETS } from "../../services/storageService";
 
 // Helper type for user preview
 type UserPreview = {
@@ -174,6 +176,16 @@ const JourneysPage: React.FC = () => {
         return;
       }
 
+      // Per client review: every checklist item for the current stage must be
+      // completed before advancing.
+      if (!isStageChecklistComplete(selectedJourney, selectedJourney.stage as JourneyStage)) {
+        setToast({
+          message: `Complete the "${selectedJourney.stage}" checklist before progressing.`,
+          type: 'error',
+        });
+        return;
+      }
+
       const prev = (selectedJourney.journeyNotes || {}) as Record<string, unknown>;
       const notes: Record<string, unknown> = { ...prev };
       const trimmed = progressNotes.trim();
@@ -193,6 +205,32 @@ const JourneysPage: React.FC = () => {
     } catch (err) {
       console.error(err);
       setToast({ message: 'Failed to progress journey', type: 'error' });
+    }
+  };
+
+  // ─── Stage checklist toggle ────────────────────────────────────────────────
+  const handleToggleStageChecklistItem = async (itemId: string) => {
+    if (!selectedJourney) return;
+    const stage = selectedJourney.stage as JourneyStage;
+    const current = getStageChecklistState(selectedJourney, stage);
+    const updated = { ...current, [itemId]: !current[itemId] };
+
+    // Optimistic update
+    const prevNotes = (selectedJourney.journeyNotes as any) || {};
+    const newNotes = {
+      ...prevNotes,
+      stageChecklists: { ...(prevNotes.stageChecklists || {}), [stage]: updated },
+    };
+    const newSelected = { ...selectedJourney, journeyNotes: newNotes } as typeof selectedJourney;
+    setSelectedJourney(newSelected);
+    setJourneys(prev => prev.map(j => j.id === selectedJourney.id ? newSelected : j));
+
+    try {
+      await journeyService.updateStageChecklist(selectedJourney.id, stage, updated);
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'Failed to update checklist', type: 'error' });
+      fetchJourneys();
     }
   };
 
@@ -253,6 +291,67 @@ const JourneysPage: React.FC = () => {
       setIsDeletingJourney(false);
     }
   };
+
+  const handleDocumentsChange = async (files: FileRecord[], updatedCategory?: string) => {
+    if (!selectedJourney) return;
+    
+    let allFiles = files;
+    if (updatedCategory) {
+      const otherFiles = currentJourneyFiles.filter(f => f.category !== updatedCategory);
+      allFiles = [...otherFiles, ...files];
+    }
+    
+    const updatedDocuments = allFiles.map(f => {
+      const existing = (selectedJourney.documents || []).find((d: any) => d.url === f.url);
+      if (existing) return existing;
+      
+      return {
+        id: crypto.randomUUID(),
+        name: f.name,
+        type: f.type,
+        url: f.url,
+        uploaded_at: f.uploadedAt,
+        uploaded_by: 'admin',
+        status: 'approved',
+        notes: `path:${f.path}|category:${f.category}`,
+        visible_to_roles: ['admin']
+      };
+    });
+
+    try {
+      await journeyService.updateJourneyDocuments(selectedJourney.id, updatedDocuments);
+      setSelectedJourney(prev => prev ? { ...prev, documents: updatedDocuments } : null);
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'Failed to update documents', type: 'error' });
+    }
+  };
+
+  const currentJourneyFiles: FileRecord[] = (selectedJourney?.documents || []).map((d: any) => {
+    const isPathAndCategory = d.notes?.startsWith('path:');
+    let path = '';
+    let category: any = 'Other';
+    if (isPathAndCategory) {
+      const parts = d.notes.split('|');
+      path = parts[0].replace('path:', '');
+      category = parts[1]?.replace('category:', '') || 'Other';
+    } else {
+      try {
+        const pathParts = d.url.split('/journeys/');
+        if (pathParts.length > 1) {
+          path = pathParts[1];
+        }
+      } catch (e) {}
+    }
+    return {
+      name: d.name,
+      url: d.url,
+      category,
+      uploadedAt: d.uploaded_at || new Date().toISOString(),
+      type: d.type || 'application/octet-stream',
+      path
+    };
+  });
 
   // ─── Tab Save Handlers ────────────────────────────────────────────────────
   const handleSaveMedical = async () => {
@@ -711,11 +810,57 @@ const JourneysPage: React.FC = () => {
                         </div>
                       </div>
 
+                      {/* Stage Progression Checklist */}
+                      {selectedJourney.status === 'Active' && (STAGE_CHECKLISTS[selectedJourney.stage as JourneyStage] || []).length > 0 && (
+                        <div className="p-4 rounded-xl border border-rose-100/60 dark:border-white/5 bg-gray-50/50 dark:bg-white/5">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                              <i className="ri-list-check-2 text-rose-500"></i>
+                              {selectedJourney.stage} checklist
+                            </h4>
+                            {isStageChecklistComplete(selectedJourney, selectedJourney.stage as JourneyStage) ? (
+                              <Badge color="green">Complete</Badge>
+                            ) : (
+                              <Badge color="yellow">In progress</Badge>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            {(STAGE_CHECKLISTS[selectedJourney.stage as JourneyStage] || []).map((item) => {
+                              const checked = !!getStageChecklistState(selectedJourney, selectedJourney.stage as JourneyStage)[item.id];
+                              return (
+                                <button
+                                  key={item.id}
+                                  onClick={() => handleToggleStageChecklistItem(item.id)}
+                                  className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${checked ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-400' : 'bg-white dark:bg-white/5 border-gray-100 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:border-rose-200'}`}
+                                >
+                                  <span className={`w-5 h-5 rounded flex items-center justify-center border-2 ${checked ? 'bg-rose-500 border-rose-500 text-white' : 'border-gray-300 dark:border-white/20'}`}>
+                                    {checked && <i className="ri-check-line text-xs"></i>}
+                                  </span>
+                                  <span className="text-sm font-medium">{item.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {journeyService.getNextStage(selectedJourney.stage) && !isStageChecklistComplete(selectedJourney, selectedJourney.stage as JourneyStage) && (
+                            <p className="mt-3 text-[11px] text-gray-400 flex items-center gap-1">
+                              <i className="ri-information-line"></i>
+                              Complete all items to unlock progressing to {journeyService.getNextStage(selectedJourney.stage)}.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       {/* Stage Actions */}
                       {selectedJourney.status === 'Active' && (
                         <div className="flex flex-wrap gap-3">
                           {journeyService.getNextStage(selectedJourney.stage) ? (
-                            <Button color="blue" className="flex-1" onClick={() => setShowProgressModal(true)}>
+                            <Button
+                              color="blue"
+                              className="flex-1"
+                              onClick={() => setShowProgressModal(true)}
+                              disabled={!isStageChecklistComplete(selectedJourney, selectedJourney.stage as JourneyStage)}
+                              title={!isStageChecklistComplete(selectedJourney, selectedJourney.stage as JourneyStage) ? `Complete the ${selectedJourney.stage} checklist first` : undefined}
+                            >
                               <i className="ri-arrow-right-line mr-2"></i>
                               Progress to {journeyService.getNextStage(selectedJourney.stage)}
                             </Button>
@@ -801,6 +946,18 @@ const JourneysPage: React.FC = () => {
                           className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
                         />
                       </div>
+                      <div className="pt-6 border-t border-gray-200 dark:border-white/10 mt-6">
+                        <FileUploadSection
+                          title="Medical Documents"
+                          description="Upload medical reports, lab results, and screening records for this journey."
+                          userId={selectedJourney.id}
+                          bucket={STORAGE_BUCKETS.JOURNEYS}
+                          defaultCategory="Medical"
+                          files={currentJourneyFiles.filter(f => f.category === 'Medical')}
+                          onFilesChange={(files) => handleDocumentsChange(files, 'Medical')}
+                        />
+                      </div>
+                      
                       <Button color="blue" className="w-full" onClick={handleSaveMedical} disabled={isSavingMedical}>
                         {isSavingMedical ? <><i className="ri-loader-4-line animate-spin mr-2"></i>Saving...</> : <><i className="ri-save-line mr-2"></i>Save Medical Records</>}
                       </Button>
@@ -847,9 +1004,6 @@ const JourneysPage: React.FC = () => {
                           className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
                         />
                       </div>
-                      <Button color="blue" className="w-full" onClick={handleSaveLegal} disabled={isSavingLegal}>
-                        {isSavingLegal ? <><i className="ri-loader-4-line animate-spin mr-2"></i>Saving...</> : <><i className="ri-save-line mr-2"></i>Save Legal Information</>}
-                      </Button>
                       {selectedJourney.legalAgreements && (contractStatus || legalNotes) && (
                         <div className="p-4 bg-rose-50/50 dark:bg-white/5 rounded-lg">
                           <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Last Saved</p>
@@ -857,6 +1011,22 @@ const JourneysPage: React.FC = () => {
                           {legalAttorney && <p className="text-sm text-gray-700 dark:text-gray-300">Attorney: {legalAttorney}</p>}
                         </div>
                       )}
+
+                      <div className="pt-6 border-t border-gray-200 dark:border-white/10 mt-6">
+                        <FileUploadSection
+                          title="Legal Documents"
+                          description="Upload legal agreements, contracts, and other legal records for this journey."
+                          userId={selectedJourney.id}
+                          bucket={STORAGE_BUCKETS.JOURNEYS}
+                          defaultCategory="Legal"
+                          files={currentJourneyFiles.filter(f => f.category === 'Legal')}
+                          onFilesChange={(files) => handleDocumentsChange(files, 'Legal')}
+                        />
+                      </div>
+                      
+                      <Button color="blue" className="w-full" onClick={handleSaveLegal} disabled={isSavingLegal}>
+                        {isSavingLegal ? <><i className="ri-loader-4-line animate-spin mr-2"></i>Saving...</> : <><i className="ri-save-line mr-2"></i>Save Legal Information</>}
+                      </Button>
                     </div>
                   )}
 

@@ -4,6 +4,21 @@ import { auditService } from './auditService';
 
 const TABLE_NAME = 'matches';
 
+// The Match Progression checklist items that must all be completed before an
+// admin can activate the match (start the journey). `match_declined` is an
+// escape hatch and is intentionally excluded.
+export const REQUIRED_CHECKLIST_ITEMS = [
+  'records_review_complete',
+  'match_meeting_complete',
+  'match_confirmed',
+] as const;
+
+export function isMatchChecklistComplete(match: Pick<Match, 'data'>): boolean {
+  const checklist = (match.data?.checklist ?? {}) as Record<string, boolean>;
+  if (checklist['match_declined']) return false;
+  return REQUIRED_CHECKLIST_ITEMS.every((k) => checklist[k] === true);
+}
+
 // Helper to map DB snake_case to Frontend camelCase
 const mapMatchFromDb = (dbMatch: any): Match => ({
   id: dbMatch.id,
@@ -274,6 +289,9 @@ export const matchService = {
       }
       if (!match.parentAccepted || !match.surrogateAccepted) {
         throw new Error('Cannot activate match: Both the Intended Parent and Gestational Carrier must accept the match before it can become Active.');
+      }
+      if (!isMatchChecklistComplete(match)) {
+        throw new Error('Cannot activate match: complete the Match Progression checklist (records review, match meeting, and match confirmed) before starting the journey.');
       }
       if (!match.gestationalCarrierId) {
         throw new Error('Match must have a Gestational Carrier assigned.');

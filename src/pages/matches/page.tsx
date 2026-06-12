@@ -4,7 +4,7 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { matchService } from '../../services/matchService';
+import { matchService, isMatchChecklistComplete } from '../../services/matchService';
 import type { Match, MatchStatus, User } from '../../types';
 import Toast from '../../components/base/Toast';
 import ConfirmationDialog from '../../components/base/ConfirmationDialog';
@@ -271,10 +271,8 @@ const MatchesPage: React.FC = () => {
       setSelectedMatch(newSelected);
       setMatches(prev => prev.map(m => m.id === selectedMatch.id ? newSelected : m));
 
-      // Auto-activate if match_confirmed is checked
-      if (itemId === 'match_confirmed' && newValue && selectedMatch.status !== 'Active' && !selectedMatch.journeyId) {
-          handleActivateMatch();
-      }
+      // Per client review: activation is now an explicit admin action gated on
+      // the full checklist — no auto-activation on toggling match_confirmed.
     } catch (error: any) {
       setToast({ message: 'Failed to update checklist', type: 'error' });
     }
@@ -534,14 +532,24 @@ const MatchesPage: React.FC = () => {
                                 <p className="text-xl font-bold text-gray-900 dark:text-white">{getFullName(selectedMatch.gestationalCarrierData)}</p>
                                 <p className="text-sm text-gray-500">{selectedMatch.gestationalCarrierData?.email}</p>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-pink-100/50 dark:border-pink-500/10">
+                            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-pink-100/50 dark:border-pink-500/10">
                                 <div>
                                     <p className="text-[10px] font-black uppercase text-pink-500/70">Location</p>
-                                    <p className="text-sm font-medium">{getGCDetails(selectedMatch.gestationalCarrierData).location}</p>
+                                    <p className="text-sm font-medium truncate">{getGCDetails(selectedMatch.gestationalCarrierData).location}</p>
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase text-pink-500/70">Clearance</p>
-                                    <Badge color="green" size="sm">{getGCDetails(selectedMatch.gestationalCarrierData).clearance}</Badge>
+                                    <div className="truncate"><Badge color="green" size="sm">{getGCDetails(selectedMatch.gestationalCarrierData).clearance}</Badge></div>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase text-pink-500/70">Match Status</p>
+                                    {selectedMatch.surrogateAccepted ? (
+                                        <Badge color="green" size="sm">Accepted</Badge>
+                                    ) : selectedMatch.surrogateDeclined ? (
+                                        <Badge color="red" size="sm">Declined</Badge>
+                                    ) : (
+                                        <Badge color="orange" size="sm">Pending</Badge>
+                                    )}
                                 </div>
                             </div>
                           </div>
@@ -557,14 +565,24 @@ const MatchesPage: React.FC = () => {
                                 <p className="text-xl font-bold text-gray-900 dark:text-white">{getFullName(selectedMatch.intendedParentData)}</p>
                                 <p className="text-sm text-gray-500">{selectedMatch.intendedParentData?.email}</p>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-blue-100/50 dark:border-blue-500/10">
+                            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-blue-100/50 dark:border-blue-500/10">
                                 <div>
                                     <p className="text-[10px] font-black uppercase text-blue-500/70">Location</p>
-                                    <p className="text-sm font-medium">{getIPDetails(selectedMatch.intendedParentData).location}</p>
+                                    <p className="text-sm font-medium truncate">{getIPDetails(selectedMatch.intendedParentData).location}</p>
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase text-blue-500/70">Timeline</p>
-                                    <p className="text-sm font-medium">{getIPDetails(selectedMatch.intendedParentData).timeline}</p>
+                                    <p className="text-sm font-medium truncate">{getIPDetails(selectedMatch.intendedParentData).timeline}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase text-blue-500/70">Match Status</p>
+                                    {selectedMatch.parentAccepted ? (
+                                        <Badge color="green" size="sm">Accepted</Badge>
+                                    ) : selectedMatch.parentDeclined ? (
+                                        <Badge color="red" size="sm">Declined</Badge>
+                                    ) : (
+                                        <Badge color="orange" size="sm">Pending</Badge>
+                                    )}
                                 </div>
                             </div>
                           </div>
@@ -608,10 +626,10 @@ const MatchesPage: React.FC = () => {
                             })}
                         </div>
                         
-                        {selectedMatch.data?.checklist?.match_confirmed && !selectedMatch.journeyId && (
-                            <div className="mt-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-sm flex items-center gap-3 animate-pulse">
+                        {isMatchChecklistComplete(selectedMatch) && !selectedMatch.journeyId && (
+                            <div className="mt-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-sm flex items-center gap-3">
                                 <i className="ri-information-line text-xl"></i>
-                                <p className="font-bold">Match confirmed! The system will now automatically generate the active Journey.</p>
+                                <p className="font-bold">Checklist complete. Use "Create Journey &amp; Activate" in Match Actions to start the journey.</p>
                             </div>
                         )}
                       </div>
@@ -634,6 +652,8 @@ const MatchesPage: React.FC = () => {
                           <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Transition To</p>
                           {getAvailableTransitions(selectedMatch.status).map((nextStatus) => {
                              const isCancel = nextStatus === 'Cancelled';
+                             // Activation (-> Active) is gated on the checklist.
+                             const gatedByChecklist = nextStatus === 'Active' && !isMatchChecklistComplete(selectedMatch);
                              return (
                                <Button
                                  key={nextStatus}
@@ -641,7 +661,8 @@ const MatchesPage: React.FC = () => {
                                  color={isCancel ? 'red' : 'blue'}
                                  className="w-full text-left justify-start py-3 rounded-2xl"
                                  onClick={() => handleStatusChangeRequest(nextStatus)}
-                                 disabled={isUpdatingMatchStatus}
+                                 disabled={isUpdatingMatchStatus || gatedByChecklist}
+                                 title={gatedByChecklist ? 'Complete the Match Progression checklist first' : undefined}
                                >
                                  <i className={`${isCancel ? 'ri-close-circle-line' : 'ri-arrow-right-circle-line'} mr-2`}></i>
                                  Set as {nextStatus}
@@ -650,19 +671,28 @@ const MatchesPage: React.FC = () => {
                           })}
 
                           {selectedMatch.status === 'Accepted' && !selectedMatch.journeyId && (
-                            <Button
-                              size="sm"
-                              color="green"
-                              className="w-full justify-start py-3 rounded-2xl"
-                              onClick={handleActivateMatch}
-                              disabled={isActivating}
-                            >
-                              {isActivating ? (
-                                <><i className="ri-loader-4-line animate-spin mr-2"></i>Starting Journey...</>
-                              ) : (
-                                <><i className="ri-rocket-line mr-2"></i>Create Journey & Activate</>
+                            <>
+                              <Button
+                                size="sm"
+                                color="green"
+                                className="w-full justify-start py-3 rounded-2xl"
+                                onClick={handleActivateMatch}
+                                disabled={isActivating || !isMatchChecklistComplete(selectedMatch)}
+                                title={!isMatchChecklistComplete(selectedMatch) ? 'Complete the Match Progression checklist first' : undefined}
+                              >
+                                {isActivating ? (
+                                  <><i className="ri-loader-4-line animate-spin mr-2"></i>Starting Journey...</>
+                                ) : (
+                                  <><i className="ri-rocket-line mr-2"></i>Create Journey & Activate</>
+                                )}
+                              </Button>
+                              {!isMatchChecklistComplete(selectedMatch) && (
+                                <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+                                  <i className="ri-information-line"></i>
+                                  Complete the Match Progression checklist to activate and start the journey.
+                                </p>
                               )}
-                            </Button>
+                            </>
                           )}
                         </div>
 
