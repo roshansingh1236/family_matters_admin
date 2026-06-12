@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase';
 
 export interface Conversation {
   id?: string;
-  participants: string[]; // User IDs 
+  name?: string; // Group/thread name (e.g. "Care Team — Alice & Bob")
+  participants: string[]; // User IDs
   participantNames: Record<string, string>; // ID -> Name mapping
   lastMessage: string;
   lastMessageTime: string;
@@ -37,6 +38,7 @@ export const messagingService = {
           conversation_id,
           conversations (
             id,
+            name,
             last_message,
             last_message_at,
             created_at,
@@ -60,6 +62,7 @@ export const messagingService = {
           
           return {
               id: conv.id,
+              name: conv.name,
               participants: participantIds,
               participantNames: names,
               lastMessage: conv.last_message,
@@ -100,6 +103,7 @@ export const messagingService = {
 
       const conversation: Conversation = {
           id: (convData as any).id,
+          name: (convData as any).name,
           participants: participantIds,
           participantNames: names,
           lastMessage: (convData as any).last_message,

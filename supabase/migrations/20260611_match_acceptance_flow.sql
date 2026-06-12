@@ -59,11 +59,16 @@ BEGIN
         END IF;
     END IF;
 
-    -- 2. Dual acceptance -> Active (match confirmed). Stamp matched_at and mark
-    --    both users 'Matched' so the portal/app reflect the confirmed match.
+    -- 2. Dual acceptance -> 'Accepted' (NOT Active). The match is confirmed by
+    --    both parties, but the journey only begins once the admin completes the
+    --    Match Progression checklist and explicitly activates it. Stamp
+    --    matched_at and mark both users 'Matched' so the portal/app reflect the
+    --    confirmed match.
     IF (NEW.parent_accepted = TRUE AND NEW.surrogate_accepted = TRUE)
        AND (OLD.parent_accepted = FALSE OR OLD.surrogate_accepted = FALSE) THEN
-        NEW.status := 'Active';
+        IF NEW.status NOT IN ('Active', 'Delivered', 'Escrow Closure', 'Completed') THEN
+            NEW.status := 'Accepted';
+        END IF;
         IF NEW.matched_at IS NULL THEN
             NEW.matched_at := NOW();
         END IF;
@@ -75,7 +80,8 @@ BEGIN
         END IF;
     END IF;
 
-    -- 3. On entering Active, auto-create the Journey if one doesn't exist.
+    -- 3. On entering Active (admin activation, after the checklist), auto-create
+    --    the Journey if one doesn't exist.
     IF (NEW.status = 'Active' AND (OLD.status IS NULL OR OLD.status != 'Active')) THEN
         IF NOT EXISTS (SELECT 1 FROM public.journeys WHERE match_id = NEW.id) THEN
             case_no := 'CASE-' || TO_CHAR(NOW(), 'YYMMDD') || '-' || SUBSTR(CAST(NEW.id AS TEXT), 1, 4);

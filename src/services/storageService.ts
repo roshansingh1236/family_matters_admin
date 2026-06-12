@@ -4,6 +4,7 @@ export const STORAGE_BUCKETS = {
   USERS: 'users',
   BABY_WATCH: 'baby_watch',
   MESSAGES: 'messages',
+  JOURNEYS: 'journeys',
 } as const;
 
 export type StorageBucket = typeof STORAGE_BUCKETS[keyof typeof STORAGE_BUCKETS];
