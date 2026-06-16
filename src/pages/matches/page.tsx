@@ -75,6 +75,10 @@ const MatchesPage: React.FC = () => {
   const [showUnmatchDialog, setShowUnmatchDialog] = useState(false);
   const [isUnmatching, setIsUnmatching] = useState(false);
 
+  // Success confirmation after proposing a match
+  const [showCreatedModal, setShowCreatedModal] = useState(false);
+  const [createdSummary, setCreatedSummary] = useState<{ gc: string; ip: string } | null>(null);
+
   // GC/IP filter for two-panel view
   const [gcSearch, setGcSearch] = useState('');
   const [ipSearch, setIpSearch] = useState('');
@@ -170,8 +174,10 @@ const MatchesPage: React.FC = () => {
         coordinatorId: authUser?.id,
       });
 
-      setToast({ message: 'Match created successfully!', type: 'success' });
+      setCreatedSummary({ gc: getFullName(selectedGC), ip: getFullName(selectedIP) });
+      setShowCreatedModal(true);
       setShowCreateModal(false);
+      setToast({ message: 'Match successfully created and proposed!', type: 'success' });
       await fetchMatches();
     } catch (error: any) {
       setToast({ message: error.message || 'Failed to create match', type: 'error' });
@@ -898,6 +904,25 @@ const MatchesPage: React.FC = () => {
             confirmLabel="Yes, Unmatch"
             isDestructive
           />
+
+          {showCreatedModal && createdSummary && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-[80]">
+              <div className="bg-white dark:bg-[#15111f] rounded-[2rem] max-w-md w-full shadow-2xl border border-rose-100/20 dark:border-white/5 p-8 text-center">
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 mb-4">
+                  <i className="ri-check-double-line text-3xl"></i>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Match proposed</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                  <span className="font-semibold text-gray-700 dark:text-white/80">{createdSummary.gc}</span> and{' '}
+                  <span className="font-semibold text-gray-700 dark:text-white/80">{createdSummary.ip}</span> have been matched.
+                  Both will be prompted in the app to accept or decline.
+                </p>
+                <Button color="blue" className="mt-6 px-10 rounded-2xl" onClick={() => setShowCreatedModal(false)}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
 
           {toast && (
             <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
