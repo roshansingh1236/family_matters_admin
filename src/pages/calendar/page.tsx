@@ -226,7 +226,7 @@ const CalendarPage: React.FC = () => {
             ...selectedEvent,
             // Ensure date and time are strings for input fields
             date: selectedEvent.date,
-            time: selectedEvent.time
+            time: selectedEvent.time?.substring(0, 5) || '09:00'
         });
         setShowNewEventModal(true);
         setSelectedEvent(null);
