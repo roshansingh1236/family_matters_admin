@@ -503,7 +503,7 @@ const MatchesPage: React.FC = () => {
           {/* ═══════════════════════════════════════════════════════════════════ */}
           {selectedMatch && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-[#15111f] rounded-[2rem] max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-rose-100/20 dark:border-white/5">
+              <div className="bg-white dark:bg-[#15111f] rounded-[2rem] max-w-7xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-rose-100/20 dark:border-white/5">
                 <div className="p-8 border-b border-gray-100 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-white/5">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-500 to-purple-600 flex items-center justify-center text-white shadow-lg">
@@ -635,7 +635,7 @@ const MatchesPage: React.FC = () => {
                         {isMatchChecklistComplete(selectedMatch) && !selectedMatch.journeyId && (
                             <div className="mt-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-sm flex items-center gap-3">
                                 <i className="ri-information-line text-xl"></i>
-                                <p className="font-bold">Checklist complete. Use "Create Journey &amp; Activate" in Match Actions to start the journey.</p>
+                                <p className="font-bold">Checklist complete. Use "Create Journey &amp; Accept Match" in Match Actions to start the journey.</p>
                             </div>
                         )}
                       </div>
@@ -689,7 +689,7 @@ const MatchesPage: React.FC = () => {
                                 {isActivating ? (
                                   <><i className="ri-loader-4-line animate-spin mr-2"></i>Starting Journey...</>
                                 ) : (
-                                  <><i className="ri-rocket-line mr-2"></i>Create Journey & Activate</>
+                                  <><i className="ri-rocket-line mr-2"></i>Create Journey & Accept Match</>
                                 )}
                               </Button>
                               {!isMatchChecklistComplete(selectedMatch) && (
