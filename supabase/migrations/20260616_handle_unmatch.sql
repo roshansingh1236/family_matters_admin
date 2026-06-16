@@ -10,10 +10,10 @@ BEGIN
     END IF;
 
     -- Reset the surrogate's status to Ready to Match
-    IF OLD.surrogate_id IS NOT NULL THEN
+    IF OLD.gestational_carrier_id IS NOT NULL THEN
         UPDATE public.users 
         SET status = 'Ready to Match'
-        WHERE id = OLD.surrogate_id;
+        WHERE id = OLD.gestational_carrier_id;
     END IF;
 
     RETURN OLD;
