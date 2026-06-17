@@ -538,8 +538,12 @@ const MessagesPage: React.FC = () => {
                               </div>
                             )}
                             <div className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`group relative max-w-[80%] md:max-w-[70%] ${isAdmin ? 'items-end' : 'items-start'}`}>
+                              <div className={`group relative max-w-[80%] md:max-w-[70%] flex flex-col ${isAdmin ? 'items-end' : 'items-start'}`}>
                                 
+                                {!isAdmin && (
+                                  <span className="text-[11px] font-bold text-slate-500 mb-1 ml-2">{msg.senderName}</span>
+                                )}
+
                                 {repliedMessage && (
                                   <div className={`mb-1 px-3 py-1.5 rounded-xl text-[11px] border-l-4 border-rose-500 bg-slate-100 dark:bg-slate-800 text-slate-500 max-w-full truncate`}>
                                     <span className="font-bold block text-rose-500 mb-0.5">{repliedMessage.senderName}</span>
