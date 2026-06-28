@@ -1,5 +1,6 @@
 
 import { supabase } from '../lib/supabase';
+import { pushService } from './pushService';
 
 export interface Conversation {
   id?: string;
@@ -274,6 +275,25 @@ export const messagingService = {
             last_message_at: new Date().toISOString()
         })
         .eq('id', conversationId);
+
+      // Push: notify the other participants of the new message.
+      try {
+        const { data: parts } = await supabase
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', conversationId);
+        const recipients = (parts || [])
+          .map((p: { user_id: string }) => p.user_id)
+          .filter((uid: string) => uid !== senderId);
+        void pushService.send(
+          recipients,
+          senderName || 'New message',
+          media ? `Sent a ${media.type}` : text.substring(0, 120),
+          { type: 'message', conversationId },
+        );
+      } catch (e) {
+        console.error('message push failed', e);
+      }
 
     } catch (error) {
       console.error('Error sending message:', error);

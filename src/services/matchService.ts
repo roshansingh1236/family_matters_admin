@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { Match, MatchStatus, User } from '../types';
 import { auditService } from './auditService';
+import { pushService } from './pushService';
 
 const TABLE_NAME = 'matches';
 
@@ -200,6 +201,15 @@ export const matchService = {
         .single();
       
       if (error) throw error;
+
+      // Push: notify both parties that a match has been presented.
+      void pushService.send(
+        [matchData.intendedParentId, matchData.gestationalCarrierId],
+        'New match to review',
+        'A match has been presented. Open the app to accept or decline.',
+        { type: 'match_presented', matchId: data.id },
+      );
+
       return data.id;
     } catch (error) {
       console.error('Error creating match:', error);
@@ -265,13 +275,30 @@ export const matchService = {
         updateData.cancellation_reason = additionalData.cancellationReason;
       }
       
-      const { data: before } = await supabase.from(TABLE_NAME).select('status').eq('id', id).single();
+      const { data: before } = await supabase
+        .from(TABLE_NAME)
+        .select('status, intended_parent_id, gestational_carrier_id')
+        .eq('id', id)
+        .single();
       const { error } = await supabase.from(TABLE_NAME).update(updateData).eq('id', id);
       if (error) throw error;
       auditService.log(`Match status changed: ${before?.status} → ${newStatus}`, 'match', id, {
         before: { status: before?.status },
         after: { status: newStatus, ...additionalData },
       });
+
+      // Push: notify both parties when a match is cancelled, including the reason.
+      if (newStatus === 'Cancelled') {
+        const reason = additionalData?.cancellationReason
+          ? ` Reason: ${additionalData.cancellationReason}`
+          : '';
+        void pushService.send(
+          [before?.intended_parent_id, before?.gestational_carrier_id],
+          'Match cancelled',
+          `Your match has been cancelled.${reason} You can be presented with a new match.`,
+          { type: 'match_cancelled', matchId: id },
+        );
+      }
     } catch (error) {
       console.error('Error updating match status:', error);
       throw error;

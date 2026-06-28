@@ -36,6 +36,7 @@ const menuItems: NavItem[] = [
   { icon: 'ri-hospital-line',            label: 'Medical',           path: '/medical' },
   { icon: 'ri-stethoscope-line',         label: 'Screening',         path: '/screening' },
   { icon: 'ri-advertisement-line',       label: 'Marketing Assets',  path: '/marketing' },
+  { icon: 'ri-article-line',             label: 'Blog & Resources',  path: '/blog' },
 
   { type: 'divider', label: 'Finance & Legal' },
   { icon: 'ri-money-dollar-circle-line', label: 'Compensation',      path: '/payments' },

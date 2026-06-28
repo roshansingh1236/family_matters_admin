@@ -348,6 +348,7 @@ const MatchesPage: React.FC = () => {
     if (s === 'accepted') return <Badge color="indigo">{status}</Badge>;
     if (s === 'delivered') return <Badge color="emerald">{status}</Badge>;
     if (s === 'cancelled') return <Badge color="red">{status}</Badge>;
+    if (s.startsWith('declined')) return <Badge color="red">{status}</Badge>;
     if (s === 'completed') return <Badge color="gray">{status}</Badge>;
     return <Badge color="gray">{status}</Badge>;
   };
@@ -357,6 +358,17 @@ const MatchesPage: React.FC = () => {
       return 'Active';
     }
     return match.status;
+  };
+
+  // Per client review: a match cancelled by a decline should read "Declined
+  // (by …)" so the agency can see which party declined, not just "Cancelled".
+  const getDisplayStatus = (match: Match): string => {
+    const derived = String(getDerivedStatus(match));
+    if (derived.toLowerCase() === 'cancelled') {
+      if (match.parentDeclined) return 'Declined (Intended Parent)';
+      if (match.surrogateDeclined) return 'Declined (Surrogate)';
+    }
+    return derived;
   };
 
   const filteredMatches = useMemo(() => {
@@ -448,7 +460,7 @@ const MatchesPage: React.FC = () => {
                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Match ID</p>
                       <p className="text-xs font-mono text-gray-500">{match.id.split('-')[0]}</p>
                     </div>
-                    {getStatusBadge(getDerivedStatus(match))}
+                    {getStatusBadge(getDisplayStatus(match))}
                   </div>
 
                   <div className="space-y-6">
@@ -511,7 +523,7 @@ const MatchesPage: React.FC = () => {
                     </div>
                     <div>
                       <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Match Overview</h2>
-                      <div className="mt-1">{getStatusBadge(getDerivedStatus(selectedMatch))}</div>
+                      <div className="mt-1">{getStatusBadge(getDisplayStatus(selectedMatch))}</div>
                     </div>
                   </div>
                   <button
