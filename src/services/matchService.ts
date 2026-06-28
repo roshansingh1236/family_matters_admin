@@ -210,6 +210,22 @@ export const matchService = {
         { type: 'match_presented', matchId: data.id },
       );
 
+      // In-App Notification: insert into notifications table
+      await supabase.from('notifications').insert([
+        {
+          user_id: matchData.intendedParentId,
+          title: 'New match to review',
+          message: 'A match has been presented. Open the app to accept or decline.',
+          type: 'system_alert'
+        },
+        {
+          user_id: matchData.gestationalCarrierId,
+          title: 'New match to review',
+          message: 'A match has been presented. Open the app to accept or decline.',
+          type: 'system_alert'
+        }
+      ]);
+
       return data.id;
     } catch (error) {
       console.error('Error creating match:', error);

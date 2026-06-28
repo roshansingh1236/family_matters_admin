@@ -21,6 +21,7 @@ type NavItem = MenuItem | DividerItem;
 const menuItems: NavItem[] = [
   { type: 'divider', label: 'Core' },
   { icon: 'ri-dashboard-3-line',         label: 'Dashboard',         path: '/' },
+  { icon: 'ri-notification-3-line',      label: 'Notifications',     path: '/notifications' },
   { icon: 'ri-parent-line',              label: 'Parents',           path: '/parents' },
   { icon: 'ri-user-heart-line',          label: 'Surrogates',        path: '/surrogates' },
   { icon: 'ri-links-line',               label: 'Matches',           path: '/matches' },
