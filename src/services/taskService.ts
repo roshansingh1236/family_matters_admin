@@ -1,5 +1,6 @@
 
 import { supabase } from '../lib/supabase';
+import { pushService } from './pushService';
 
 export interface Task {
   id?: string;
@@ -57,6 +58,15 @@ export const taskService = {
         .single();
       
       if (error) throw error;
+
+      // Push: notify the assignee of the new task.
+      void pushService.send(
+        [task.assignee],
+        'New task assigned',
+        task.title || 'You have a new task.',
+        { type: 'task', taskId: data.id },
+      );
+
       return data.id;
     } catch (error) {
       console.error('Error creating task:', error);

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { Sidebar } from '../../components/feature/Sidebar';
+import Header from '../../components/feature/Header';
 
 interface Notification {
   id: string;
@@ -12,10 +14,6 @@ interface Notification {
   isRead: boolean;
 }
 
-interface NotificationDropdownProps {
-  onClose: () => void;
-}
-
 function timeAgo(dateStr: string): string {
   const diffInSeconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
   if (diffInSeconds < 60) return 'Just now';
@@ -24,13 +22,13 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diffInSeconds / 86400)}d ago`;
 }
 
-const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) => {
+export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchRecent = async () => {
+    const fetchAll = async () => {
       try {
         const [usersRes, gcRes, apptsRes, notifRes] = await Promise.all([
           supabase
@@ -38,17 +36,17 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
             .select('id, first_name, last_name, email, role, created_at')
             .eq('role', 'Intended Parent')
             .order('created_at', { ascending: false })
-            .limit(5),
+            .limit(50),
           supabase
             .from('surrogate_inquiries')
             .select('id, first_name, last_name, name, email, created_at')
             .order('created_at', { ascending: false })
-            .limit(5),
+            .limit(50),
           supabase
             .from('appointments')
             .select('id, title, created_at')
             .order('created_at', { ascending: false })
-            .limit(5),
+            .limit(50),
           supabase.auth.getUser().then(({ data }) => {
             if (!data.user) return { data: null };
             return supabase
@@ -56,7 +54,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
               .select('*')
               .eq('user_id', data.user.id)
               .order('created_at', { ascending: false })
-              .limit(5);
+              .limit(50);
           })
         ]);
 
@@ -120,44 +118,42 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
           });
         }
 
-        // Sort descending by rawTime
         list.sort((a, b) => b.rawTime.localeCompare(a.rawTime));
-        setNotifications(list.slice(0, 5));
+        setNotifications(list);
       } catch (err) {
-        console.error('Failed to load recent notifications', err);
+        console.error('Failed to load notifications', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRecent();
+    fetchAll();
 
-    // Real-time subscriptions
     const channelUsers = supabase
-      .channel('users-notifications')
+      .channel('users-notifications-page')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'users' }, () => {
-        fetchRecent();
+        fetchAll();
       })
       .subscribe();
 
     const channelSurr = supabase
-      .channel('surrogate-notifications')
+      .channel('surrogate-notifications-page')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'surrogate_inquiries' }, () => {
-        fetchRecent();
+        fetchAll();
       })
       .subscribe();
 
     const channelAppts = supabase
-      .channel('appointments-notifications')
+      .channel('appointments-notifications-page')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointments' }, () => {
-        fetchRecent();
+        fetchAll();
       })
       .subscribe();
 
     const channelSys = supabase
-      .channel('sys-notifications')
+      .channel('sys-notifications-page')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
-        fetchRecent();
+        fetchAll();
       })
       .subscribe();
 
@@ -177,7 +173,6 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
     } else {
       navigate('/inquiries');
     }
-    onClose();
   };
 
   const getNotificationStyles = (type: Notification['type']) => {
@@ -198,7 +193,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
           color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400'
         };
       case 'surrogate_inquiry':
-        default:
+      default:
         return {
           icon: 'ri-user-smile-line',
           color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
@@ -207,68 +202,71 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
   };
 
   return (
-    <div className="absolute right-0 top-12 w-80 bg-white dark:bg-[#15111f] rounded-lg shadow-xl border border-gray-100 dark:border-white/5 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
-      <div className="p-4 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
-        <span className="text-xs text-rose-600 dark:text-rose-400 font-medium bg-rose-50 dark:bg-rose-900/30 px-2 py-1 rounded-full">
-          {notifications.length} New
-        </span>
-      </div>
+    <div className="flex h-screen bg-gray-50/50 dark:bg-[#0b0814] overflow-hidden">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        <Header />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">All Notifications</h1>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">Review all system alerts and updates</p>
+              </div>
+            </div>
 
-      <div className="max-h-[400px] overflow-y-auto">
-        {loading ? (
-          <div className="p-4 text-center text-gray-500 text-sm">Loading...</div>
-        ) : notifications.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 text-sm">
-            <i className="ri-notification-off-line text-2xl mb-2 block text-gray-400"></i>
-            No new notifications
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-50 dark:divide-gray-700">
-            {notifications.map((item) => {
-              const styles = getNotificationStyles(item.type);
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => handleItemClick(item)}
-                  className="p-4 hover:bg-gray-50 dark:hover:bg-white/5/50 cursor-pointer transition-colors group"
-                >
-                  <div className="flex gap-3">
-                    <div
-                      className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${styles.color}`}
-                    >
-                      <i className={styles.icon}></i>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {item.title}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {item.type === 'appointment' ? 'Title: ' : 'From '}
-                        <span className="font-medium">{item.name}</span>
-                      </p>
-                      <span className="text-xs text-gray-400 dark:text-gray-500 mt-1 block">
-                        {item.time}
-                      </span>
-                    </div>
+            <div className="bg-white dark:bg-[#15111f] rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden">
+              {loading ? (
+                <div className="p-8 text-center text-gray-500">Loading notifications...</div>
+              ) : notifications.length === 0 ? (
+                <div className="p-16 text-center">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-50 dark:bg-white/5 mb-4">
+                    <i className="ri-notification-off-line text-2xl text-gray-400"></i>
                   </div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">No notifications yet</h3>
+                  <p className="text-gray-500 dark:text-gray-400 mt-1">You're all caught up!</p>
                 </div>
-              );
-            })}
+              ) : (
+                <div className="divide-y divide-gray-50 dark:divide-gray-700/50">
+                  {notifications.map((item) => {
+                    const styles = getNotificationStyles(item.type);
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => handleItemClick(item)}
+                        className="p-4 sm:p-6 hover:bg-gray-50/80 dark:hover:bg-white/5 cursor-pointer transition-colors flex items-start sm:items-center gap-4"
+                      >
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${styles.color}`}>
+                          <i className={`${styles.icon} text-xl`}></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4">
+                            <p className="text-base font-medium text-gray-900 dark:text-white truncate">
+                              {item.title}
+                            </p>
+                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                              {item.time}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
+                            {item.type === 'appointment' ? 'Title: ' : 'From '}
+                            <span className="font-medium text-gray-700 dark:text-gray-300">{item.name}</span>
+                          </p>
+                        </div>
+                        <div className="hidden sm:flex shrink-0">
+                          <button className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <i className="ri-arrow-right-line"></i>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        )}
-      </div>
-
-      <div className="p-3 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#0e0b1a]/50 text-center">
-        <button
-          onClick={onClose}
-          className="text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
-          Close Notifications
-        </button>
+        </main>
       </div>
     </div>
   );
-};
-
-export default NotificationDropdown;
+}

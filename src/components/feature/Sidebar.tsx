@@ -21,6 +21,7 @@ type NavItem = MenuItem | DividerItem;
 const menuItems: NavItem[] = [
   { type: 'divider', label: 'Core' },
   { icon: 'ri-dashboard-3-line',         label: 'Dashboard',         path: '/' },
+  { icon: 'ri-notification-3-line',      label: 'Notifications',     path: '/notifications' },
   { icon: 'ri-parent-line',              label: 'Parents',           path: '/parents' },
   { icon: 'ri-user-heart-line',          label: 'Surrogates',        path: '/surrogates' },
   { icon: 'ri-links-line',               label: 'Matches',           path: '/matches' },
@@ -36,6 +37,7 @@ const menuItems: NavItem[] = [
   { icon: 'ri-hospital-line',            label: 'Medical',           path: '/medical' },
   { icon: 'ri-stethoscope-line',         label: 'Screening',         path: '/screening' },
   { icon: 'ri-advertisement-line',       label: 'Marketing Assets',  path: '/marketing' },
+  { icon: 'ri-article-line',             label: 'Blog & Resources',  path: '/blog' },
 
   { type: 'divider', label: 'Finance & Legal' },
   { icon: 'ri-money-dollar-circle-line', label: 'Compensation',      path: '/payments' },

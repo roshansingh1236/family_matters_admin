@@ -1,5 +1,6 @@
 
 import { supabase } from '../lib/supabase';
+import { pushService } from './pushService';
 
 export interface Appointment {
   id?: string;
@@ -103,6 +104,15 @@ export const appointmentService = {
         .single();
       
       if (error) throw error;
+
+      // Push: notify the participants of the new appointment.
+      void pushService.send(
+        [primaryUserId, ...participantIds],
+        'New appointment',
+        `${appointment.title || 'Appointment'} on ${new Date(timestamp).toLocaleString()}`,
+        { type: 'appointment', appointmentId: data.id },
+      );
+
       return data.id;
     } catch (error) {
       console.error('Error creating appointment:', error);

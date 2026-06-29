@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { Journey, JourneyStatus, JourneyStage, CaseMilestone } from '../types';
 import { auditService } from './auditService';
+import { pushService } from './pushService';
 
 const TABLE_NAME = 'journeys';
 
@@ -176,7 +177,11 @@ export const journeyService = {
   // ─── Update journey stage (operational sub-stage progression) ──────────────
   updateJourneyStage: async (id: string, newStage: JourneyStage): Promise<void> => {
     try {
-      const { data: before } = await supabase.from(TABLE_NAME).select('stage').eq('id', id).single();
+      const { data: before } = await supabase
+        .from(TABLE_NAME)
+        .select('stage, parent_id, surrogate_id')
+        .eq('id', id)
+        .single();
       const { error } = await supabase
         .from(TABLE_NAME)
         .update({ stage: newStage, updated_at: new Date().toISOString() })
@@ -186,6 +191,13 @@ export const journeyService = {
         before: { stage: before?.stage },
         after: { stage: newStage },
       });
+      // Push: notify both parties of the new journey stage.
+      void pushService.send(
+        [before?.parent_id, before?.surrogate_id],
+        'Journey update',
+        `Your journey has moved to "${newStage}".`,
+        { type: 'journey_stage', journeyId: id, stage: newStage },
+      );
     } catch (error) {
       console.error('Error updating journey stage:', error);
       throw error;

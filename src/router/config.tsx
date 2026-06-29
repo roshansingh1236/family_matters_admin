@@ -29,6 +29,8 @@ import AuditPage from '../pages/audit/page';
 import ContactsPage from '../pages/contacts/page';
 import ContactDetailPage from '../pages/contacts/detail/page';
 import MarketingPage from '../pages/marketing/page';
+import BlogPage from '../pages/blog/page';
+import NotificationsPage from '../pages/notifications/page';
 
 const routes: RouteObject[] = [
   {
@@ -42,6 +44,10 @@ const routes: RouteObject[] = [
   {
     path: '/marketing',
     element: <MarketingPage />,
+  },
+  {
+    path: '/blog',
+    element: <BlogPage />,
   },
   {
     path: '/inquiries',
@@ -150,6 +156,10 @@ const routes: RouteObject[] = [
   {
     path: '/contacts/:id',
     element: <ContactDetailPage />,
+  },
+  {
+    path: '/notifications',
+    element: <NotificationsPage />,
   }
 ];
 
