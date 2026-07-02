@@ -3,12 +3,12 @@ import Card from '../base/Card';
 import Button from '../base/Button';
 import {
   ACCESS_CODE_LABELS,
-  AccessCodeKey,
   DEFAULT_ACCESS_CODES,
   getAccessCode,
   resetAccessCode,
   setAccessCode,
 } from '../../utils/accessCodes';
+import type { AccessCodeKey } from '../../utils/accessCodes';
 
 type ToastFn = (toast: { message: string; type: 'success' | 'error' } | null) => void;
 

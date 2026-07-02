@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { User, UserRole, MatchStatus } from "@/types";
+import type { User, UserRole, MatchStatus } from "@/types";
 import { X, Plus, Eye, Loader2, AlertCircle, Check, Calendar } from "lucide-react";
 import ProfileDetailDialog from "./ProfileDetailDialog";
 
