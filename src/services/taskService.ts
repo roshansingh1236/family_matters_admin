@@ -82,7 +82,10 @@ export const taskService = {
       if (updates.description) mappedUpdates.description = updates.description;
       if (updates.assignee) mappedUpdates.user_id = updates.assignee;
       if (updates.dueDate) mappedUpdates.due_date = updates.dueDate;
-      if (updates.isCompleted !== undefined) mappedUpdates.status = updates.isCompleted ? 'Completed' : 'Pending';
+      if (updates.isCompleted !== undefined) {
+        mappedUpdates.status = updates.isCompleted ? 'Completed' : 'Pending';
+        mappedUpdates.is_completed = updates.isCompleted;
+      }
 
       const { error } = await supabase
         .from(TABLE_NAME)
