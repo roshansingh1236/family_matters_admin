@@ -12,7 +12,7 @@ import Toast from "../../components/base/Toast";
 import ConfirmationDialog from "../../components/base/ConfirmationDialog";
 import { canViewFinancials } from "../../utils/permissions";
 import { formatMMDDYYYY } from "../../utils/dateFormat";
-import FileUploadSection, { FileRecord } from "../../components/data/FileUploadSection";
+import FileUploadSection, { type FileRecord } from "../../components/data/FileUploadSection";
 import { STORAGE_BUCKETS } from "../../services/storageService";
 
 // Helper type for user preview

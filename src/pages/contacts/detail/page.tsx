@@ -6,7 +6,7 @@ import Card from '../../../components/base/Card';
 import Button from '../../../components/base/Button';
 import Badge from '../../../components/base/Badge';
 import { supabase } from '../../../lib/supabase';
-import { Contact, ContactCategory } from '../../../services/contactService';
+import type { Contact, ContactCategory } from '../../../services/contactService';
 
 const ContactDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

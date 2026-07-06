@@ -1002,11 +1002,67 @@ export default function SurrogateProfileContent({
             </div>
         )}
 
-        {activeTab === 'documents' && (
-            <Card>
-                <FileUploadSection title="Documents" userId={surrogate.id} files={surrogate.documents ?? []} onFilesChange={(f: any) => handleUpdateField('documents', f)} />
-            </Card>
-        )}
+        {activeTab === 'documents' && (() => {
+                const getDocs = (urls: any, category: string) => {
+                    if (!urls) return [];
+                    const arr = Array.isArray(urls) ? urls : typeof urls === 'string' ? [urls] : [];
+                    return arr.filter(Boolean).map((url: string, i: number) => {
+                        // check if it's a valid url
+                        if (!url.startsWith('http')) return null;
+                        return { 
+                            url, 
+                            category, 
+                            name: `${category} Document ${i + 1}`, 
+                            type: url.toLowerCase().split('?')[0].endsWith('.pdf') ? 'application/pdf' : 'image/jpeg' 
+                        };
+                    }).filter(Boolean);
+                };
+
+                const fd = surrogate.formData || {};
+                const sp = fd.surrogate_profile || {};
+                const psychDoc = surrogate.form2?.psychClearance?.mentalHealthClearanceDoc;
+
+                const appDocs = [
+                    ...getDocs(fd.disease_screening_urls || sp.disease_screening_urls, 'Disease Screening'),
+                    ...getDocs(fd.medical_records_urls || sp.medical_records_urls, 'Medical Records'),
+                    ...getDocs(fd.clearance_document_urls || sp.clearance_document_urls, 'Clearance Document'),
+                    ...getDocs(psychDoc, 'Psychological Clearance'),
+                ];
+
+                return (
+                    <div className="space-y-6">
+                        <Card>
+                            <FileUploadSection 
+                                title="Documents" 
+                                userId={surrogate.id} 
+                                files={surrogate.documents ?? []} 
+                                onFilesChange={(f: any) => handleUpdateField('documents', f)} 
+                            />
+                        </Card>
+                        {appDocs.length > 0 && (
+                            <Card>
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">App-Submitted Medical Documents</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {appDocs.map((doc: any, i: number) => (
+                                        <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5 shadow-sm hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-500/30 transition-all group">
+                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${doc.type === 'application/pdf' ? 'bg-red-50 dark:bg-red-500/10 text-red-500' : 'bg-blue-50 dark:bg-blue-500/10 text-blue-500'}`}>
+                                                <i className={doc.type === 'application/pdf' ? "ri-file-pdf-line text-2xl" : "ri-image-line text-2xl"}></i>
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{doc.name}</p>
+                                                <p className="text-[10px] text-gray-500 uppercase mt-1 tracking-wider">Click to view</p>
+                                            </div>
+                                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <i className="ri-external-link-line text-gray-400"></i>
+                                            </div>
+                                        </a>
+                                    ))}
+                                </div>
+                            </Card>
+                        )}
+                    </div>
+                );
+        })()}
       </div>
     </div>
   );

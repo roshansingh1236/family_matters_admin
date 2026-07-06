@@ -5,7 +5,7 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Toast from '../../components/base/Toast';
-import { contactService, Contact, ContactCategory } from '../../services/contactService';
+import { contactService, type Contact, type ContactCategory } from '../../services/contactService';
 import { messagingService } from '../../services/messagingService';
 import { useAuth } from '../../contexts/AuthContext';
 
