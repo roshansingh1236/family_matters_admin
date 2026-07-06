@@ -19,11 +19,19 @@ const ParentsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('table');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'name' | 'date' | 'status'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const activeStatus = searchParams.get('status');
   // Per client review: declined/inactive IPs are archived. Show only when the
   // user explicitly opts in via the "archived=1" query param.
   const showArchived = searchParams.get('archived') === '1';
+
+  useEffect(() => {
+    if (activeStatus) setStatusFilter(activeStatus);
+  }, [activeStatus]);
 
   const fetchParents = async () => {
     setIsLoading(true);
@@ -47,6 +55,13 @@ const ParentsPage: React.FC = () => {
     fetchParents();
   }, []);
 
+  const getDisplayName = (user: User) => {
+    const first = user.firstName || user.first_name || '';
+    const last = user.lastName || user.last_name || '';
+    const combined = [first, last].filter(Boolean).join(' ');
+    return combined || user.email || 'Anonymous IP';
+  };
+
   const filteredParents = useMemo(() => {
     let list = parents;
     // Default view hides archived rows. Archived view shows ONLY them.
@@ -55,11 +70,31 @@ const ParentsPage: React.FC = () => {
     } else {
       list = list.filter(p => (p.status as string)?.toLowerCase() !== 'declined / inactive');
     }
-    if (activeStatus) {
-      list = list.filter(p => (p.status as string).toLowerCase() === activeStatus.toLowerCase());
+    if (statusFilter !== 'all') {
+      list = list.filter(p => (p.status as string).toLowerCase() === statusFilter.toLowerCase());
     }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(p => 
+        getDisplayName(p).toLowerCase().includes(q) || 
+        (p.email && p.email.toLowerCase().includes(q))
+      );
+    }
+
+    list = [...list].sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'name') {
+        comparison = getDisplayName(a).localeCompare(getDisplayName(b));
+      } else if (sortBy === 'date') {
+        comparison = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+      } else if (sortBy === 'status') {
+        comparison = (a.status as string || '').localeCompare(b.status as string || '');
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
     return list;
-  }, [parents, activeStatus, showArchived]);
+  }, [parents, statusFilter, showArchived, searchQuery, sortBy, sortOrder]);
 
   const handleStatusUpdate = async (userId: string, newStatus: UserStatus) => {
     try {
@@ -97,13 +132,6 @@ const ParentsPage: React.FC = () => {
     if (s?.includes('pending')) return <Badge color="yellow">{status}</Badge>;
     if (s === 'declined / inactive' || s === 'on hold') return <Badge color="red">{status}</Badge>;
     return <Badge color="gray">{status}</Badge>;
-  };
-
-  const getDisplayName = (user: User) => {
-    const first = user.firstName || user.first_name || '';
-    const last = user.lastName || user.last_name || '';
-    const combined = [first, last].filter(Boolean).join(' ');
-    return combined || user.email || 'Anonymous IP';
   };
 
   return (
@@ -151,6 +179,45 @@ const ParentsPage: React.FC = () => {
                <Button color="blue" onClick={() => setIsAddDialogOpen(true)}>
                  <i className="ri-add-line mr-2"></i> Add Parent
                </Button>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-white/5 p-4 rounded-2xl border border-rose-100/50 dark:border-white/10 mb-6 flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input 
+                type="text" 
+                placeholder="Search by name or email..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none text-sm dark:text-white transition-all"
+              />
+            </div>
+            <div className="flex gap-2">
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none text-sm dark:text-white"
+              >
+                <option value="all">All Statuses</option>
+                {IP_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select 
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="px-4 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none text-sm dark:text-white"
+              >
+                <option value="date">Sort by Date</option>
+                <option value="name">Sort by Name</option>
+                <option value="status">Sort by Status</option>
+              </select>
+              <button 
+                onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                className="px-3 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-600 dark:text-gray-300 flex items-center justify-center"
+                title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
+              >
+                <i className={sortOrder === 'asc' ? 'ri-sort-asc' : 'ri-sort-desc'}></i>
+              </button>
             </div>
           </div>
 
@@ -211,12 +278,12 @@ const ParentsPage: React.FC = () => {
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead className="bg-rose-50/50 dark:bg-white/5 text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-widest font-black">
-                    <tr>
-                      <th className="px-6 py-4 font-bold">Name</th>
+                  <thead className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-widest font-black">
+                    <tr className="bg-rose-50/50 dark:bg-white/5">
+                      <th className="px-6 py-4 font-bold rounded-l-xl">Name</th>
                       <th className="px-6 py-4 font-bold">Received</th>
                       <th className="px-6 py-4 font-bold">Status</th>
-                      <th className="px-6 py-4 font-bold text-right">Actions</th>
+                      <th className="px-6 py-4 font-bold text-right rounded-r-xl">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-white/5">

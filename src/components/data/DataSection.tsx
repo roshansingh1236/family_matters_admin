@@ -47,17 +47,50 @@ const PREFERRED_ORDER = [
   'firstname',
   'lastname',
   'name',
+  'gender',
+  'age',
+  'dob',
+  'dateofbirth',
   'email',
   'phone',
   'phonenumber',
+  'address',
   'city',
   'state',
-  'country',
-  'address',
   'zipcode',
   'zip',
-  'dob',
-  'dateofbirth'
+  'country',
+  'language',
+  'religion',
+  'occupation',
+  'relationshipstatus',
+  'relationshipduration',
+  'numberofchildren',
+  'needforsurrogateassistance',
+  'pastsurrogateexperience',
+  'workedwithsurrogatebefore',
+  'surrogateselectioncriteria',
+  'communicationpreference',
+  'contactafterbirth',
+  'contactafterbirthexplanation',
+  'pregnancyrelationship',
+  'attendobappointments',
+  'attenddeliveryroom',
+  'favoritefood',
+  'favoritecolor',
+  'favoritemovieshow',
+  'hobbiesinterests',
+  'relaxationmethod',
+  'aboutyourself',
+  'personalitydescription',
+  'relationshipdescription',
+  'relationshipwithchildren',
+  'childrenfeelings',
+  'tellchildaboutsurrogate',
+  'introducesurrogatetochildren',
+  'familyfriendsopinion',
+  'difficultdecisionreason',
+  'additionalinfoforsurrogate',
 ] as const;
 
 const normalizeKey = (key: string) => key.replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -84,25 +117,64 @@ const renderEntries = (data: Record<string, unknown>, depth = 0): React.ReactNod
   }
 
   return (
-    <div className={`space-y-3 ${depth > 0 ? 'pl-4 border-l border-rose-100/60 dark:border-white/5' : ''}`}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {entries.map(([key, value]) => {
         const label = formatLabel(key);
 
         if (isPlainObject(value)) {
           return (
-            <div key={key} className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</p>
+            <div key={key} className="col-span-full space-y-3 mt-4">
+              <h4 className="text-sm font-bold uppercase tracking-wide text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-white/5 pb-2">{label}</h4>
               {renderEntries(value, depth + 1)}
             </div>
           );
         }
 
+        const isUrl = typeof value === 'string' && value.startsWith('http');
+        const isUrlArray = Array.isArray(value) && value.length > 0 && typeof value[0] === 'string' && value[0].startsWith('http');
+
+        if (isUrlArray || isUrl) {
+            const urls = isUrlArray ? (value as string[]) : [value as string];
+            return (
+              <div key={key} className="col-span-full space-y-3 mt-4">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500 mb-1 block">
+                  {label}
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {urls.map((url, i) => {
+                      const isPdf = url.toLowerCase().split('?')[0].endsWith('.pdf');
+                      const filename = url.split('/').pop()?.split('?')[0] || 'Document';
+                      return (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 rounded-xl border border-rose-100/30 dark:border-white/5 bg-gray-50/50 dark:bg-[#1a1625] hover:bg-white dark:hover:bg-white/5 shadow-sm hover:shadow-md transition-all group">
+                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${isPdf ? 'bg-red-50 dark:bg-red-500/10 text-red-500' : 'bg-blue-50 dark:bg-blue-500/10 text-blue-500'}`}>
+                                  <i className={isPdf ? "ri-file-pdf-line text-2xl" : "ri-image-line text-2xl"}></i>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">View Document {urls.length > 1 ? i + 1 : ''}</p>
+                                  <p className="text-[10px] text-gray-500 uppercase mt-1 tracking-wider truncate">{filename}</p>
+                              </div>
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <i className="ri-external-link-line text-gray-400"></i>
+                              </div>
+                          </a>
+                      );
+                  })}
+                </div>
+              </div>
+            );
+        }
+
+        const isLongText = typeof value === 'string' && value.length > 60;
+        const isArray = Array.isArray(value);
+
         return (
-          <div key={key} className="flex flex-col">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          <div key={key} className={`flex flex-col p-4 rounded-xl bg-gray-50/50 dark:bg-[#1a1625] border border-rose-100/30 dark:border-white/5 hover:bg-white dark:hover:bg-white/5 transition-all shadow-sm ${isLongText || isArray ? 'col-span-full' : ''}`}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-500 mb-1">
               {label}
             </span>
-            <span className="text-sm text-gray-900 dark:text-white break-words">{formatValue(value)}</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-white break-words">
+              {formatValue(value)}
+            </span>
           </div>
         );
       })}
