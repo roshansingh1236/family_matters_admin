@@ -645,13 +645,17 @@ export default function SurrogateProfileContent({
                       <SurrogateIntakeFormView
                         data={surrogate.form1 as Record<string, unknown> | null}
                         onSaveField={async (key, value) => {
-                          // Save back into whichever container originally held the field.
-                          // Priority: form_data.surrogate_profile -> top-level form_data.
                           const fd = (surrogate.formData || {}) as Record<string, any>;
-                          const sp = (fd.surrogate_profile && typeof fd.surrogate_profile === 'object') ? fd.surrogate_profile : null;
-                          if (sp && Object.prototype.hasOwnProperty.call(sp, key)) {
-                            const next = { ...sp, [key]: value };
+                          
+                          if (fd.surrogate_profile && typeof fd.surrogate_profile === 'object' && Object.keys(fd.surrogate_profile).length > 0) {
+                            const next = { ...fd.surrogate_profile, [key]: value };
                             await handleUpdateField('form_data.surrogate_profile', next);
+                          } else if (fd.form2 && typeof fd.form2 === 'object' && Object.keys(fd.form2).length > 0) {
+                            const next = { ...fd.form2, [key]: value };
+                            await handleUpdateField('form_data.form2', next);
+                          } else if (fd.form1 && typeof fd.form1 === 'object' && Object.keys(fd.form1).length > 0) {
+                            const next = { ...fd.form1, [key]: value };
+                            await handleUpdateField('form_data.form1', next);
                           } else {
                             await handleUpdateField(`form_data.${key}`, value);
                           }

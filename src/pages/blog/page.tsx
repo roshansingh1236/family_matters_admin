@@ -33,8 +33,8 @@ const MediaCarousel = ({ mediaAssets }: { mediaAssets: { url: string; type: stri
   return (
     <div className="mb-4 -mt-4 -mx-4 h-48 relative bg-black group flex-shrink-0">
       {mediaAssets[index].type === 'image' ? (
-        <div 
-          className="w-full h-full relative cursor-pointer group/image" 
+        <div
+          className="w-full h-full relative cursor-pointer group/image"
           onClick={() => window.open(mediaAssets[index].url, '_blank')}
         >
           <img src={mediaAssets[index].url} alt="Cover" className="w-full h-full object-cover" />
@@ -45,22 +45,22 @@ const MediaCarousel = ({ mediaAssets }: { mediaAssets: { url: string; type: stri
       ) : (
         <video src={mediaAssets[index].url} className="w-full h-full object-contain" controls controlsList="nodownload" />
       )}
-      
+
       {mediaAssets.length > 1 && (
         <>
-          <button 
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIndex(i => i > 0 ? i - 1 : mediaAssets.length - 1); }} 
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIndex(i => i > 0 ? i - 1 : mediaAssets.length - 1); }}
             className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
           >
             <i className="ri-arrow-left-s-line text-lg"></i>
           </button>
-          <button 
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIndex(i => i < mediaAssets.length - 1 ? i + 1 : 0); }} 
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIndex(i => i < mediaAssets.length - 1 ? i + 1 : 0); }}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
           >
             <i className="ri-arrow-right-s-line text-lg"></i>
           </button>
-          
+
           <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-lg">
             {index + 1} / {mediaAssets.length}
           </div>
@@ -149,7 +149,7 @@ const BlogPage: React.FC = () => {
         const file = files[i];
         const ext = file.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-        
+
         const { error } = await supabase.storage
           .from('articles_media')
           .upload(fileName, file);
@@ -201,7 +201,7 @@ const BlogPage: React.FC = () => {
   const roleBadge = (r: ArticleRoleTarget) =>
     r === 'both' ? <Badge color="indigo">All users</Badge>
       : r === 'surrogate' ? <Badge color="purple">Surrogates</Badge>
-      : <Badge color="blue">Parents</Badge>;
+        : <Badge color="blue">Parents</Badge>;
 
   const field = "w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm focus:ring-rose-500 outline-none";
 
