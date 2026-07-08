@@ -145,3 +145,85 @@ CREATE POLICY "Staff full access contracts"
 CREATE POLICY "Contracts visible to linked parent or surrogate"
   ON contracts FOR SELECT
   USING (auth.uid() = parent_id OR auth.uid() = surrogate_id);
+    journey_id UUID REFERENCES public.journeys(id) NOT NULL UNIQUE,
+    surrogate_id UUID REFERENCES public.users(id) NOT NULL,
+    signing_bonus DECIMAL(12,2) DEFAULT 2000.00,
+    monthly_allowance DECIMAL(12,2) DEFAULT 400.00,
+    embryo_transfer_fee DECIMAL(12,2) DEFAULT 1000.00,
+    singleton_living_expense DECIMAL(12,2) DEFAULT 65000.00,
+    multiples_living_expense DECIMAL(12,2) DEFAULT 10000.00,
+    maternity_clothing DECIMAL(12,2) DEFAULT 1000.00,
+    housekeeping_allowance DECIMAL(12,2) DEFAULT 1400.00,
+    support_group_allowance DECIMAL(12,2) DEFAULT 100.00,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.surrogate_benefit_packages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "benefit_packages_view" ON public.surrogate_benefit_packages;
+CREATE POLICY "benefit_packages_view" ON public.surrogate_benefit_packages FOR SELECT USING (auth.uid()::text = surrogate_id::text OR public.check_is_admin());
+DROP POLICY IF EXISTS "benefit_packages_admin" ON public.surrogate_benefit_packages;
+CREATE POLICY "benefit_packages_admin" ON public.surrogate_benefit_packages FOR ALL USING (public.check_is_admin());
+
+-- Payment Schedules
+CREATE TABLE IF NOT EXISTS public.payment_schedules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    journey_id UUID REFERENCES public.journeys(id) NOT NULL,
+    user_id UUID REFERENCES public.users(id) NOT NULL, -- IP or Surrogate
+    type TEXT NOT NULL, -- 'Deposit' or 'Compensation'
+    title TEXT NOT NULL,
+    date_of_occurrence DATE NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    status TEXT DEFAULT 'PENDING', -- 'PENDING', 'PAID'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.payment_schedules ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "payment_schedules_view" ON public.payment_schedules;
+CREATE POLICY "payment_schedules_view" ON public.payment_schedules FOR SELECT USING (auth.uid()::text = user_id::text OR public.check_is_admin());
+DROP POLICY IF EXISTS "payment_schedules_admin" ON public.payment_schedules;
+CREATE POLICY "payment_schedules_admin" ON public.payment_schedules FOR ALL USING (public.check_is_admin());
+
+-- Trust Accounts
+CREATE TABLE IF NOT EXISTS public.trust_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    journey_id UUID REFERENCES public.journeys(id) NOT NULL UNIQUE,
+    intended_parent_id UUID REFERENCES public.users(id) NOT NULL,
+    total_funded DECIMAL(12,2) DEFAULT 0.00,
+    current_balance DECIMAL(12,2) DEFAULT 0.00,
+    minimum_balance_required DECIMAL(12,2) DEFAULT 10000.00,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.trust_accounts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "trust_accounts_view" ON public.trust_accounts;
+CREATE POLICY "trust_accounts_view" ON public.trust_accounts FOR SELECT USING (auth.uid()::text = intended_parent_id::text OR public.check_is_admin());
+DROP POLICY IF EXISTS "trust_accounts_admin" ON public.trust_accounts;
+CREATE POLICY "trust_accounts_admin" ON public.trust_accounts FOR ALL USING (public.check_is_admin());
+
+-- Monthly Payment Forms
+CREATE TABLE IF NOT EXISTS public.monthly_payment_forms (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    surrogate_id UUID REFERENCES public.users(id) NOT NULL,
+    journey_id UUID REFERENCES public.journeys(id) NOT NULL,
+    month TEXT NOT NULL,
+    year TEXT NOT NULL,
+    total_amount_requested DECIMAL(12,2) NOT NULL,
+    status TEXT DEFAULT 'pending', -- 'pending', 'approved', 'rejected', 'paid'
+    line_items JSONB, -- stores base allowance, twins allowance, transfer, etc.
+    receipts JSONB, -- stores paths to uploaded files in storage
+    submitted_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    processed_at TIMESTAMP WITH TIME ZONE,
+    processed_by UUID REFERENCES public.users(id)
+);
+ALTER TABLE public.monthly_payment_forms ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "monthly_payment_forms_view" ON public.monthly_payment_forms;
+CREATE POLICY "monthly_payment_forms_view" ON public.monthly_payment_forms FOR SELECT USING (
+    auth.uid()::text = surrogate_id::text OR 
+    public.check_is_admin() OR 
+    EXISTS (SELECT 1 FROM public.journeys j WHERE j.id = monthly_payment_forms.journey_id AND j.intended_parent_id::text = auth.uid()::text)
+);
+DROP POLICY IF EXISTS "monthly_payment_forms_surrogate" ON public.monthly_payment_forms;
+CREATE POLICY "monthly_payment_forms_surrogate" ON public.monthly_payment_forms FOR INSERT WITH CHECK (auth.uid()::text = surrogate_id::text);
+DROP POLICY IF EXISTS "monthly_payment_forms_admin" ON public.monthly_payment_forms;
+CREATE POLICY "monthly_payment_forms_admin" ON public.monthly_payment_forms FOR UPDATE USING (public.check_is_admin());
+CREATE POLICY "monthly_payment_forms_admin_delete" ON public.monthly_payment_forms FOR DELETE USING (public.check_is_admin());

@@ -30,27 +30,28 @@ export const STAGE_CHECKLISTS: Record<JourneyStage, { id: string; label: string 
     { id: 'ms_cleared', label: 'Medically cleared for program' },
   ],
   'Legal': [
-    { id: 'legal_contract_sent', label: 'Legal contract sent to both parties' },
-    { id: 'legal_contract_signed', label: 'Contract signed by both parties' },
-    { id: 'legal_clearance', label: 'Legal clearance issued' },
+    { id: 'legal_parental_est', label: 'Parental establishment/Birth Order completion date' },
   ],
   'Embryo Transfer': [
-    { id: 'et_protocol_started', label: 'Transfer protocol / medications started' },
-    { id: 'et_transfer_done', label: 'Embryo transfer completed' },
-    { id: 'et_beta_confirmed', label: 'Beta / pregnancy confirmed' },
+    { id: 'et_date', label: 'Embryo transfer date' },
+    { id: 'et_first_hcg', label: 'First HCG date' },
+    { id: 'et_second_hcg', label: 'Second HCG date' },
   ],
   'Pregnancy': [
-    { id: 'preg_first_trimester', label: 'First trimester cleared' },
-    { id: 'preg_anatomy_scan', label: 'Anatomy scan complete' },
-    { id: 'preg_birth_plan', label: 'Third trimester / birth plan ready' },
+    { id: 'preg_heartbeat', label: 'Heartbeat detection date' },
+    { id: 'preg_first_trimester', label: 'first trimester completion date' },
+    { id: 'preg_anatomy_scan', label: 'Anatomy scan completion date' },
+    { id: 'preg_fetal_echo', label: 'Fetal echocardiogram completion date' },
+    { id: 'preg_birth_plan', label: 'Birth plan completion date' },
   ],
   'Birth': [
-    { id: 'birth_delivered', label: 'Baby delivered' },
-    { id: 'birth_docs', label: 'Birth documentation complete' },
+    { id: 'birth_delivery_date', label: 'Delivery date' },
+    { id: 'birth_delivery_docs', label: 'Delivery Documentation' },
   ],
   'Postpartum': [
-    { id: 'pp_recovery', label: 'Postpartum recovery confirmed' },
-    { id: 'pp_escrow', label: 'Final payments / escrow reconciled' },
+    { id: 'pp_six_weeks', label: 'Six Weeks Postpartum followup visit' },
+    { id: 'pp_three_months', label: 'Three Months Postpartum Cancel Insurance Policy' },
+    { id: 'pp_trust_closure', label: 'Trust Account Closure' },
   ],
 };
 
