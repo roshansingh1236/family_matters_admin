@@ -208,12 +208,12 @@ const JourneysPage: React.FC = () => {
     }
   };
 
-  // ─── Stage checklist toggle ────────────────────────────────────────────────
-  const handleToggleStageChecklistItem = async (itemId: string) => {
+  // ─── Stage checklist update ────────────────────────────────────────────────
+  const handleUpdateStageChecklistItem = async (itemId: string, value: boolean | string) => {
     if (!selectedJourney) return;
     const stage = selectedJourney.stage as JourneyStage;
     const current = getStageChecklistState(selectedJourney, stage);
-    const updated = { ...current, [itemId]: !current[itemId] };
+    const updated = { ...current, [itemId]: value };
 
     // Optimistic update
     const prevNotes = (selectedJourney.journeyNotes as any) || {};
@@ -230,7 +230,33 @@ const JourneysPage: React.FC = () => {
     } catch (err) {
       console.error(err);
       setToast({ message: 'Failed to update checklist', type: 'error' });
-      fetchJourneys();
+      // Revert optimistic update
+      setSelectedJourney(selectedJourney);
+    }
+  };
+
+  const getStageColorClasses = (stage: string, isChecked: boolean) => {
+    if (!isChecked) return 'bg-white dark:bg-white/5 border-gray-100 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:border-gray-300';
+    switch (stage) {
+      case 'Medical Screening': return 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-400';
+      case 'Legal': return 'bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/30 text-purple-700 dark:text-purple-400';
+      case 'Embryo Transfer': return 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-400';
+      case 'Pregnancy': return 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-400';
+      case 'Birth': return 'bg-teal-50 dark:bg-teal-500/10 border-teal-200 dark:border-teal-500/30 text-teal-700 dark:text-teal-400';
+      case 'Postpartum': return 'bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/30 text-orange-700 dark:text-orange-400';
+      default: return 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-400';
+    }
+  };
+
+  const getStageIconColor = (stage: string) => {
+    switch (stage) {
+      case 'Medical Screening': return 'text-blue-500';
+      case 'Legal': return 'text-purple-500';
+      case 'Embryo Transfer': return 'text-rose-500';
+      case 'Pregnancy': return 'text-indigo-500';
+      case 'Birth': return 'text-teal-500';
+      case 'Postpartum': return 'text-orange-500';
+      default: return 'text-rose-500';
     }
   };
 
@@ -815,7 +841,7 @@ const JourneysPage: React.FC = () => {
                         <div className="p-4 rounded-xl border border-rose-100/60 dark:border-white/5 bg-gray-50/50 dark:bg-white/5">
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                              <i className="ri-list-check-2 text-rose-500"></i>
+                              <i className={`ri-list-check-2 ${getStageIconColor(selectedJourney.stage)}`}></i>
                               {selectedJourney.stage} checklist
                             </h4>
                             {isStageChecklistComplete(selectedJourney, selectedJourney.stage as JourneyStage) ? (
@@ -826,15 +852,44 @@ const JourneysPage: React.FC = () => {
                           </div>
                           <div className="space-y-2">
                             {(STAGE_CHECKLISTS[selectedJourney.stage as JourneyStage] || []).map((item) => {
-                              const checked = !!getStageChecklistState(selectedJourney, selectedJourney.stage as JourneyStage)[item.id];
+                              const value = getStageChecklistState(selectedJourney, selectedJourney.stage as JourneyStage)[item.id];
+                              const isChecked = !!value;
+                              
+                              if (item.isDate) {
+                                return (
+                                  <div 
+                                    key={item.id} 
+                                    className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border transition-all ${getStageColorClasses(selectedJourney.stage, isChecked)} cursor-pointer`}
+                                    onClick={() => {
+                                      const newValue = isChecked ? false : new Date().toISOString().split('T')[0];
+                                      handleUpdateStageChecklistItem(item.id, newValue);
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <span className={`w-5 h-5 rounded flex items-center justify-center border-2 ${isChecked ? 'bg-current border-current text-white' : 'border-gray-300 dark:border-white/20'}`}>
+                                        {isChecked && <i className="ri-check-line text-xs"></i>}
+                                      </span>
+                                      <span className="text-sm font-medium">{item.label}</span>
+                                    </div>
+                                    <input
+                                      type="date"
+                                      value={typeof value === 'string' ? value : ''}
+                                      onChange={(e) => handleUpdateStageChecklistItem(item.id, e.target.value)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="px-2 py-1 text-sm rounded bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white"
+                                    />
+                                  </div>
+                                );
+                              }
+
                               return (
                                 <button
                                   key={item.id}
-                                  onClick={() => handleToggleStageChecklistItem(item.id)}
-                                  className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${checked ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-400' : 'bg-white dark:bg-white/5 border-gray-100 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:border-rose-200'}`}
+                                  onClick={() => handleUpdateStageChecklistItem(item.id, !value)}
+                                  className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${getStageColorClasses(selectedJourney.stage, isChecked)}`}
                                 >
-                                  <span className={`w-5 h-5 rounded flex items-center justify-center border-2 ${checked ? 'bg-rose-500 border-rose-500 text-white' : 'border-gray-300 dark:border-white/20'}`}>
-                                    {checked && <i className="ri-check-line text-xs"></i>}
+                                  <span className={`w-5 h-5 rounded flex items-center justify-center border-2 ${isChecked ? 'bg-current border-current text-white' : 'border-gray-300 dark:border-white/20'}`}>
+                                    {isChecked && <i className="ri-check-line text-xs"></i>}
                                   </span>
                                   <span className="text-sm font-medium">{item.label}</span>
                                 </button>

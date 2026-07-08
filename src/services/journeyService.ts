@@ -23,35 +23,35 @@ export const JOURNEY_STAGES: JourneyStage[] = [
 // finalized checklist for each stage — only the `label` text needs to change
 // (and add/remove rows). Keep `id` stable once items are in production so saved
 // progress is preserved.
-export const STAGE_CHECKLISTS: Record<JourneyStage, { id: string; label: string }[]> = {
+export const STAGE_CHECKLISTS: Record<JourneyStage, { id: string; label: string; isDate?: boolean }[]> = {
   'Medical Screening': [
-    { id: 'ms_records_collected', label: 'Medical records collected' },
-    { id: 'ms_screening_scheduled', label: 'Medical screening scheduled' },
-    { id: 'ms_cleared', label: 'Medically cleared for program' },
+    { id: 'ms_records_collected', label: 'Medical records collected', isDate: true },
+    { id: 'ms_screening_scheduled', label: 'Medical screening scheduled', isDate: true },
+    { id: 'ms_cleared', label: 'Medically cleared for program', isDate: true },
   ],
   'Legal': [
-    { id: 'legal_parental_est', label: 'Parental establishment/Birth Order completion date' },
+    { id: 'legal_parental_est', label: 'Parental establishment/Birth Order completion date', isDate: true },
   ],
   'Embryo Transfer': [
-    { id: 'et_date', label: 'Embryo transfer date' },
-    { id: 'et_first_hcg', label: 'First HCG date' },
-    { id: 'et_second_hcg', label: 'Second HCG date' },
+    { id: 'et_date', label: 'Embryo transfer date', isDate: true },
+    { id: 'et_first_hcg', label: 'First HCG date', isDate: true },
+    { id: 'et_second_hcg', label: 'Second HCG date', isDate: true },
   ],
   'Pregnancy': [
-    { id: 'preg_heartbeat', label: 'Heartbeat detection date' },
-    { id: 'preg_first_trimester', label: 'first trimester completion date' },
-    { id: 'preg_anatomy_scan', label: 'Anatomy scan completion date' },
-    { id: 'preg_fetal_echo', label: 'Fetal echocardiogram completion date' },
-    { id: 'preg_birth_plan', label: 'Birth plan completion date' },
+    { id: 'preg_heartbeat', label: 'Heartbeat detection date', isDate: true },
+    { id: 'preg_first_trimester', label: 'First trimester completion date', isDate: true },
+    { id: 'preg_anatomy_scan', label: 'Anatomy scan completion date', isDate: true },
+    { id: 'preg_fetal_echo', label: 'Fetal echocardiogram completion date', isDate: true },
+    { id: 'preg_birth_plan', label: 'Birth plan completion date', isDate: true },
   ],
   'Birth': [
-    { id: 'birth_delivery_date', label: 'Delivery date' },
+    { id: 'birth_delivery_date', label: 'Delivery date', isDate: true },
     { id: 'birth_delivery_docs', label: 'Delivery Documentation' },
   ],
   'Postpartum': [
-    { id: 'pp_six_weeks', label: 'Six Weeks Postpartum followup visit' },
-    { id: 'pp_three_months', label: 'Three Months Postpartum Cancel Insurance Policy' },
-    { id: 'pp_trust_closure', label: 'Trust Account Closure' },
+    { id: 'pp_six_weeks', label: 'Six Weeks Postpartum followup visit', isDate: true },
+    { id: 'pp_three_months', label: 'Three Months Postpartum Cancel Insurance Policy', isDate: true },
+    { id: 'pp_trust_closure', label: 'Trust Account Closure', isDate: true },
   ],
 };
 
@@ -59,9 +59,9 @@ export const STAGE_CHECKLISTS: Record<JourneyStage, { id: string; label: string 
 export function getStageChecklistState(
   journey: Pick<Journey, 'journeyNotes'>,
   stage: JourneyStage,
-): Record<string, boolean> {
+): Record<string, boolean | string> {
   const notes = (journey.journeyNotes as any) || {};
-  return (notes.stageChecklists?.[stage] as Record<string, boolean>) || {};
+  return (notes.stageChecklists?.[stage] as Record<string, boolean | string>) || {};
 }
 
 /** True when every checklist item for [stage] is checked. */
@@ -72,7 +72,7 @@ export function isStageChecklistComplete(
   const items = STAGE_CHECKLISTS[stage] || [];
   if (items.length === 0) return true;
   const state = getStageChecklistState(journey, stage);
-  return items.every((i) => state[i.id] === true);
+  return items.every((i) => !!state[i.id]);
 }
 
 // Helper to map DB snake_case to Frontend camelCase
