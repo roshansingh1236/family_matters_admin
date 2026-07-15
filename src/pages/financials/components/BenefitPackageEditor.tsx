@@ -60,7 +60,8 @@ export const BenefitPackageEditor: React.FC = () => {
         await financialsService.updateBenefitPackage(id, updates);
       } else {
         // Creating new
-        await financialsService.createBenefitPackage(formData);
+        const { id, ...newPackage } = formData;
+        await financialsService.createBenefitPackage(newPackage);
       }
       setShowModal(false);
       loadPackages();
