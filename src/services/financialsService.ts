@@ -1,5 +1,22 @@
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/supabase'; // Assuming there is a types file, if not we'll use any
+import { pushService } from './pushService';
+
+// uuid columns reject empty strings ("invalid input syntax for type uuid").
+// Coerce empty-string values on known id keys to null before insert.
+const UUID_KEYS = new Set([
+  'journey_id', 'user_id', 'surrogate_id', 'parent_id',
+  'intended_parent_id', 'gestational_carrier_id',
+]);
+function cleanUuids<T extends Record<string, any>>(obj: T): T {
+  const out: Record<string, any> = { ...obj };
+  for (const k of Object.keys(out)) {
+    if (UUID_KEYS.has(k) && typeof out[k] === 'string' && out[k].trim() === '') {
+      out[k] = null;
+    }
+  }
+  return out as T;
+}
 
 export const financialsService = {
   // --- Lookups for Dropdowns ---
@@ -37,7 +54,7 @@ export const financialsService = {
   async createBenefitPackage(pkg: any) {
     const { data, error } = await supabase
       .from('surrogate_benefit_packages')
-      .insert([pkg])
+      .insert([cleanUuids(pkg)])
       .select()
       .single();
     if (error) throw error;
@@ -76,8 +93,16 @@ export const financialsService = {
       if (notifError) {
         console.error('Failed to create notification:', notifError);
       }
+
+      // Push notification to the surrogate.
+      void pushService.send(
+        [data.surrogate_id],
+        'New Care Package to Sign',
+        'Your Surrogate Benefit Care Package is ready for your review and signature.',
+        { type: 'benefit_package', packageId: id },
+      );
     }
-    
+
     console.log(`Package ${id} marked as sent. Notification dispatched.`);
     return data;
   },
@@ -89,6 +114,62 @@ export const financialsService = {
       .select('*, journeys(*), users!intended_parent_id(*)');
     if (error) throw error;
     return data;
+  },
+
+  // Current trust balance for a journey (0 if no account yet).
+  async getTrustBalance(journeyId: string): Promise<number> {
+    if (!journeyId) return 0;
+    const { data } = await supabase
+      .from('trust_accounts')
+      .select('current_balance')
+      .eq('journey_id', journeyId)
+      .maybeSingle();
+    return data ? Number(data.current_balance) : 0;
+  },
+
+  // Deduct a surrogate payment/reimbursement/compensation from the IP's trust
+  // account for the journey. Throws if the balance is $0 or insufficient, so a
+  // payment can never be marked paid without funds. Records a ledger entry.
+  async deductFromTrust(
+    journeyId: string,
+    amount: number,
+    title: string,
+    userId?: string | null,
+  ): Promise<void> {
+    if (!journeyId) {
+      throw new Error('This payment is not linked to a journey, so it cannot be deducted from a trust account.');
+    }
+    const { data: account, error } = await supabase
+      .from('trust_accounts')
+      .select('id, current_balance')
+      .eq('journey_id', journeyId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!account) {
+      throw new Error('No trust account exists for this journey. Fund the Intended Parent trust account before paying the surrogate.');
+    }
+    const balance = Number(account.current_balance);
+    if (balance <= 0) {
+      throw new Error('The Intended Parent trust account balance is $0. Fund the trust account before marking any surrogate payment as paid.');
+    }
+    if (amount > balance) {
+      throw new Error(`Insufficient trust balance ($${balance.toFixed(2)}) to pay $${Number(amount).toFixed(2)}. Fund the trust account first.`);
+    }
+    const { error: updErr } = await supabase
+      .from('trust_accounts')
+      .update({ current_balance: balance - amount })
+      .eq('id', account.id);
+    if (updErr) throw updErr;
+
+    await supabase.from('payment_schedules').insert({
+      user_id: userId ?? null,
+      amount: -Math.abs(amount),
+      type: 'Disbursement',
+      title,
+      status: 'PAID',
+      date_of_occurrence: new Date().toISOString().split('T')[0],
+      is_recurring: false,
+    });
   },
 
   async addFunds(journeyId: string, amount: number) {
@@ -192,7 +273,7 @@ export const financialsService = {
   async createPaymentSchedule(sched: any) {
     const { data, error } = await supabase
       .from('payment_schedules')
-      .insert([sched])
+      .insert([cleanUuids(sched)])
       .select()
       .single();
     if (error) throw error;
@@ -242,7 +323,7 @@ export const financialsService = {
   async createIpInvoice(invoice: any) {
     const { data, error } = await supabase
       .from('ip_invoices')
-      .insert([invoice])
+      .insert([cleanUuids(invoice)])
       .select()
       .single();
     if (error) throw error;

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { AgencyReimbursable, ReimbursableStatus } from '../types';
+import { financialsService } from './financialsService';
 
 const TABLE_NAME = 'agency_reimbursables';
 
@@ -70,6 +71,25 @@ export const reimbursableService = {
       if (updates.reviewNotes !== undefined) payload.review_notes = updates.reviewNotes;
       if (updates.reimbursedDate !== undefined) payload.reimbursed_date = updates.reimbursedDate;
       if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
+
+      // Marking a reimbursable as Reimbursed pays the surrogate, so deduct it
+      // from the IP trust account (blocks if balance is $0 / insufficient).
+      if (updates.status === 'Reimbursed') {
+        const { data: current } = await supabase
+          .from(TABLE_NAME)
+          .select('status, amount, approved_amount, journey_id, gc_id')
+          .eq('id', id)
+          .single();
+        if (current?.status !== 'Reimbursed') {
+          const amt = Number(current?.approved_amount ?? current?.amount ?? 0);
+          await financialsService.deductFromTrust(
+            current?.journey_id,
+            amt,
+            'Surrogate reimbursement',
+            current?.gc_id,
+          );
+        }
+      }
 
       const { error } = await supabase.from(TABLE_NAME).update(payload).eq('id', id);
       if (error) throw error;
