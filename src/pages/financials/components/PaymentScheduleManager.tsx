@@ -9,6 +9,7 @@ export const PaymentScheduleManager: React.FC = () => {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [selectedJourneyFilter, setSelectedJourneyFilter] = useState<string>('');
   const [journeys, setJourneys] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [formData, setFormData] = useState({
@@ -116,9 +117,23 @@ export const PaymentScheduleManager: React.FC = () => {
     <Card className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold">Payment Schedules & SPC Calendar</h2>
-        <Button color="blue" onClick={() => setShowModal(true)}>
-          <i className="ri-add-line mr-2"></i> Add Scheduled Payment
-        </Button>
+        <div className="flex gap-4 items-center">
+          <select 
+            className="w-full p-2 border rounded-xl dark:border-white/10 dark:bg-white/5"
+            value={selectedJourneyFilter}
+            onChange={(e) => setSelectedJourneyFilter(e.target.value)}
+          >
+            <option value="">All Journeys</option>
+            {journeys.map(j => (
+              <option key={j.id} value={j.id}>
+                {j.case_number || `Journey ${j.id.substring(0, 8)}`}
+              </option>
+            ))}
+          </select>
+          <Button color="blue" onClick={() => setShowModal(true)}>
+            <i className="ri-add-line mr-2"></i> Add Scheduled Payment
+          </Button>
+        </div>
       </div>
 
       {showModal && (
@@ -134,8 +149,6 @@ export const PaymentScheduleManager: React.FC = () => {
                   onChange={val => {
                     const selectedJourney = journeys.find(j => j.id === val);
                     const isIP = formData.type === 'Deposit';
-                    console.log('Selected Journey in PaymentScheduleManager:', selectedJourney);
-                    console.log('Auto-populating user for Type:', formData.type);
                     setFormData({ 
                       ...formData, 
                       journey_id: val,
@@ -242,7 +255,9 @@ export const PaymentScheduleManager: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {schedules.map((sched) => (
+              {schedules
+                .filter(s => selectedJourneyFilter === '' || s.journey_id === selectedJourneyFilter)
+                .map((sched) => (
                 <tr key={sched.id} className="border-b hover:bg-gray-50 dark:hover:bg-white/5">
                   <td className="py-3 px-4">
                     {sched.users?.first_name} {sched.users?.last_name}

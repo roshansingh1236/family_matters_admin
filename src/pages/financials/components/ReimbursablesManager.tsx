@@ -3,6 +3,7 @@ import Card from '../../../components/base/Card';
 import Button from '../../../components/base/Button';
 import { supabase } from '../../../lib/supabase';
 import { formatMMDDYYYY } from '../../../utils/dateFormat';
+import { financialsService } from '../../../services/financialsService';
 
 export const ReimbursablesManager: React.FC = () => {
   const [reimbursables, setReimbursables] = useState<any[]>([]);
@@ -30,16 +31,20 @@ export const ReimbursablesManager: React.FC = () => {
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      const { error } = await supabase
-        .from('agency_reimbursables')
-        .update({ status })
-        .eq('id', id);
-        
-      if (error) throw error;
+      if (status === 'Reimbursed') {
+        await financialsService.markReimbursementPaid(id);
+      } else {
+        const { error } = await supabase
+          .from('agency_reimbursables')
+          .update({ status })
+          .eq('id', id);
+          
+        if (error) throw error;
+      }
       loadReimbursables();
     } catch (e) {
       console.error(e);
-      alert('Error updating status');
+      alert('Error updating status: ' + (e as Error).message);
     }
   };
 

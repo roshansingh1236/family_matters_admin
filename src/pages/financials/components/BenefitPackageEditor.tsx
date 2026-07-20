@@ -207,6 +207,7 @@ export const BenefitPackageEditor: React.FC = () => {
             <thead>
               <tr className="border-b dark:border-white/10">
                 <th className="py-3 px-4 font-semibold text-gray-600">Surrogate</th>
+                <th className="py-3 px-4 font-semibold text-gray-600">Journey</th>
                 <th className="py-3 px-4 font-semibold text-gray-600">Signing Bonus</th>
                 <th className="py-3 px-4 font-semibold text-gray-600">Monthly Allowance</th>
                 <th className="py-3 px-4 font-semibold text-gray-600">Living Expense (Singleton)</th>
@@ -219,6 +220,9 @@ export const BenefitPackageEditor: React.FC = () => {
                 <tr key={pkg.id} className="border-b hover:bg-gray-50 dark:hover:bg-white/5">
                   <td className="py-3 px-4">
                     {pkg.users?.first_name} {pkg.users?.last_name}
+                  </td>
+                  <td className="py-3 px-4">
+                    {pkg.journeys?.case_number || 'N/A'}
                   </td>
                   <td className="py-3 px-4">${pkg.signing_bonus}</td>
                   <td className="py-3 px-4">${pkg.monthly_allowance}</td>

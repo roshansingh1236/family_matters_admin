@@ -95,7 +95,7 @@ export const financialsService = {
       }
 
       // Push notification to the surrogate.
-      void pushService.send(
+      await pushService.send(
         [data.surrogate_id],
         'New Care Package to Sign',
         'Your Surrogate Benefit Care Package is ready for your review and signature.',
@@ -281,9 +281,42 @@ export const financialsService = {
   },
 
   async updatePaymentScheduleStatus(id: string, status: 'PENDING' | 'PAID') {
+    if (status === 'PAID') {
+      const { data: schedule, error: fetchErr } = await supabase.from('payment_schedules').select('*').eq('id', id).single();
+      if (fetchErr) throw fetchErr;
+      
+      if (schedule && schedule.status !== 'PAID' && schedule.type !== 'Deposit') {
+         if (!schedule.journey_id) {
+           throw new Error('This payment is not linked to a journey, so it cannot be deducted from a trust account.');
+         }
+         await this.deductFromTrust(schedule.journey_id, schedule.amount, schedule.title || 'Scheduled Payment', schedule.user_id);
+      }
+    }
+
     const { data, error } = await supabase
       .from('payment_schedules')
       .update({ status })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async markReimbursementPaid(id: string) {
+    const { data: reimb, error: fetchErr } = await supabase.from('agency_reimbursables').select('*').eq('id', id).single();
+    if (fetchErr) throw fetchErr;
+
+    if (reimb && reimb.status !== 'Reimbursed') {
+      if (!reimb.journey_id) {
+         throw new Error('This reimbursement is not linked to a journey, so it cannot be deducted from a trust account.');
+      }
+      await this.deductFromTrust(reimb.journey_id, reimb.amount, reimb.category || 'Reimbursement', reimb.gc_id);
+    }
+
+    const { data, error } = await supabase
+      .from('agency_reimbursables')
+      .update({ status: 'Reimbursed' })
       .eq('id', id)
       .select()
       .single();
