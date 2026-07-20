@@ -55,8 +55,9 @@ export const PaymentScheduleManager: React.FC = () => {
     try {
       await financialsService.updatePaymentScheduleStatus(id, 'PAID');
       loadSchedules();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e?.message || 'Error marking payment as paid. Check console.');
     }
   };
 
