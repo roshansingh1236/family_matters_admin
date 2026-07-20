@@ -30,6 +30,8 @@ import {
 import { STORAGE_BUCKETS } from '../../../services/storageService';
 import { JourneyRoadmap } from '../JourneyRoadmap';
 import ReimbursementTracker from '../ReimbursementTracker';
+import { isImageDoc } from '../../../utils/userDocuments';
+import GalleryPhoto from '../../base/GalleryPhoto';
 
 interface ParentProfileContentProps {
   id: string;
@@ -144,6 +146,7 @@ function parentStateFromRow(data: Record<string, any>) {
 
 const TABS = [
     { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line' },
+    { id: 'gallery', label: 'Gallery', icon: 'ri-image-line' },
     { id: 'application', label: 'Signup & App', icon: 'ri-file-user-line' },
     { id: 'personal', label: 'Detailed Application (Form 2)', icon: 'ri-profile-line' },
     { id: 'medical', label: 'Medical & Fertility', icon: 'ri-heart-pulse-line' },
@@ -525,6 +528,54 @@ export default function ParentProfileContent({
                     </div>
                 </div>
             )}
+
+            {activeTab === 'gallery' && (() => {
+                const personalPhotos = (parent.documents ?? []).filter(
+                    (f: any) => String(f?.category ?? '').toLowerCase() === 'personal' && isImageDoc(f)
+                );
+
+                return (
+                    <Card>
+                        <div className="p-4">
+                            <div className="mb-6">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Photo Gallery</h3>
+                                <p className="text-sm text-gray-500 mt-1">Photos uploaded with the "Personal" tag in Documents.</p>
+                            </div>
+                            {personalPhotos.length === 0 ? (
+                                <div className="p-12 text-center border-dashed border-2 rounded-2xl">
+                                    <i className="ri-image-2-line text-4xl text-gray-300 mb-4"></i>
+                                    <h4 className="text-base font-semibold text-gray-700 dark:text-gray-200">No Personal Photos</h4>
+                                    <p className="text-gray-500 mt-2">Upload photos under the "Personal" category in the Documents tab to see them here.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+                                    {personalPhotos.map((file: any, index: number) => (
+                                        <a
+                                            key={`${file.path || file.url}-${index}`}
+                                            href={file.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="group relative aspect-square overflow-hidden rounded-2xl bg-gray-100 dark:bg-[#15111f]"
+                                        >
+                                            <GalleryPhoto
+                                                url={file.url}
+                                                name={file.name}
+                                                type={file.type}
+                                                alt={file.name}
+                                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                                            <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 transition-opacity group-hover:opacity-100">
+                                                <p className="truncate text-xs font-medium text-white">{file.name}</p>
+                                            </div>
+                                        </a>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+                );
+            })()}
 
             {activeTab === 'application' && (
                 <div className="grid grid-cols-1 gap-6">

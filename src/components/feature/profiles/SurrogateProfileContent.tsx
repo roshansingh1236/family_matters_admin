@@ -10,6 +10,7 @@ import AboutSection from '../AboutSection';
 import FileUploadSection from '../../data/FileUploadSection';
 import Toast from '../../base/Toast';
 import Badge from '../../base/Badge';
+import GalleryPhoto from '../../base/GalleryPhoto';
 import { storageService, STORAGE_BUCKETS } from '../../../services/storageService';
 import { approvalSyncFields } from '../../../utils/approvalStatus';
 import { medicalService, type Medication } from '../../../services/medicalService';
@@ -33,7 +34,7 @@ import {
   resolveSurrogateIntakeProfile
 } from '../../../utils/surrogateFormData';
 import { medicalIntakeProfileSource } from '../../../utils/surrogateMedicalFromProfile';
-import { normalizeUserDocuments } from '../../../utils/userDocuments';
+import { normalizeUserDocuments, isImageDoc } from '../../../utils/userDocuments';
 import SurrogateMedicalIntakeView from '../../data/SurrogateMedicalIntakeView';
 import { JourneyRoadmap } from '../JourneyRoadmap';
 import ReimbursementTracker from '../ReimbursementTracker';
@@ -621,15 +622,53 @@ export default function SurrogateProfileContent({
             </Card>
         )}
 
-        {activeTab === 'gallery' && (
-            <Card>
-                <div className="p-12 text-center border-dashed border-2">
-                    <i className="ri-image-2-line text-4xl text-gray-300 mb-4"></i>
-                    <h3 className="text-lg font-bold">Photo Gallery</h3>
-                    <p className="text-gray-500 mt-2">Surrogate lifestyle and family photos will appear here.</p>
-                </div>
-            </Card>
-        )}
+        {activeTab === 'gallery' && (() => {
+            const personalPhotos = (surrogate.documents ?? []).filter(
+                (f: any) => String(f?.category ?? '').toLowerCase() === 'personal' && isImageDoc(f)
+            );
+
+            return (
+                <Card>
+                    <div className="p-4">
+                        <div className="mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Photo Gallery</h3>
+                            <p className="text-sm text-gray-500 mt-1">Photos uploaded with the "Personal" tag in Documents.</p>
+                        </div>
+                        {personalPhotos.length === 0 ? (
+                            <div className="p-12 text-center border-dashed border-2 rounded-2xl">
+                                <i className="ri-image-2-line text-4xl text-gray-300 mb-4"></i>
+                                <h4 className="text-base font-semibold text-gray-700 dark:text-gray-200">No Personal Photos</h4>
+                                <p className="text-gray-500 mt-2">Upload photos under the "Personal" category in the Documents tab to see them here.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+                                {personalPhotos.map((file: any, index: number) => (
+                                    <a
+                                        key={`${file.path || file.url}-${index}`}
+                                        href={file.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="group relative aspect-square overflow-hidden rounded-2xl bg-gray-100 dark:bg-[#15111f]"
+                                    >
+                                        <GalleryPhoto
+                                            url={file.url}
+                                            name={file.name}
+                                            type={file.type}
+                                            alt={file.name}
+                                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                                        <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 transition-opacity group-hover:opacity-100">
+                                            <p className="truncate text-xs font-medium text-white">{file.name}</p>
+                                        </div>
+                                    </a>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </Card>
+            );
+        })()}
 
         {activeTab === 'application' && (
               <div className="grid grid-cols-1 gap-6">
