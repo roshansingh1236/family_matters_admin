@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Card from '../../../components/base/Card';
 import Button from '../../../components/base/Button';
 import SearchableDropdown from '../../../components/base/SearchableDropdown';
 import { financialsService } from '../../../services/financialsService';
+import { matchService } from '../../../services/matchService';
+import { SurrogateBenefitPackagePdfEditor } from './SurrogateBenefitPackagePdfEditor';
 
 export const BenefitPackageEditor: React.FC = () => {
   const [packages, setPackages] = useState<any[]>([]);
@@ -10,6 +12,7 @@ export const BenefitPackageEditor: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [journeys, setJourneys] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [matches, setMatches] = useState<any[]>([]);
   const [formData, setFormData] = useState<any>({
     id: undefined,
     journey_id: '',
@@ -31,10 +34,14 @@ export const BenefitPackageEditor: React.FC = () => {
 
   const loadLookups = async () => {
     try {
-      const jData = await financialsService.getJourneys();
-      const uData = await financialsService.getUsers();
+      const [jData, uData, mData] = await Promise.all([
+        financialsService.getJourneys().catch(() => []),
+        financialsService.getUsers().catch(() => []),
+        matchService.getAllMatches().catch(() => [])
+      ]);
       setJourneys(jData || []);
       setUsers(uData || []);
+      setMatches(mData || []);
     } catch (e) {
       console.error(e);
     }
@@ -51,12 +58,43 @@ export const BenefitPackageEditor: React.FC = () => {
     }
   };
 
+  const surrogateOptions = useMemo(() => {
+    const optionsMap = new Map<string, string>();
+
+    // 1. Surrogates from active/accepted matches
+    const activeMatches = matches.filter(m => m.status === 'Active' || m.status === 'Accepted');
+    const matchesToUse = activeMatches.length > 0 ? activeMatches : matches;
+
+    matchesToUse.forEach(m => {
+      const gcId = m.gestationalCarrierId || m.gestational_carrier_id || m.surrogate_id;
+      if (gcId && !optionsMap.has(gcId)) {
+        const gcUser = m.gestationalCarrierData || users.find(u => u.id === gcId);
+        const gcName = gcUser ? `${gcUser.first_name} ${gcUser.last_name}`.trim() : `Surrogate (${gcId.substring(0, 8)})`;
+        const ipUser = m.intendedParentData;
+        const ipName = ipUser ? `${ipUser.first_name} ${ipUser.last_name}`.trim() : '';
+        const label = gcName + (ipName ? ` (Matched with ${ipName})` : '');
+        optionsMap.set(gcId, label);
+      }
+    });
+
+    // 2. Fallback for any surrogates/gestational carriers in users
+    users
+      .filter(u => u.role === 'gestationalCarrier' || u.role === 'surrogate')
+      .forEach(u => {
+        if (!optionsMap.has(u.id)) {
+          optionsMap.set(u.id, `${u.first_name} ${u.last_name}`.trim());
+        }
+      });
+
+    return Array.from(optionsMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [matches, users]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (formData.id) {
         // Editing existing package
-        const { id, journey_id, surrogate_id, ...updates } = formData;
+        const { id, ...updates } = formData;
         await financialsService.updateBenefitPackage(id, updates);
       } else {
         // Creating new
@@ -109,93 +147,71 @@ export const BenefitPackageEditor: React.FC = () => {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-lg w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">{formData.id ? 'Edit Benefit Package' : 'Create New Package'}</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Journey ID</label>
-                <SearchableDropdown
-                  options={journeys.map(j => ({ id: j.id, name: j.case_number || `Journey ${j.id.substring(0, 8)}` }))}
-                  value={formData.journey_id}
-                  onChange={val => {
-                    const selectedJourney = journeys.find(j => j.id === val);
-                    console.log('Selected Journey in BenefitPackageEditor:', selectedJourney);
-                    console.log('Gestational Carrier (Surrogate) ID for this journey:', selectedJourney?.gestational_carrier_id || selectedJourney?.surrogate_id);
-                    setFormData({ 
-                      ...formData, 
-                      journey_id: val,
-                      surrogate_id: selectedJourney?.gestational_carrier_id || selectedJourney?.surrogate_id || ''
-                    });
-                  }}
-                  placeholder="Select Journey"
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl max-h-[92vh] overflow-y-auto border border-slate-200 dark:border-slate-700">
+              <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <i className="ri-file-text-line text-purple-600"></i>
+                  {formData.id ? 'Edit Benefit Package PDF' : 'Create New Care Package PDF'}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xl font-bold p-1 rounded-lg"
+                >
+                  <i className="ri-close-line"></i>
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
+                    Select Surrogate (Active Matches)
+                  </label>
+                  <SearchableDropdown
+                    options={surrogateOptions}
+                    value={formData.surrogate_id}
+                    onChange={val => {
+                      const match = matches.find(m =>
+                        m.gestationalCarrierId === val ||
+                        m.gestational_carrier_id === val ||
+                        m.surrogate_id === val
+                      );
+                      const j = journeys.find(jx =>
+                        jx.gestational_carrier_id === val || jx.surrogate_id === val
+                      );
+                      const resolvedJourneyId = match?.journeyId || match?.journey_id || j?.id || '';
+
+                      setFormData({
+                        ...formData,
+                        surrogate_id: val,
+                        journey_id: resolvedJourneyId
+                      });
+                    }}
+                    placeholder="Select Surrogate"
+                    required
+                  />
+                </div>
+
+                {/* Interactive PDF Document Layout with Inline Editable Amount Fields */}
+                <SurrogateBenefitPackagePdfEditor
+                  formData={formData}
+                  setFormData={setFormData}
+                  surrogateName={
+                    surrogateOptions.find(o => o.id === formData.surrogate_id)?.name || ''
+                  }
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Surrogate ID</label>
-                <SearchableDropdown
-                  options={users
-                    .filter(u => {
-                      if (formData.journey_id) {
-                        const j = journeys.find(jx => jx.id === formData.journey_id);
-                        return u.id === (j?.gestational_carrier_id || j?.surrogate_id);
-                      }
-                      return u.role === 'gestationalCarrier' || u.role === 'surrogate';
-                    })
-                    .map(u => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))}
-                  value={formData.surrogate_id}
-                  onChange={val => setFormData({ ...formData, surrogate_id: val })}
-                  placeholder="Select Surrogate"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Signing Bonus ($)</label>
-                  <input type="number" required className="w-full border rounded p-2 text-black" 
-                    value={formData.signing_bonus} onChange={e => setFormData({...formData, signing_bonus: Number(e.target.value)})} />
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md p-2 rounded-b-xl z-20">
+                  <Button variant="outline" type="button" onClick={() => setShowModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button color="blue" type="submit" className="shadow-lg shadow-blue-500/20">
+                    <i className="ri-save-line mr-1.5"></i> Save Package
+                  </Button>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Monthly Allowance ($)</label>
-                  <input type="number" required className="w-full border rounded p-2 text-black" 
-                    value={formData.monthly_allowance} onChange={e => setFormData({...formData, monthly_allowance: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Base Compensation (Singleton) ($)</label>
-                  <input type="number" required className="w-full border rounded p-2 text-black" 
-                    value={formData.singleton_living_expense} onChange={e => setFormData({...formData, singleton_living_expense: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Multiples Fee (per additional) ($)</label>
-                  <input type="number" required className="w-full border rounded p-2 text-black" 
-                    value={formData.multiples_living_expense} onChange={e => setFormData({...formData, multiples_living_expense: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Embryo Transfer Fee ($)</label>
-                  <input type="number" required className="w-full border rounded p-2 text-black" 
-                    value={formData.embryo_transfer_fee} onChange={e => setFormData({...formData, embryo_transfer_fee: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Maternity Clothing ($)</label>
-                  <input type="number" required className="w-full border rounded p-2 text-black" 
-                    value={formData.maternity_clothing} onChange={e => setFormData({...formData, maternity_clothing: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Housekeeping Allowance ($)</label>
-                  <input type="number" required className="w-full border rounded p-2 text-black" 
-                    value={formData.housekeeping_allowance} onChange={e => setFormData({...formData, housekeeping_allowance: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Support Group Allowance ($)</label>
-                  <input type="number" required className="w-full border rounded p-2 text-black" 
-                    value={formData.support_group_allowance} onChange={e => setFormData({...formData, support_group_allowance: Number(e.target.value)})} />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-6">
-                <Button variant="outline" type="button" onClick={() => setShowModal(false)}>Cancel</Button>
-                <Button color="blue" type="submit">Save Package</Button>
-              </div>
-            </form>
-          </div>
+              </form>
+            </div>
         </div>
       )}
 
