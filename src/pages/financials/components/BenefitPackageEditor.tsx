@@ -10,12 +10,10 @@ export const BenefitPackageEditor: React.FC = () => {
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [journeys, setJourneys] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [matches, setMatches] = useState<any[]>([]);
   const [formData, setFormData] = useState<any>({
     id: undefined,
-    journey_id: '',
     surrogate_id: '',
     signing_bonus: 2000,
     monthly_allowance: 400,
@@ -34,12 +32,10 @@ export const BenefitPackageEditor: React.FC = () => {
 
   const loadLookups = async () => {
     try {
-      const [jData, uData, mData] = await Promise.all([
-        financialsService.getJourneys().catch(() => []),
+      const [uData, mData] = await Promise.all([
         financialsService.getUsers().catch(() => []),
         matchService.getAllMatches().catch(() => [])
       ]);
-      setJourneys(jData || []);
       setUsers(uData || []);
       setMatches(mData || []);
     } catch (e) {
@@ -59,34 +55,46 @@ export const BenefitPackageEditor: React.FC = () => {
   };
 
   const surrogateOptions = useMemo(() => {
-    const optionsMap = new Map<string, string>();
+    const isSurrogateRole = (role: string) =>
+      ['surrogate', 'gestationalcarrier', 'gestational carrier', 'gestational_carrier']
+        .includes((role || '').toLowerCase().trim());
 
-    // 1. Surrogates from active/accepted matches
-    const activeMatches = matches.filter(m => m.status === 'Active' || m.status === 'Accepted');
-    const matchesToUse = activeMatches.length > 0 ? activeMatches : matches;
-
-    matchesToUse.forEach(m => {
+    // Map surrogate id -> intended parent name, so matched surrogates keep their context
+    const matchLabels = new Map<string, string>();
+    matches.forEach(m => {
       const gcId = m.gestationalCarrierId || m.gestational_carrier_id || m.surrogate_id;
-      if (gcId && !optionsMap.has(gcId)) {
-        const gcUser = m.gestationalCarrierData || users.find(u => u.id === gcId);
-        const gcName = gcUser ? `${gcUser.first_name} ${gcUser.last_name}`.trim() : `Surrogate (${gcId.substring(0, 8)})`;
-        const ipUser = m.intendedParentData;
-        const ipName = ipUser ? `${ipUser.first_name} ${ipUser.last_name}`.trim() : '';
-        const label = gcName + (ipName ? ` (Matched with ${ipName})` : '');
-        optionsMap.set(gcId, label);
-      }
+      if (!gcId || matchLabels.has(gcId)) return;
+      const ipUser = m.intendedParentData;
+      const ipName = ipUser ? `${ipUser.first_name} ${ipUser.last_name}`.trim() : '';
+      if (ipName) matchLabels.set(gcId, ipName);
     });
 
-    // 2. Fallback for any surrogates/gestational carriers in users
+    const optionsMap = new Map<string, string>();
+
+    // 1. Every surrogate in the system, matched or not
     users
-      .filter(u => u.role === 'gestationalCarrier' || u.role === 'surrogate')
+      .filter(u => isSurrogateRole(u.role))
       .forEach(u => {
-        if (!optionsMap.has(u.id)) {
-          optionsMap.set(u.id, `${u.first_name} ${u.last_name}`.trim());
-        }
+        const name = `${u.first_name || ''} ${u.last_name || ''}`.trim() || `Surrogate (${u.id.substring(0, 8)})`;
+        const ipName = matchLabels.get(u.id);
+        optionsMap.set(u.id, name + (ipName ? ` (Matched with ${ipName})` : ''));
       });
 
-    return Array.from(optionsMap.entries()).map(([id, name]) => ({ id, name }));
+    // 2. Surrogates referenced by a match but missing from the users list
+    matches.forEach(m => {
+      const gcId = m.gestationalCarrierId || m.gestational_carrier_id || m.surrogate_id;
+      if (!gcId || optionsMap.has(gcId)) return;
+      const gcUser = m.gestationalCarrierData || users.find(u => u.id === gcId);
+      const gcName = gcUser
+        ? `${gcUser.first_name || ''} ${gcUser.last_name || ''}`.trim()
+        : `Surrogate (${gcId.substring(0, 8)})`;
+      const ipName = matchLabels.get(gcId);
+      optionsMap.set(gcId, gcName + (ipName ? ` (Matched with ${ipName})` : ''));
+    });
+
+    return Array.from(optionsMap.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [matches, users]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -129,7 +137,6 @@ export const BenefitPackageEditor: React.FC = () => {
         <Button color="blue" onClick={() => {
           setFormData({
             id: undefined,
-            journey_id: '',
             surrogate_id: '',
             signing_bonus: 2000,
             monthly_allowance: 400,
@@ -166,28 +173,12 @@ export const BenefitPackageEditor: React.FC = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
-                    Select Surrogate (Active Matches)
+                    Select Surrogate
                   </label>
                   <SearchableDropdown
                     options={surrogateOptions}
                     value={formData.surrogate_id}
-                    onChange={val => {
-                      const match = matches.find(m =>
-                        m.gestationalCarrierId === val ||
-                        m.gestational_carrier_id === val ||
-                        m.surrogate_id === val
-                      );
-                      const j = journeys.find(jx =>
-                        jx.gestational_carrier_id === val || jx.surrogate_id === val
-                      );
-                      const resolvedJourneyId = match?.journeyId || match?.journey_id || j?.id || '';
-
-                      setFormData({
-                        ...formData,
-                        surrogate_id: val,
-                        journey_id: resolvedJourneyId
-                      });
-                    }}
+                    onChange={val => setFormData({ ...formData, surrogate_id: val })}
                     placeholder="Select Surrogate"
                     required
                   />
@@ -223,7 +214,6 @@ export const BenefitPackageEditor: React.FC = () => {
             <thead>
               <tr className="border-b dark:border-white/10">
                 <th className="py-3 px-4 font-semibold text-gray-600">Surrogate</th>
-                <th className="py-3 px-4 font-semibold text-gray-600">Journey</th>
                 <th className="py-3 px-4 font-semibold text-gray-600">Signing Bonus</th>
                 <th className="py-3 px-4 font-semibold text-gray-600">Monthly Allowance</th>
                 <th className="py-3 px-4 font-semibold text-gray-600">Living Expense (Singleton)</th>
@@ -236,9 +226,6 @@ export const BenefitPackageEditor: React.FC = () => {
                 <tr key={pkg.id} className="border-b hover:bg-gray-50 dark:hover:bg-white/5">
                   <td className="py-3 px-4">
                     {pkg.users?.first_name} {pkg.users?.last_name}
-                  </td>
-                  <td className="py-3 px-4">
-                    {pkg.journeys?.case_number || 'N/A'}
                   </td>
                   <td className="py-3 px-4">${pkg.signing_bonus}</td>
                   <td className="py-3 px-4">${pkg.monthly_allowance}</td>
@@ -256,7 +243,6 @@ export const BenefitPackageEditor: React.FC = () => {
                     <Button variant="outline" size="sm" onClick={() => {
                       setFormData({
                         id: pkg.id,
-                        journey_id: pkg.journey_id,
                         surrogate_id: pkg.surrogate_id,
                         signing_bonus: pkg.signing_bonus,
                         monthly_allowance: pkg.monthly_allowance,

@@ -149,7 +149,6 @@ CREATE POLICY "Contracts visible to linked parent or surrogate"
 -- Surrogate Benefit Packages
 CREATE TABLE IF NOT EXISTS public.surrogate_benefit_packages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    journey_id UUID REFERENCES public.journeys(id) ON DELETE CASCADE NOT NULL UNIQUE,
     surrogate_id UUID REFERENCES public.users(id) NOT NULL,
     signing_bonus DECIMAL(12,2) DEFAULT 2000.00,
     monthly_allowance DECIMAL(12,2) DEFAULT 400.00,
@@ -234,7 +233,6 @@ DROP POLICY IF EXISTS "monthly_payment_forms_admin_delete" ON public.monthly_pay
 CREATE POLICY "monthly_payment_forms_admin_delete" ON public.monthly_payment_forms FOR DELETE USING (public.check_is_admin());
 
 -- Ensure foreign key constraints are updated to ON DELETE CASCADE for existing tables
-ALTER TABLE public.surrogate_benefit_packages DROP CONSTRAINT IF EXISTS surrogate_benefit_packages_journey_id_fkey, ADD CONSTRAINT surrogate_benefit_packages_journey_id_fkey FOREIGN KEY (journey_id) REFERENCES public.journeys(id) ON DELETE CASCADE;
 ALTER TABLE public.payment_schedules DROP CONSTRAINT IF EXISTS payment_schedules_journey_id_fkey, ADD CONSTRAINT payment_schedules_journey_id_fkey FOREIGN KEY (journey_id) REFERENCES public.journeys(id) ON DELETE CASCADE;
 ALTER TABLE public.trust_accounts DROP CONSTRAINT IF EXISTS trust_accounts_journey_id_fkey, ADD CONSTRAINT trust_accounts_journey_id_fkey FOREIGN KEY (journey_id) REFERENCES public.journeys(id) ON DELETE CASCADE;
 ALTER TABLE public.monthly_payment_forms DROP CONSTRAINT IF EXISTS monthly_payment_forms_journey_id_fkey, ADD CONSTRAINT monthly_payment_forms_journey_id_fkey FOREIGN KEY (journey_id) REFERENCES public.journeys(id) ON DELETE CASCADE;

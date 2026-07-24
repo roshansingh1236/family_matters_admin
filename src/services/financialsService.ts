@@ -46,7 +46,7 @@ export const financialsService = {
   async getBenefitPackages() {
     const { data, error } = await supabase
       .from('surrogate_benefit_packages')
-      .select('*, journeys(*), users!surrogate_id(*)');
+      .select('*, users!surrogate_id(*)');
     if (error) throw error;
     return data;
   },
