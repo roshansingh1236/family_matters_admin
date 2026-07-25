@@ -3,11 +3,11 @@ import { supabase } from '../../lib/supabase';
 
 // Shared "Add User" modal used on the Parents and Surrogates list pages.
 //
-// Mirrors RecordInquiryDialog's pattern (optional Auth signUp using phone as
-// the initial password, then insert into public.users) but is targeted at
-// staff manually onboarding a new Intended Parent or Surrogate that the
-// agency is working with directly — rather than recording an inbound phone
-// inquiry.
+// For Surrogates: a Password field is shown and an Auth account is created
+// immediately so the surrogate can log into the mobile app and self-onboard.
+//
+// For Intended Parents: keeps the existing phone-as-password fallback behaviour
+// unchanged (Auth account created only if phone ≥ 6 characters).
 //
 // The created row is left with `profile_completed = false` so the person
 // still sees the role-specific multi-step intake on first login.
@@ -34,6 +34,7 @@ const STATUS_BY_ROLE: Record<Role, string> = {
 
 const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -41,11 +42,12 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
     phone: '',
     location: '',
     notes: '',
+    password: '',
   });
 
   if (!isOpen) return null;
 
-  const resetForm = () =>
+  const resetForm = () => {
     setFormData({
       firstName: '',
       lastName: '',
@@ -53,7 +55,10 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
       phone: '',
       location: '',
       notes: '',
+      password: '',
     });
+    setShowPassword(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,15 +84,17 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
         },
       };
 
-      // If an email is supplied, try to create an Auth user so the person can
-      // log into the mobile app and complete their intake. Mirrors the logic
-      // in RecordInquiryDialog — uses the phone number as the initial
-      // password when it meets the 6-char minimum.
       if (formData.email) {
-        if (formData.phone && formData.phone.length >= 6) {
+        if (role === 'Surrogate') {
+          // For surrogates: use the explicit password field to create an Auth
+          // account so they can immediately log in and complete their intake.
+          const password = formData.password;
+          if (!password || password.length < 6) {
+            throw new Error('Password must be at least 6 characters.');
+          }
           const { data: authData, error: authError } = await supabase.auth.signUp({
             email: formData.email,
-            password: formData.phone,
+            password,
             options: {
               data: { full_name: fullName, role },
             },
@@ -98,6 +105,24 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
           }
           if (authData?.user) {
             data.id = authData.user.id;
+          }
+        } else {
+          // Intended Parents: keep original phone-as-password fallback.
+          if (formData.phone && formData.phone.length >= 6) {
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+              email: formData.email,
+              password: formData.phone,
+              options: {
+                data: { full_name: fullName, role },
+              },
+            });
+
+            if (authError && !authError.message.includes('User already registered')) {
+              throw authError;
+            }
+            if (authData?.user) {
+              data.id = authData.user.id;
+            }
           }
         }
       }
@@ -117,6 +142,9 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
       setLoading(false);
     }
   };
+
+  const inputClass =
+    'w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -144,7 +172,7 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
                   required
                   value={formData.firstName}
                   onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                  className={inputClass}
                   placeholder="First name"
                 />
               </div>
@@ -157,7 +185,7 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
                   required
                   value={formData.lastName}
                   onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                  className={inputClass}
                   placeholder="Last name"
                 />
               </div>
@@ -172,10 +200,41 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                className={inputClass}
                 placeholder="person@example.com"
               />
             </div>
+
+            {/* Password field — only for Surrogates */}
+            {role === 'Surrogate' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Login Password *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className={`${inputClass} pr-10`}
+                    placeholder="Min. 6 characters"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    <i className={showPassword ? 'ri-eye-off-line' : 'ri-eye-line'}></i>
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  The surrogate will use this password to log in to the mobile app and complete their profile.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -186,7 +245,7 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                  className={inputClass}
                   placeholder="555-555-1234"
                 />
               </div>
@@ -198,7 +257,7 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                  className={inputClass}
                   placeholder="City, State"
                 />
               </div>
@@ -212,15 +271,17 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
                 rows={3}
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none resize-none"
+                className={`${inputClass} resize-none`}
                 placeholder="Any context for this record…"
               />
             </div>
 
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              If the phone number is 6+ characters, an Auth account will be created using it as the
-              initial password so the person can sign in and complete their intake form.
-            </p>
+            {role === 'Intended Parent' && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                If the phone number is 6+ characters, an Auth account will be created using it as the
+                initial password so the person can sign in and complete their intake form.
+              </p>
+            )}
 
             <div className="flex justify-end gap-3 mt-6">
               <button

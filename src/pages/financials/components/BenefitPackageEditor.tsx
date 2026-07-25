@@ -12,6 +12,27 @@ export const BenefitPackageEditor: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [matches, setMatches] = useState<any[]>([]);
+  const DEFAULT_DATA_FEES = {
+    cancelled_cycle_fee: 500,
+    dc_fee: 500,
+    abortion_before_20wks_fee: 1500,
+    abortion_after_20wks_fee: 3000,
+    ectopic_fee: 500,
+    cvs_amnio_fee: 500,
+    hysteroscopy_fee: 500,
+    cervical_cerclage_fee: 500,
+    uterine_biopsy_fee: 500,
+    loss_of_ovary_fee: 1500,
+    loss_of_uterus_fee: 6000,
+    csection_fee: 3000,
+    bed_rest_childcare_per_week: 325,
+    bed_rest_housekeeping_per_week: 75,
+    relaxation_therapy_fee: 1000,
+    breast_milk_per_week: 400,
+    life_insurance_fee: 1200,
+    partner_lost_wages_per_day: 150,
+  };
+
   const [formData, setFormData] = useState<any>({
     id: undefined,
     surrogate_id: '',
@@ -22,7 +43,8 @@ export const BenefitPackageEditor: React.FC = () => {
     multiples_living_expense: 10000,
     maternity_clothing: 1000,
     housekeeping_allowance: 1400,
-    support_group_allowance: 100
+    support_group_allowance: 100,
+    data: { ...DEFAULT_DATA_FEES },
   });
 
   useEffect(() => {
@@ -145,7 +167,8 @@ export const BenefitPackageEditor: React.FC = () => {
             multiples_living_expense: 10000,
             maternity_clothing: 1000,
             housekeeping_allowance: 1400,
-            support_group_allowance: 100
+            support_group_allowance: 100,
+            data: { ...DEFAULT_DATA_FEES },
           });
           setShowModal(true);
         }}>
@@ -251,7 +274,9 @@ export const BenefitPackageEditor: React.FC = () => {
                         multiples_living_expense: pkg.multiples_living_expense,
                         maternity_clothing: pkg.maternity_clothing,
                         housekeeping_allowance: pkg.housekeeping_allowance,
-                        support_group_allowance: pkg.support_group_allowance
+                        support_group_allowance: pkg.support_group_allowance,
+                        // Merge saved procedure fees from DB with defaults for any missing keys
+                        data: { ...DEFAULT_DATA_FEES, ...(pkg.data || {}) },
                       });
                       setShowModal(true);
                     }}>Edit</Button>

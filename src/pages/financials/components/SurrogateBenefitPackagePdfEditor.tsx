@@ -13,6 +13,7 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
 }) => {
   const [activePage, setActivePage] = useState<number | 'all'>('all');
 
+  // Updates a top-level field (signing_bonus, monthly_allowance, etc.)
   const updateField = (field: string, val: number) => {
     setFormData({
       ...formData,
@@ -20,15 +21,47 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
     });
   };
 
+  // Updates a field inside formData.data (procedure fees, etc.)
+  const updateDataField = (field: string, val: number) => {
+    setFormData({
+      ...formData,
+      data: {
+        ...(formData.data || {}),
+        [field]: val
+      }
+    });
+  };
+
+  const inputClass =
+    'w-24 text-right font-black text-slate-900 dark:text-white bg-transparent outline-none focus:ring-2 focus:ring-purple-500 rounded px-1';
+  const wrapClass =
+    'inline-flex items-center gap-1 font-bold text-slate-900 dark:text-white bg-purple-50 dark:bg-purple-950/80 border border-purple-400 dark:border-purple-500 rounded px-2 py-0.5 shadow-sm';
+  const dollarSign = <span className="text-purple-700 dark:text-purple-300 font-bold">$</span>;
+
+  // Renders an editable input for a TOP-LEVEL formData field
   const renderAmountInput = (field: string, defaultValue: number) => (
-    <span className="inline-flex items-center gap-1 font-bold text-slate-900 dark:text-white bg-purple-50 dark:bg-purple-950/80 border border-purple-400 dark:border-purple-500 rounded px-2 py-0.5 shadow-sm">
-      <span className="text-purple-700 dark:text-purple-300 font-bold">$</span>
+    <span className={wrapClass}>
+      {dollarSign}
       <input
         type="number"
         step="0.01"
-        className="w-28 text-right font-black text-slate-900 dark:text-white bg-transparent outline-none focus:ring-2 focus:ring-purple-500 rounded px-1"
+        className={inputClass}
         value={formData[field] !== undefined ? formData[field] : defaultValue}
         onChange={(e) => updateField(field, Number(e.target.value))}
+      />
+    </span>
+  );
+
+  // Renders an editable input for a field inside formData.data
+  const renderDataAmountInput = (field: string, defaultValue: number) => (
+    <span className={wrapClass}>
+      {dollarSign}
+      <input
+        type="number"
+        step="0.01"
+        className={inputClass}
+        value={formData.data?.[field] !== undefined ? formData.data[field] : defaultValue}
+        onChange={(e) => updateDataField(field, Number(e.target.value))}
       />
     </span>
   );
@@ -66,7 +99,7 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
       <div className="flex items-center justify-between bg-purple-50 dark:bg-slate-900 p-3 rounded-xl border border-purple-200 dark:border-purple-800/80 sticky top-0 z-10 backdrop-blur-md shadow-sm">
         <div className="text-xs font-bold text-purple-950 dark:text-purple-200 flex items-center gap-2">
           <i className="ri-file-pdf-2-line text-xl text-purple-600"></i>
-          <span>Official 8-Page Care Package PDF Editor (Interactive Pricing Audit)</span>
+          <span>Official 8-Page Care Package PDF Editor (All Amounts Editable)</span>
         </div>
         <div className="flex gap-1 overflow-x-auto">
           <button
@@ -99,12 +132,12 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
 
       {/* Document Pages Container */}
       <div className="space-y-8 bg-slate-200 dark:bg-slate-950 p-4 rounded-2xl border border-slate-300 dark:border-slate-800 max-h-[70vh] overflow-y-auto">
-        
+
         {/* PAGE 1 */}
         {(activePage === 'all' || activePage === 1) && (
           <div className="bg-white dark:bg-slate-900 border-4 border-purple-300 dark:border-purple-800 rounded-xl p-8 shadow-xl text-slate-800 dark:text-slate-100">
             <HeaderPage pageNum={1} />
-            
+
             <div className="text-center my-6">
               <h1 className="text-2xl font-black tracking-widest text-purple-950 dark:text-purple-200 uppercase border-b-2 border-purple-300 dark:border-purple-800 inline-block pb-1">
                 SURROGATE BENEFIT
@@ -128,7 +161,7 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
                   {renderAmountInput('signing_bonus', 2000)}
                 </div>
                 <p className="text-slate-700 dark:text-slate-300 text-xs leading-relaxed">
-                  $2,000.00 Paid to the Gestational Carrier once legal is complete. If the Gestational Carrier (Surrogate) does not complete at least one transfer, these funds must be returned to the Intended Parent(s).
+                  Paid to the Gestational Carrier once legal is complete. If the Gestational Carrier (Surrogate) does not complete at least one transfer, these funds must be returned to the Intended Parent(s).
                 </p>
               </div>
 
@@ -138,7 +171,7 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
                   {renderAmountInput('monthly_allowance', 400)}
                 </div>
                 <p className="text-slate-700 dark:text-slate-300 text-xs leading-relaxed mb-2">
-                  Monthly Allowance covers the Surrogates’ expenses including, but not limited, to parking, phone, fax, notary, postage, meals, childcare, and vitamins (non Rx) and lost wages to attend IVF/OB appointments.
+                  Monthly Allowance covers the Surrogates' expenses including, but not limited, to parking, phone, fax, notary, postage, meals, childcare, and vitamins (non Rx) and lost wages to attend IVF/OB appointments.
                 </p>
                 <p className="text-slate-700 dark:text-slate-300 text-xs leading-relaxed mb-2">
                   Multiple pregnancies will have a monthly non-accountable of $500.00 due to the increased number of pregnancy appointments (starting the 1st of the month after the 16th week from the embryo transfer).
@@ -234,14 +267,16 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
                 </ul>
               </div>
 
+              {/* Evaluation / Cancelled Cycle — now editable */}
               <div className="flex justify-between items-center bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60">
                 <div>
                   <span className="font-extrabold text-purple-950 dark:text-purple-200 text-sm underline">Evaluation / Cancelled Cycle:</span>
                   <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5">Mock cycle or cancelled transfer after progesterone injection start at no fault of Surrogate.</p>
                 </div>
-                <span className="font-black text-purple-950 dark:text-purple-200 text-base bg-purple-100 dark:bg-purple-900 px-3 py-1 rounded-lg border border-purple-300">$500.00</span>
+                {renderDataAmountInput('cancelled_cycle_fee', 500)}
               </div>
 
+              {/* Maternity Clothing — top-level field */}
               <div className="bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60">
                 <div className="flex justify-between items-center font-extrabold text-sm text-purple-950 dark:text-purple-200 border-b border-purple-200 dark:border-purple-700 pb-1.5 mb-1.5">
                   <span className="underline">Maternity Clothing Allowance:</span>
@@ -250,19 +285,38 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
                 <p className="text-xs text-slate-700 dark:text-slate-300">Paid on the first of the month following the 16th gestational week of pregnancy.</p>
               </div>
 
+              {/* Invasive Procedures — all editable */}
               <div className="bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60">
                 <div className="flex justify-between items-center font-extrabold text-purple-950 dark:text-purple-200 text-sm mb-1.5 border-b border-purple-200 pb-1">
                   <span className="underline">Invasive Procedure(s):</span>
-                  <span className="font-black">$750.00 to $6,000.00</span>
+                  <span className="font-black text-xs text-slate-500 dark:text-slate-400 italic">Range — see below</span>
                 </div>
-                <p className="text-xs italic text-slate-600 dark:text-slate-400 mb-2">A doctor’s note may be required to be reimbursed.</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-700 dark:text-slate-300">
-                  <div>• D&C: <span className="font-bold text-slate-900 dark:text-white">$500.00</span></div>
-                  <div>• Abortion (prior to 20 wks): <span className="font-bold text-slate-900 dark:text-white">$1,500.00</span></div>
-                  <div>• Abortion (after 20 wks): <span className="font-bold text-slate-900 dark:text-white">$3,000.00</span></div>
-                  <div>• Ectopic / Tubal Pregnancy: <span className="font-bold text-slate-900 dark:text-white">$500.00</span></div>
-                  <div>• CVS / Amniocentesis: <span className="font-bold text-slate-900 dark:text-white">$500.00</span></div>
-                  <div>• Hysteroscopy: <span className="font-bold text-slate-900 dark:text-white">$500.00</span></div>
+                <p className="text-xs italic text-slate-600 dark:text-slate-400 mb-3">A doctor's note may be required to be reimbursed.</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs text-slate-700 dark:text-slate-300">
+                  <div className="flex justify-between items-center gap-2">
+                    <span>• D&C:</span>
+                    {renderDataAmountInput('dc_fee', 500)}
+                  </div>
+                  <div className="flex justify-between items-center gap-2">
+                    <span>• Abortion (prior to 20 wks):</span>
+                    {renderDataAmountInput('abortion_before_20wks_fee', 1500)}
+                  </div>
+                  <div className="flex justify-between items-center gap-2">
+                    <span>• Abortion (after 20 wks):</span>
+                    {renderDataAmountInput('abortion_after_20wks_fee', 3000)}
+                  </div>
+                  <div className="flex justify-between items-center gap-2">
+                    <span>• Ectopic / Tubal Pregnancy:</span>
+                    {renderDataAmountInput('ectopic_fee', 500)}
+                  </div>
+                  <div className="flex justify-between items-center gap-2">
+                    <span>• CVS / Amniocentesis:</span>
+                    {renderDataAmountInput('cvs_amnio_fee', 500)}
+                  </div>
+                  <div className="flex justify-between items-center gap-2">
+                    <span>• Hysteroscopy:</span>
+                    {renderDataAmountInput('hysteroscopy_fee', 500)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -277,19 +331,42 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
             <HeaderPage pageNum={4} />
 
             <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-2 text-xs bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60">
-                <div>• Cervical Cerclage: <span className="font-bold text-slate-900 dark:text-white">$500.00</span></div>
-                <div>• Uterine Biopsy: <span className="font-bold text-slate-900 dark:text-white">$500.00</span></div>
-                <div>• Loss of Ovary / Fallopian Tube(s): <span className="font-bold text-slate-900 dark:text-white">$1,500.00</span></div>
-                <div>• Loss of Uterus: <span className="font-bold text-slate-900 dark:text-white">$6,000.00</span></div>
-                <div className="col-span-2">• C-Section Delivery: <span className="font-bold text-slate-900 dark:text-white">$3,000.00</span></div>
+              {/* Continued invasive procedures */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60">
+                <div className="flex justify-between items-center gap-2">
+                  <span>• Cervical Cerclage:</span>
+                  {renderDataAmountInput('cervical_cerclage_fee', 500)}
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <span>• Uterine Biopsy:</span>
+                  {renderDataAmountInput('uterine_biopsy_fee', 500)}
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <span>• Loss of Ovary / Fallopian Tube(s):</span>
+                  {renderDataAmountInput('loss_of_ovary_fee', 1500)}
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <span>• Loss of Uterus:</span>
+                  {renderDataAmountInput('loss_of_uterus_fee', 6000)}
+                </div>
+                <div className="col-span-2 flex justify-between items-center gap-2">
+                  <span>• C-Section Delivery:</span>
+                  {renderDataAmountInput('csection_fee', 3000)}
+                </div>
               </div>
 
-              <div className="border border-purple-200 dark:border-purple-800/60 p-3.5 rounded-xl bg-purple-50/40 dark:bg-slate-800/40 space-y-2">
+              {/* Bed Rest — now editable */}
+              <div className="border border-purple-200 dark:border-purple-800/60 p-3.5 rounded-xl bg-purple-50/40 dark:bg-slate-800/40 space-y-3">
                 <span className="font-extrabold text-purple-950 dark:text-purple-200 text-sm underline">Bed Rest / Activity Restriction: TBD</span>
-                <div className="flex justify-between text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  <span>Childcare Allowance per week: $325.00</span>
-                  <span>Housekeeping Allowance per week: $75.00</span>
+                <div className="flex justify-between items-center text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span>Childcare Allowance per week:</span>
+                    {renderDataAmountInput('bed_rest_childcare_per_week', 325)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>Housekeeping per week:</span>
+                    {renderDataAmountInput('bed_rest_housekeeping_per_week', 75)}
+                  </div>
                 </div>
                 <ul className="list-disc pl-4 text-xs text-slate-700 dark:text-slate-300 space-y-1 pt-1">
                   <li>The Surrogate must provide receipts to the Agency to be eligible for reimbursement.</li>
@@ -299,14 +376,18 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
                 </ul>
               </div>
 
+              {/* Relaxation Therapy — now editable */}
               <div className="flex justify-between items-center bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60">
-                <span className="font-extrabold text-purple-950 dark:text-purple-200 text-sm underline">Relaxation Therapy Package:</span>
-                <span className="font-black text-purple-950 dark:text-purple-200 text-base bg-purple-100 dark:bg-purple-900 px-3 py-1 rounded-lg border border-purple-300">$1,000.00</span>
+                <div>
+                  <span className="font-extrabold text-purple-950 dark:text-purple-200 text-sm underline">Relaxation Therapy Package:</span>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                    Pregnancy massage therapy, chiropractic, acupuncture, pedicures up to 6 weeks post-delivery (reimbursable with receipt).
+                  </p>
+                </div>
+                {renderDataAmountInput('relaxation_therapy_fee', 1000)}
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 -mt-2 pl-1">
-                Pregnancy massage therapy, chiropractic, acupuncture, pedicures up to 6 weeks post-delivery (reimbursable with receipt).
-              </p>
 
+              {/* Housekeeping Allowance — top-level field */}
               <div className="bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60">
                 <div className="flex justify-between items-center font-extrabold text-sm text-purple-950 dark:text-purple-200 border-b border-purple-200 dark:border-purple-700 pb-1.5 mb-1.5">
                   <span className="underline">Housekeeping Allowance:</span>
@@ -315,6 +396,7 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
                 <p className="text-xs text-slate-700 dark:text-slate-300">Housekeeping Allowance $100.00 per week starting at gestational week 26 and ending upon delivery.</p>
               </div>
 
+              {/* Support Group — top-level field */}
               <div className="bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60">
                 <div className="flex justify-between items-center font-extrabold text-sm text-purple-950 dark:text-purple-200 border-b border-purple-200 dark:border-purple-700 pb-1.5 mb-1.5">
                   <span className="underline">Support Group Meetings:</span>
@@ -337,26 +419,32 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
             <HeaderPage pageNum={5} />
 
             <div className="space-y-4 text-xs">
+              {/* Breast Milk — now editable */}
               <div className="bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60 space-y-1">
                 <div className="flex justify-between items-center font-extrabold text-sm text-purple-950 dark:text-purple-200">
                   <span className="underline">Breast Milk:</span>
-                  <span className="font-black text-purple-900 dark:text-purple-300">$400.00 / week</span>
+                  <div className="flex items-center gap-1">
+                    {renderDataAmountInput('breast_milk_per_week', 400)}
+                    <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">/ week</span>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                  If Surrogate chooses to pump breastmilk and Intended Parent(s) accept, surrogate will be reimbursed $400.00 per week plus pumping supplies (receipts required).
+                  If Surrogate chooses to pump breastmilk and Intended Parent(s) accept, surrogate will be reimbursed per week plus pumping supplies (receipts required).
                 </p>
               </div>
 
+              {/* Life Insurance — now editable */}
               <div className="bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60 space-y-1">
                 <div className="flex justify-between items-center font-extrabold text-sm text-purple-950 dark:text-purple-200">
                   <span className="underline">Life Insurance Policy:</span>
-                  <span className="font-black text-purple-900 dark:text-purple-300">$1,200.00</span>
+                  {renderDataAmountInput('life_insurance_fee', 1200)}
                 </div>
                 <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                   Coverage policy of $500,000.00 for Surrogate and $150,000.00 for Intended Parent(s), plus Loss of Reproductive Organs Ryder. Applied for after legal completion.
                 </p>
               </div>
 
+              {/* Health Insurance — TBD, no amount to edit */}
               <div className="bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60 space-y-1">
                 <div className="flex justify-between items-center font-extrabold text-sm text-purple-950 dark:text-purple-200">
                   <span className="underline">Health Insurance:</span>
@@ -367,13 +455,17 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
                 </p>
               </div>
 
+              {/* Partner's Lost Wages — now editable */}
               <div className="bg-purple-50/60 dark:bg-slate-800/60 p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/60 space-y-1">
                 <div className="flex justify-between items-center font-extrabold text-sm text-purple-950 dark:text-purple-200">
                   <span className="underline">Partner's Lost Wages:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">$150.00 / day</span>
+                  <div className="flex items-center gap-1">
+                    {renderDataAmountInput('partner_lost_wages_per_day', 150)}
+                    <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">/ day</span>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                  Flat rate of $150.00/day for Husband/Partner for: (i) Parentage court appearance (max 1 day), (ii) Embryo transfer (max 2 days), (iii) Invasive/hospitalization (max 2 days/occ), (iv) Vaginal birth (max 3 days) or C-section (max 5 days), and (v) Hysterectomy (max 2 days).
+                  Flat rate per day for Husband/Partner for: (i) Parentage court appearance (max 1 day), (ii) Embryo transfer (max 2 days), (iii) Invasive/hospitalization (max 2 days/occ), (iv) Vaginal birth (max 3 days) or C-section (max 5 days), and (v) Hysterectomy (max 2 days).
                 </p>
               </div>
             </div>
@@ -426,7 +518,7 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
               <h3 className="font-extrabold text-purple-950 dark:text-purple-200 text-sm border-b-2 border-purple-200 dark:border-purple-800 pb-1.5">
                 Surrogate Declarations & Medical Questionnaire
               </h3>
-              
+
               <div className="space-y-3 text-xs">
                 <div className="bg-purple-50/50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-purple-200">
                   <span className="font-bold text-slate-900 dark:text-white block mb-1">Maximum Fetuses Willing to Carry:</span>
@@ -452,7 +544,6 @@ export const SurrogateBenefitPackagePdfEditor: React.FC<PdfEditorProps> = ({
                   </p>
                 </div>
               </div>
-
             </div>
 
             <FooterPage pageNum={7} />
