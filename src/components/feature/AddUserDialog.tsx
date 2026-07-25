@@ -71,18 +71,19 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
         full_name: fullName,
         email: formData.email || null,
         phone: formData.phone || null,
-        description: formData.notes || null,
-        // Flagged as manually created by admin staff so we can separate these
-        // from inbound web/phone inquiries in reporting.
+        // Store location in description when a dedicated column doesn't exist yet.
+        description: [
+          formData.notes || null,
+          formData.location ? `Location: ${formData.location}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n') || null,
         source: 'manual',
         status: STATUS_BY_ROLE[role],
         role,
         profile_completed: false,
-        data: {
-          createdBy: 'admin',
-          location: formData.location || undefined,
-        },
       };
+
 
       if (formData.email) {
         if (role === 'Surrogate') {

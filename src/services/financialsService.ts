@@ -72,38 +72,68 @@ export const financialsService = {
     return data;
   },
 
+  // Mark all OTHER packages for the same surrogate as inactive so there is
+  // always exactly one active package per surrogate.
+  async deactivateOtherPackages(surrogateId: string, activePackageId: string) {
+    const { error } = await supabase
+      .from('surrogate_benefit_packages')
+      .update({ is_active: false })
+      .eq('surrogate_id', surrogateId)
+      .neq('id', activePackageId);
+    if (error) console.error('Failed to deactivate other packages:', error);
+  },
+
   async sendPackageForSignature(id: string) {
-    // 1. Update status to 'sent'
+    // 1. Fetch the package so we have surrogate_id before updating
+    const { data: existing, error: fetchErr } = await supabase
+      .from('surrogate_benefit_packages')
+      .select('surrogate_id')
+      .eq('id', id)
+      .single();
+    if (fetchErr) throw fetchErr;
+
+    // 2. Reset signature + set this package as active and sent
     const { data, error } = await supabase
       .from('surrogate_benefit_packages')
-      .update({ status: 'sent' })
+      .update({
+        status: 'sent',
+        is_active: true,
+        // Clear any previous signature so the surrogate must sign again
+        signature_url: null,
+        signature_date: null,
+      })
       .eq('id', id)
       .select()
       .single();
     if (error) throw error;
 
-    // 2. Trigger notification by inserting into the notifications table
+    // 3. Deactivate all other packages for this surrogate
+    if (existing.surrogate_id) {
+      await this.deactivateOtherPackages(existing.surrogate_id, id);
+    }
+
+    // 4. Trigger in-app notification
     if (data.surrogate_id) {
       const { error: notifError } = await supabase.from('notifications').insert({
         user_id: data.surrogate_id,
-        title: 'New Care Package to Sign',
-        message: 'Your Surrogate Benefit Care Package has been finalized and is ready for your signature.',
-        type: 'action_required'
+        title: 'Care Package Updated — Action Required',
+        message: 'Your Surrogate Benefit Care Package has been updated and is ready for your review and signature.',
+        type: 'action_required',
       });
       if (notifError) {
         console.error('Failed to create notification:', notifError);
       }
 
-      // Push notification to the surrogate.
+      // 5. Push notification
       await pushService.send(
         [data.surrogate_id],
-        'New Care Package to Sign',
-        'Your Surrogate Benefit Care Package is ready for your review and signature.',
+        'Care Package Updated — Action Required',
+        'Your updated Surrogate Benefit Care Package is ready for your review and signature.',
         { type: 'benefit_package', packageId: id },
       );
     }
 
-    console.log(`Package ${id} marked as sent. Notification dispatched.`);
+    console.log(`Package ${id} marked as active+sent. Other packages deactivated. Notification dispatched.`);
     return data;
   },
 
