@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, createAuthAccountForOther } from '../../lib/supabase';
 
 // Shared "Add User" modal used on the Parents and Surrogates list pages.
 //
@@ -27,8 +27,10 @@ const TITLE_BY_ROLE: Record<Role, string> = {
 };
 
 const STATUS_BY_ROLE: Record<Role, string> = {
-  // Matches the default first-stage statuses used by each list page.
-  'Intended Parent': 'New Inquiry',
+  // Matches the default first-stage statuses used by each list page
+  // (see IP_STATUSES / GC_STATUSES in types) — 'New Inquiry' is a legacy value
+  // that the status filter no longer offers.
+  'Intended Parent': 'Inquiry',
   Surrogate: 'New Application',
 };
 
@@ -67,25 +69,35 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
     try {
       const fullName = [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim();
 
+      // Only real `users` columns belong here — the table has no
+      // description/source/notes/location columns, and writing them makes
+      // PostgREST reject the whole insert ("Could not find the 'x' column").
+      // Location and notes live in the `about` JSONB blob instead.
+      const about: Record<string, unknown> = {};
+      if (formData.location) about.location = formData.location;
+      if (formData.notes) about.notes = formData.notes;
+
       const data: Record<string, unknown> = {
+        first_name: formData.firstName || null,
+        last_name: formData.lastName || null,
         full_name: fullName,
         email: formData.email || null,
         phone: formData.phone || null,
-        // Store location in description when a dedicated column doesn't exist yet.
-        description: [
-          formData.notes || null,
-          formData.location ? `Location: ${formData.location}` : null,
-        ]
-          .filter(Boolean)
-          .join('\n') || null,
-        source: 'manual',
+        about,
+        form_data: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone || null,
+          location: formData.location || null,
+        },
         status: STATUS_BY_ROLE[role],
         role,
         profile_completed: false,
       };
 
-
       if (formData.email) {
+        // Sign-ups go through an isolated client so creating this account does
+        // not log the admin out of their own session.
         if (role === 'Surrogate') {
           // For surrogates: use the explicit password field to create an Auth
           // account so they can immediately log in and complete their intake.
@@ -93,42 +105,35 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, role, onClose, on
           if (!password || password.length < 6) {
             throw new Error('Password must be at least 6 characters.');
           }
-          const { data: authData, error: authError } = await supabase.auth.signUp({
-            email: formData.email,
-            password,
-            options: {
-              data: { full_name: fullName, role },
-            },
+          const newUserId = await createAuthAccountForOther(formData.email, password, {
+            full_name: fullName,
+            role,
           });
-
-          if (authError && !authError.message.includes('User already registered')) {
-            throw authError;
+          if (!newUserId) {
+            // The users row is keyed by the auth account id, so without one
+            // there is nothing to link the profile to.
+            throw new Error(
+              'An account with this email already exists. Use a different email, or find the existing record in the list.',
+            );
           }
-          if (authData?.user) {
-            data.id = authData.user.id;
-          }
-        } else {
+          data.id = newUserId;
+        } else if (formData.phone && formData.phone.length >= 6) {
           // Intended Parents: keep original phone-as-password fallback.
-          if (formData.phone && formData.phone.length >= 6) {
-            const { data: authData, error: authError } = await supabase.auth.signUp({
-              email: formData.email,
-              password: formData.phone,
-              options: {
-                data: { full_name: fullName, role },
-              },
-            });
-
-            if (authError && !authError.message.includes('User already registered')) {
-              throw authError;
-            }
-            if (authData?.user) {
-              data.id = authData.user.id;
-            }
-          }
+          const newUserId = await createAuthAccountForOther(formData.email, formData.phone, {
+            full_name: fullName,
+            role,
+          });
+          if (newUserId) data.id = newUserId;
         }
       }
 
-      const { error: dbError } = await supabase.from('users').insert(data);
+      // The `handle_new_user` trigger on auth.users already creates a matching
+      // public.users row during sign-up, so a plain insert here collides with
+      // it ("duplicate key ... users_pkey"). Upsert fills in the rest of the
+      // details on the row the trigger just made.
+      const { error: dbError } = data.id
+        ? await supabase.from('users').upsert(data, { onConflict: 'id' })
+        : await supabase.from('users').insert(data);
       if (dbError) throw dbError;
 
       resetForm();
