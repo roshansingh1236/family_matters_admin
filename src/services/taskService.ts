@@ -1,6 +1,7 @@
 
 import { supabase } from '../lib/supabase';
 import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 export interface Task {
   id?: string;
@@ -61,6 +62,12 @@ export const taskService = {
 
       // Push: notify the assignee of the new task.
       void pushService.send(
+        [task.assignee],
+        'New task assigned',
+        task.title || 'You have a new task.',
+        { type: 'task', taskId: data.id },
+      );
+      void emailService.send(
         [task.assignee],
         'New task assigned',
         task.title || 'You have a new task.',

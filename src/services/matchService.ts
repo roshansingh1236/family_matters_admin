@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { Match, MatchStatus, User } from '../types';
 import { auditService } from './auditService';
 import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 const TABLE_NAME = 'matches';
 
@@ -209,6 +210,12 @@ export const matchService = {
         'A match has been presented. Open the app to accept or decline.',
         { type: 'match_presented', matchId: data.id },
       );
+      void emailService.send(
+        [matchData.intendedParentId, matchData.gestationalCarrierId],
+        'New match to review',
+        'A match has been presented. Open the app to accept or decline.',
+        { type: 'match_presented', matchId: data.id },
+      );
 
       // In-App Notification: insert into notifications table
       await supabase.from('notifications').insert([
@@ -309,6 +316,12 @@ export const matchService = {
           ? ` Reason: ${additionalData.cancellationReason}`
           : '';
         void pushService.send(
+          [before?.intended_parent_id, before?.gestational_carrier_id],
+          'Match cancelled',
+          `Your match has been cancelled.${reason} You can be presented with a new match.`,
+          { type: 'match_cancelled', matchId: id },
+        );
+        void emailService.send(
           [before?.intended_parent_id, before?.gestational_carrier_id],
           'Match cancelled',
           `Your match has been cancelled.${reason} You can be presented with a new match.`,

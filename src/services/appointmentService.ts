@@ -1,6 +1,7 @@
 
 import { supabase } from '../lib/supabase';
 import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 export interface Appointment {
   id?: string;
@@ -107,6 +108,12 @@ export const appointmentService = {
 
       // Push: notify the participants of the new appointment.
       void pushService.send(
+        [primaryUserId, ...participantIds],
+        'New appointment',
+        `${appointment.title || 'Appointment'} on ${new Date(timestamp).toLocaleString()}`,
+        { type: 'appointment', appointmentId: data.id },
+      );
+      void emailService.send(
         [primaryUserId, ...participantIds],
         'New appointment',
         `${appointment.title || 'Appointment'} on ${new Date(timestamp).toLocaleString()}`,

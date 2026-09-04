@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { Journey, JourneyStatus, JourneyStage, CaseMilestone } from '../types';
 import { auditService } from './auditService';
 import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 const TABLE_NAME = 'journeys';
 
@@ -194,6 +195,12 @@ export const journeyService = {
       });
       // Push: notify both parties of the new journey stage.
       void pushService.send(
+        [before?.parent_id, before?.surrogate_id],
+        'Journey update',
+        `Your journey has moved to "${newStage}".`,
+        { type: 'journey_stage', journeyId: id, stage: newStage },
+      );
+      void emailService.send(
         [before?.parent_id, before?.surrogate_id],
         'Journey update',
         `Your journey has moved to "${newStage}".`,

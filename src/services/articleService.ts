@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 // Roles that should receive an article based on its audience.
 function rolesFor(roleTarget: string): string[] {
@@ -17,6 +18,7 @@ async function pushNewArticle(title: string, roleTarget: string) {
       .in('role', rolesFor(roleTarget));
     const ids = (data || []).map((u: { id: string }) => u.id);
     void pushService.send(ids, 'New article', title, { type: 'article' });
+    void emailService.send(ids, 'New article', title, { type: 'article' });
   } catch (e) {
     console.error('article push failed', e);
   }

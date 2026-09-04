@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/supabase'; // Assuming there is a types file, if not we'll use any
 import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 // uuid columns reject empty strings ("invalid input syntax for type uuid").
 // Coerce empty-string values on known id keys to null before insert.
@@ -126,6 +127,12 @@ export const financialsService = {
 
       // 5. Push notification
       await pushService.send(
+        [data.surrogate_id],
+        'Care Package Updated — Action Required',
+        'Your updated Surrogate Benefit Care Package is ready for your review and signature.',
+        { type: 'benefit_package', packageId: id },
+      );
+      await emailService.send(
         [data.surrogate_id],
         'Care Package Updated — Action Required',
         'Your updated Surrogate Benefit Care Package is ready for your review and signature.',

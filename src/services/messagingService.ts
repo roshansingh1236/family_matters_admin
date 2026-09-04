@@ -1,6 +1,7 @@
 
 import { supabase } from '../lib/supabase';
 import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 export interface Conversation {
   id?: string;
@@ -286,6 +287,12 @@ export const messagingService = {
           .map((p: { user_id: string }) => p.user_id)
           .filter((uid: string) => uid !== senderId);
         void pushService.send(
+          recipients,
+          senderName || 'New message',
+          media ? `Sent a ${media.type}` : text.substring(0, 120),
+          { type: 'message', conversationId },
+        );
+        void emailService.send(
           recipients,
           senderName || 'New message',
           media ? `Sent a ${media.type}` : text.substring(0, 120),
