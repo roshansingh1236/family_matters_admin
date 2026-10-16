@@ -16,6 +16,7 @@ import MedicalPage from '../pages/medical/page';
 import ContractsPage from '../pages/contracts/page';
 import LoginPage from '../pages/auth/login/page';
 import SignupPage from '../pages/auth/signup/page';
+import ForgotPasswordPage from '../pages/auth/forgot-password/page';
 import NotFound from '../pages/NotFound';
 import TasksPage from '../pages/tasks/page';
 import BabyWatchPage from '../pages/baby-watch/page';
@@ -108,6 +109,15 @@ const routes: RouteObject[] = [
   {
     path: '/auth/signup',
     element: <SignupPage />,
+  },
+  {
+    path: '/auth/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+  {
+    // Landing page for Supabase recovery links (same screen, link mode).
+    path: '/auth/reset-password',
+    element: <ForgotPasswordPage />,
   },
   {
     path: '/tasks',

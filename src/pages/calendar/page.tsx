@@ -5,7 +5,14 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import { appointmentService } from '../../services/appointmentService';
+import {
+  appointmentService,
+  REMINDER_LEAD_OPTIONS,
+  isReminderEventType,
+  reminderLeadLabel,
+  localDateKey,
+  localTimeValue,
+} from '../../services/appointmentService';
 import type { Appointment } from '../../services/appointmentService';
 import UserSelector from '../../components/feature/UserSelector';
 import MultiUserSelector from '../../components/feature/MultiUserSelector';
@@ -20,6 +27,14 @@ const CalendarPage: React.FC = () => {
   const [events, setEvents] = useState<Appointment[]>([]);
   const [showMedicalModal, setShowMedicalModal] = useState(false);
   const [participantNames, setParticipantNames] = useState<Record<string, string>>({});
+
+  // Push reminders for the event being created / edited: minutes before the
+  // event at which the user is notified on their phone.
+  const [reminderLeads, setReminderLeads] = useState<number[]>([]);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'success' | 'warning'; message: string } | null>(null);
+  const [selectedEventLeads, setSelectedEventLeads] = useState<number[] | null>(null);
 
   // New Event Form State
   const [formData, setFormData] = useState<Partial<Appointment>>({
@@ -154,7 +169,8 @@ const CalendarPage: React.FC = () => {
     const month = String(currentDate.getMonth() + 1).padStart(2, '0');
     const dayStr = String(day).padStart(2, '0');
     const dateStr = `${year}-${month}-${dayStr}`;
-    return events.filter(event => event.date === dateStr);
+    // Bucket by the event's local calendar day (the stored value is UTC).
+    return events.filter(event => (localDateKey(event.startsAt) || event.date) === dateStr);
   };
 
   const getEventTypeColor = (type: string) => {
@@ -163,6 +179,9 @@ const CalendarPage: React.FC = () => {
       case 'medical': return 'bg-green-500';
       case 'legal': return 'bg-purple-500';
       case 'psychological': return 'bg-orange-500';
+      case 'medication': return 'bg-teal-500';
+      case 'injection': return 'bg-rose-500';
+      case 'reminder': return 'bg-amber-500';
       default: return 'bg-gray-500';
     }
   };
@@ -194,42 +213,131 @@ const CalendarPage: React.FC = () => {
     });
   };
 
+  const emptyForm = (): Partial<Appointment> => ({
+    title: '',
+    type: 'consultation',
+    date: localDateKey(new Date().toISOString()),
+    time: '09:00',
+    duration: '60 min',
+    participants: [],
+    location: 'Clinic',
+    status: 'scheduled',
+    notes: '',
+    userId: ''
+  });
+
+  const openNewEventModal = () => {
+    setFormData(emptyForm());
+    setReminderLeads([]);
+    setFormError(null);
+    setShowNewEventModal(true);
+  };
+
+  const toggleReminderLead = (minutes: number) => {
+    setReminderLeads(prev =>
+      prev.includes(minutes) ? prev.filter(m => m !== minutes) : [...prev, minutes]
+    );
+  };
+
+  const handleTypeChange = (type: string) => {
+    setFormData(prev => ({ ...prev, type }));
+    // A medication / injection / reminder exists to notify the user, so start
+    // with sensible push reminders the admin can still change.
+    if (isReminderEventType(type) && reminderLeads.length === 0) {
+      setReminderLeads([1440, 0]);
+    }
+  };
+
   const handleCreateEvent = async () => {
+    setFormError(null);
+
+    if (!formData.title?.trim()) {
+      setFormError('Please enter a title.');
+      return;
+    }
+    if (!formData.date) {
+      setFormError('Please choose a date.');
+      return;
+    }
+    const attendees = [formData.userId, ...(formData.participants || [])].filter(Boolean);
+    if (reminderLeads.length > 0 && attendees.length === 0) {
+      setFormError('Choose the user to notify before scheduling push reminders.');
+      return;
+    }
+
+    setIsSaving(true);
+    let eventId: string | undefined = formData.id;
     try {
         if (formData.id) {
             await appointmentService.updateAppointment(formData.id, formData as any);
         } else {
-            await appointmentService.createAppointment(formData as any);
+            eventId = await appointmentService.createAppointment(formData as any);
         }
-        await fetchEvents();
-        setShowNewEventModal(false);
-        setFormData({
-            title: '',
-            type: 'consultation',
-            date: new Date().toISOString().split('T')[0],
-            time: '09:00',
-            duration: '60 min',
-            participants: [],
-            location: 'Clinic',
-            status: 'scheduled',
-            notes: '',
-            userId: ''
-        });
     } catch (error) {
         console.error("Failed to save event", error);
+        setFormError('Could not save the event. Please try again.');
+        setIsSaving(false);
+        return;
     }
+
+    // The event is saved; now (re)schedule its push reminders. A failure here
+    // must not look like the event was lost.
+    let nextNotice: { type: 'success' | 'warning'; message: string } | null = null;
+    // A brand-new event without reminders has nothing to schedule; an edited
+    // one may have reminders to move or remove.
+    if (eventId && (reminderLeads.length > 0 || formData.id)) {
+      try {
+        const result = await appointmentService.setReminders(eventId, reminderLeads);
+        if (reminderLeads.length > 0) {
+          nextNotice = result.scheduled > 0
+            ? {
+                type: result.skippedPast > 0 ? 'warning' : 'success',
+                message: `Event saved. ${result.scheduled} push reminder${result.scheduled === 1 ? '' : 's'} scheduled${result.skippedPast > 0 ? ` (${result.skippedPast} skipped because that time has already passed)` : ''}.`,
+              }
+            : { type: 'warning', message: 'Event saved, but no push reminders were scheduled because the selected times have already passed.' };
+        }
+      } catch (error: any) {
+        console.error('Failed to schedule reminders', error);
+        if (reminderLeads.length > 0) {
+          nextNotice = {
+            type: 'warning',
+            message: `Event saved, but the push reminders could not be scheduled${error?.message ? `: ${error.message}` : '.'}`,
+          };
+        }
+      }
+    }
+
+    await fetchEvents();
+    setShowNewEventModal(false);
+    setFormData(emptyForm());
+    setReminderLeads([]);
+    setNotice(nextNotice);
+    setIsSaving(false);
   };
 
-  const handleEditEvent = () => {
+  const handleEditEvent = async () => {
     if (selectedEvent) {
+        const event = selectedEvent;
         setFormData({
-            ...selectedEvent,
-            // Ensure date and time are strings for input fields
-            date: selectedEvent.date,
-            time: selectedEvent.time?.substring(0, 5) || '09:00'
+            ...event,
+            // Date and time inputs need the event's local day and 24-hour time.
+            date: localDateKey(event.startsAt) || event.date,
+            time: localTimeValue(event.startsAt) || event.time?.substring(0, 5) || '09:00'
         });
+        setReminderLeads(selectedEventLeads ?? []);
+        setFormError(null);
         setShowNewEventModal(true);
         setSelectedEvent(null);
+
+        // Make sure the form reflects the reminders stored for this event even
+        // if they had not finished loading in the detail view.
+        if (selectedEventLeads === null && event.id) {
+          try {
+            setReminderLeads(await appointmentService.getReminderLeads(event.id));
+          } catch (error) {
+            console.error('Failed to load reminders', error);
+          }
+        }
     }
   };
 
@@ -294,6 +402,21 @@ const CalendarPage: React.FC = () => {
     if (selectedEvent?.participants && Array.isArray(selectedEvent.participants)) {
       fetchParticipantNames(selectedEvent.participants);
     }
+  }, [selectedEvent]);
+
+  // Load the push reminders scheduled for the selected event
+  useEffect(() => {
+    setSelectedEventLeads(null);
+    const eventId = selectedEvent?.id;
+    if (!eventId) return;
+    let cancelled = false;
+    appointmentService.getReminderLeads(eventId)
+      .then(leads => { if (!cancelled) setSelectedEventLeads(leads); })
+      .catch(error => {
+        console.error('Failed to load reminders', error);
+        if (!cancelled) setSelectedEventLeads([]);
+      });
+    return () => { cancelled = true; };
   }, [selectedEvent]);
 
   const renderMonthView = () => {
@@ -404,27 +527,32 @@ const CalendarPage: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <Button color="blue" onClick={() => {
-                  setFormData({
-                    title: '',
-                    type: 'consultation',
-                    date: new Date().toISOString().split('T')[0],
-                    time: '09:00',
-                    duration: '60 min',
-                    participants: [],
-                    location: 'Clinic',
-                    status: 'scheduled',
-                    notes: '',
-                    userId: ''
-                  });
-                  setShowNewEventModal(true);
-                }}>
+                <Button color="blue" onClick={openNewEventModal}>
                   <i className="ri-add-line mr-2"></i>
                   New Event
                 </Button>
               </div>
             </div>
           </div>
+
+          {notice && (
+            <div
+              role="status"
+              className={`mb-6 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
+                notice.type === 'success'
+                  ? 'border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                  : 'border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300'
+              }`}
+            >
+              <span className="flex items-start gap-2">
+                <i className={`${notice.type === 'success' ? 'ri-notification-3-line' : 'ri-error-warning-line'} mt-0.5`}></i>
+                {notice.message}
+              </span>
+              <button onClick={() => setNotice(null)} aria-label="Dismiss" className="cursor-pointer opacity-70 hover:opacity-100">
+                <i className="ri-close-line"></i>
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Main Calendar */}
@@ -488,7 +616,10 @@ const CalendarPage: React.FC = () => {
                     { type: 'consultation', label: 'Consultations', color: 'bg-blue-500' },
                     { type: 'medical', label: 'Medical', color: 'bg-green-500' },
                     { type: 'legal', label: 'Legal', color: 'bg-purple-500' },
-                    { type: 'psychological', label: 'Psychological', color: 'bg-orange-500' }
+                    { type: 'psychological', label: 'Psychological', color: 'bg-orange-500' },
+                    { type: 'medication', label: 'Medication reminders', color: 'bg-teal-500' },
+                    { type: 'injection', label: 'Injection reminders', color: 'bg-rose-500' },
+                    { type: 'reminder', label: 'Other reminders', color: 'bg-amber-500' }
                   ].map(item => (
                     <div key={item.type} className="flex items-center gap-2">
                       <div className={`w-3 h-3 rounded-full ${item.color}`}></div>
@@ -524,7 +655,7 @@ const CalendarPage: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4 text-sm bg-rose-50/50 dark:bg-white/5 p-4 rounded-lg">
                       <div>
                         <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Date:</span>
-                        <div className="font-medium text-gray-900 dark:text-white">{selectedEvent.date}</div>
+                        <div className="font-medium text-gray-900 dark:text-white">{localDateKey(selectedEvent.startsAt) || selectedEvent.date}</div>
                       </div>
                       <div>
                         <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Time:</span>
@@ -550,6 +681,22 @@ const CalendarPage: React.FC = () => {
                           </div>
                         )) : (
                             <span className="text-gray-500 italic text-sm">No participants</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-600 dark:text-gray-400 font-medium">Push reminders:</span>
+                      <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                        {selectedEventLeads === null ? (
+                          <span className="text-gray-500 italic text-sm">Loading...</span>
+                        ) : selectedEventLeads.length > 0 ? selectedEventLeads.map(minutes => (
+                          <div key={minutes} className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 rounded-full border border-amber-100 dark:border-amber-500/20">
+                            <i className="ri-notification-3-line text-xs"></i>
+                            <span className="font-medium">{reminderLeadLabel(minutes)}</span>
+                          </div>
+                        )) : (
+                          <span className="text-gray-500 italic text-sm">None scheduled</span>
                         )}
                       </div>
                     </div>
@@ -597,6 +744,12 @@ const CalendarPage: React.FC = () => {
                   </div>
 
                   <div className="space-y-4">
+                    {formError && (
+                      <div role="alert" className="flex items-center gap-2 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-2.5 text-sm text-red-700 dark:text-red-400">
+                        <i className="ri-error-warning-line flex-shrink-0"></i>
+                        {formError}
+                      </div>
+                    )}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Event Title
@@ -676,15 +829,40 @@ const CalendarPage: React.FC = () => {
                       </label>
                       <select 
                          value={formData.type}
-                         onChange={e => setFormData({...formData, type: e.target.value as any})}
+                         onChange={e => handleTypeChange(e.target.value)}
                          className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
                       >
                         <option value="consultation">Consultation</option>
                         <option value="medical">Medical</option>
                         <option value="legal">Legal</option>
                         <option value="psychological">Psychological</option>
+                        <option value="medication">Medication reminder</option>
+                        <option value="injection">Injection reminder</option>
+                        <option value="reminder">Other reminder / action needed</option>
                       </select>
                     </div>
+
+                    <fieldset>
+                      <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Push reminders
+                      </legend>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        The user sees this event on their app calendar and gets a push notification at the times you tick.
+                      </p>
+                      <div className="flex flex-wrap gap-x-5 gap-y-2">
+                        {REMINDER_LEAD_OPTIONS.map(option => (
+                          <label key={option.minutes} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={reminderLeads.includes(option.minutes)}
+                              onChange={() => toggleReminderLead(option.minutes)}
+                              className="h-4 w-4 rounded border-gray-300 dark:border-white/20 accent-rose-500"
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -700,9 +878,9 @@ const CalendarPage: React.FC = () => {
                     </div>
 
                     <div className="flex gap-3 pt-4">
-                      <Button color="blue" className="flex-1" onClick={handleCreateEvent}>
+                      <Button color="blue" className="flex-1" onClick={handleCreateEvent} disabled={isSaving}>
                         <i className="ri-save-line mr-2"></i>
-                        {formData.id ? 'Update Event' : 'Create Event'}
+                        {isSaving ? 'Saving...' : formData.id ? 'Update Event' : 'Create Event'}
                       </Button>
                       <Button variant="outline" className="flex-1" onClick={() => setShowNewEventModal(false)}>
                         Cancel

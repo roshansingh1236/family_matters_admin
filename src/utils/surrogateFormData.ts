@@ -39,6 +39,36 @@ export function resolveSurrogateIntakeProfile(
   return null;
 }
 
+/**
+ * Basics asked on the first application (top level of form_data). Once Form 2
+ * (surrogate_profile) exists the Intake Questionnaire reads that instead, so a
+ * value left blank there (e.g. blood type) used to show as empty even though
+ * the surrogate gave it on her application. Fill only the empty ones.
+ */
+const SIGNUP_BASICS = ['dob', 'bloodType', 'height', 'weight', 'age', 'email', 'phone', 'address'] as const;
+
+const isBlank = (v: unknown) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+
+export function fillIntakeFromSignup(
+  intake: Record<string, unknown> | null,
+  formData: Record<string, unknown>
+): Record<string, unknown> | null {
+  if (!intake || !formData || intake === formData) return intake;
+  const signup: Record<string, unknown> = {
+    ...formData,
+    dob: formData.dob ?? formData.date_of_birth,
+    bloodType: formData.bloodType ?? formData.blood_type,
+  };
+  let out = intake;
+  for (const key of SIGNUP_BASICS) {
+    if (isBlank(out[key]) && !isBlank(signup[key])) {
+      if (out === intake) out = { ...intake };
+      out[key] = signup[key];
+    }
+  }
+  return out;
+}
+
 export function resolveSurrogateAdditionalProfile(
   formData: Record<string, unknown>,
   row: Record<string, unknown>

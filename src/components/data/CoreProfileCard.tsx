@@ -18,10 +18,11 @@ const FIELD_CONFIG: Record<
   firstName: { label: 'First name', icon: 'ri-user-smile-line' },
   lastName: { label: 'Last name', icon: 'ri-user-line' },
   role: { label: 'Role', icon: 'ri-shield-user-line' },
-  profileCompleted: { label: 'Profile completed', icon: 'ri-checkbox-circle-line' },
-  form2Completed: { label: 'Form 2 completed', icon: 'ri-file-list-3-line' },
-  profileCompletedAt: { label: 'Profile completed at', icon: 'ri-calendar-schedule-line', wide: true },
-  form2CompletedAt: { label: 'Form 2 completed at', icon: 'ri-time-line', wide: true }
+  // Per client: the first application is "Application", Form 2 is "Profile".
+  profileCompleted: { label: 'Application completed', icon: 'ri-checkbox-circle-line' },
+  form2Completed: { label: 'Profile completed', icon: 'ri-file-list-3-line' },
+  profileCompletedAt: { label: 'Application completed at', icon: 'ri-calendar-schedule-line', wide: true },
+  form2CompletedAt: { label: 'Profile completed at', icon: 'ri-time-line', wide: true }
 };
 
 const ORDER: FieldKey[] = [

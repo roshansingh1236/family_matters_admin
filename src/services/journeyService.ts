@@ -24,21 +24,37 @@ export const JOURNEY_STAGES: JourneyStage[] = [
 // finalized checklist for each stage — only the `label` text needs to change
 // (and add/remove rows). Keep `id` stable once items are in production so saved
 // progress is preserved.
-export const STAGE_CHECKLISTS: Record<JourneyStage, { id: string; label: string; isDate?: boolean }[]> = {
+export type StageChecklistItem = {
+  id: string;
+  label: string;
+  /** Item is completed by picking a date. */
+  isDate?: boolean;
+  /** Item is completed by choosing one of these options (dropdown). */
+  options?: string[];
+  /** Item is completed by entering a number. */
+  isNumber?: boolean;
+  /** Unit shown next to a number input (e.g. "lbs"). */
+  unit?: string;
+};
+
+export const STAGE_CHECKLISTS: Record<JourneyStage, StageChecklistItem[]> = {
   'Medical Screening': [
-    { id: 'ms_records_collected', label: 'Medical records collected', isDate: true },
+    { id: 'ms_records_collected', label: 'Medical Reports approved by Clinic', isDate: true },
     { id: 'ms_screening_scheduled', label: 'Medical screening scheduled', isDate: true },
-    { id: 'ms_cleared', label: 'Medically cleared for program', isDate: true },
+    { id: 'ms_cleared', label: 'Medically Cleared for Legal', isDate: true },
   ],
   'Legal': [
+    { id: 'legal_clearance', label: 'Legal Clearance', isDate: true },
     { id: 'legal_parental_est', label: 'Parental establishment/Birth Order completion date', isDate: true },
   ],
   'Embryo Transfer': [
+    { id: 'et_fet_calendar_received', label: 'FET Calendar Received', isDate: true },
     { id: 'et_date', label: 'Embryo transfer date', isDate: true },
     { id: 'et_first_hcg', label: 'First HCG date', isDate: true },
     { id: 'et_second_hcg', label: 'Second HCG date', isDate: true },
   ],
   'Pregnancy': [
+    { id: 'preg_first_ob_scheduled', label: '1st OB Appointment Scheduled', isDate: true },
     { id: 'preg_heartbeat', label: 'Heartbeat detection date', isDate: true },
     { id: 'preg_first_trimester', label: 'First trimester completion date', isDate: true },
     { id: 'preg_anatomy_scan', label: 'Anatomy scan completion date', isDate: true },
@@ -47,6 +63,9 @@ export const STAGE_CHECKLISTS: Record<JourneyStage, { id: string; label: string;
   ],
   'Birth': [
     { id: 'birth_delivery_date', label: 'Delivery date', isDate: true },
+    { id: 'birth_baby_gender', label: 'Gender of the baby', options: ['Male', 'Female'] },
+    { id: 'birth_baby_weight', label: 'Weight of the baby', isNumber: true, unit: 'lbs' },
+    { id: 'birth_delivery_mode', label: 'Mode of Delivery', options: ['Vaginal', 'Cesarean'] },
     { id: 'birth_delivery_docs', label: 'Delivery Documentation' },
   ],
   'Postpartum': [
@@ -392,7 +411,7 @@ export const journeyService = {
   updateStageChecklist: async (
     journeyId: string,
     stage: JourneyStage,
-    checklist: Record<string, boolean>,
+    checklist: Record<string, boolean | string>,
   ): Promise<void> => {
     try {
       const journey = (await journeyService.getJourneyById(journeyId)) as any;

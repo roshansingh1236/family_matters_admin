@@ -11,6 +11,7 @@ export type UserStatus =
   | 'Matched'
   | 'New Application'
   | 'Documents Pending'
+  | 'Review Medical Records'
   | 'Interview Scheduled'
   | 'Medical Records Requested'
   | 'Medical Records Received'
@@ -99,6 +100,8 @@ export const GC_STATUSES: UserStatus[] = [
   'Contacted',
   'Follow up',
   'Documents Pending',
+  // Set by the app when the surrogate submits Form 2 (client STATUS AND FLOW).
+  'Review Medical Records',
   'Interview Scheduled',
   'Medical Records Requested',
   'Medical Records Received',

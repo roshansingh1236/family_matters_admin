@@ -71,6 +71,9 @@ const JourneysPage: React.FC = () => {
   const [eddInput, setEddInput] = useState('');
   const [deliveryHospital, setDeliveryHospital] = useState('');
   const [postpartumNotesInput, setPostpartumNotesInput] = useState('');
+  const [deliveryBabyGender, setDeliveryBabyGender] = useState('');
+  const [deliveryBabyWeight, setDeliveryBabyWeight] = useState('');
+  const [deliveryMode, setDeliveryMode] = useState('');
   const [isSavingDelivery, setIsSavingDelivery] = useState(false);
 
   // Delivery date input
@@ -156,6 +159,11 @@ const JourneysPage: React.FC = () => {
           ? selectedJourney.postpartumNotes
           : '',
       );
+
+      const birthChecklist = getStageChecklistState(selectedJourney, 'Birth');
+      setDeliveryBabyGender(typeof birthChecklist.birth_baby_gender === 'string' ? birthChecklist.birth_baby_gender : '');
+      setDeliveryBabyWeight(typeof birthChecklist.birth_baby_weight === 'string' ? birthChecklist.birth_baby_weight : '');
+      setDeliveryMode(typeof birthChecklist.birth_delivery_mode === 'string' ? birthChecklist.birth_delivery_mode : '');
 
       const trust = (selectedJourney.journeyNotes as any)?.trust || {};
       setTrustFundingAmount(trust.fundingAmount || '');
@@ -266,10 +274,19 @@ const JourneysPage: React.FC = () => {
 
     try {
       await journeyService.updateDeliveryDate(selectedJourney.id, deliveryDateInput);
+      const currentBirthChecklist = getStageChecklistState(selectedJourney, 'Birth');
+      const updatedBirthChecklist: Record<string, boolean | string> = {
+        ...currentBirthChecklist,
+        birth_delivery_date: deliveryDateInput,
+        ...(deliveryBabyGender ? { birth_baby_gender: deliveryBabyGender } : {}),
+        ...(deliveryBabyWeight ? { birth_baby_weight: deliveryBabyWeight } : {}),
+        ...(deliveryMode ? { birth_delivery_mode: deliveryMode } : {}),
+      };
+      await journeyService.updateStageChecklist(selectedJourney.id, 'Birth', updatedBirthChecklist);
       await fetchJourneys();
       setShowDeliveryModal(false);
       setDeliveryDateInput('');
-      setToast({ message: 'Delivery date recorded!', type: 'success' });
+      setToast({ message: 'Delivery date and details recorded!', type: 'success' });
     } catch (err) {
       console.error(err);
       setToast({ message: 'Failed to record delivery', type: 'error' });
@@ -483,6 +500,17 @@ const JourneysPage: React.FC = () => {
         ...existingLegal,
         hospital: deliveryHospital,
       });
+
+      // Update Birth stage checklist details (Gender, Weight, Mode of Delivery)
+      const currentBirthChecklist = getStageChecklistState(selectedJourney, 'Birth');
+      const updatedBirthChecklist: Record<string, boolean | string> = {
+        ...currentBirthChecklist,
+        ...(deliveryBabyGender ? { birth_baby_gender: deliveryBabyGender } : {}),
+        ...(deliveryBabyWeight ? { birth_baby_weight: deliveryBabyWeight } : {}),
+        ...(deliveryMode ? { birth_delivery_mode: deliveryMode } : {}),
+      };
+      await journeyService.updateStageChecklist(selectedJourney.id, 'Birth', updatedBirthChecklist);
+
       await fetchJourneys();
       setToast({ message: 'Delivery info saved', type: 'success' });
     } catch {
@@ -855,6 +883,54 @@ const JourneysPage: React.FC = () => {
                               const value = getStageChecklistState(selectedJourney, selectedJourney.stage as JourneyStage)[item.id];
                               const isChecked = !!value;
                               
+                              // Dropdown / number items: completed once a value is chosen or entered.
+                              if (item.options || item.isNumber) {
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border transition-all ${getStageColorClasses(selectedJourney.stage, isChecked)}`}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <span className={`w-5 h-5 rounded flex items-center justify-center border-2 ${isChecked ? 'bg-current border-current text-white' : 'border-gray-300 dark:border-white/20'}`}>
+                                        {isChecked && <i className="ri-check-line text-xs"></i>}
+                                      </span>
+                                      <span className="text-sm font-medium">{item.label}</span>
+                                    </div>
+                                    {item.options ? (
+                                      <select
+                                        aria-label={item.label}
+                                        value={typeof value === 'string' ? value : ''}
+                                        onChange={(e) => handleUpdateStageChecklistItem(item.id, e.target.value || false)}
+                                        className="px-2 py-1 text-sm rounded bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white"
+                                      >
+                                        <option value="">Select…</option>
+                                        {item.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                                      </select>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          inputMode="decimal"
+                                          aria-label={item.label}
+                                          key={`${selectedJourney.id}-${item.id}`}
+                                          defaultValue={typeof value === 'string' ? value : ''}
+                                          onBlur={(e) => {
+                                            const raw = e.target.value.trim();
+                                            const next = raw !== '' && Number(raw) > 0 ? raw : false;
+                                            if (next !== (value || false)) handleUpdateStageChecklistItem(item.id, next);
+                                          }}
+                                          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                          className="w-24 px-2 py-1 text-sm rounded bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white"
+                                        />
+                                        {item.unit && <span className="text-xs text-gray-500 dark:text-gray-400">{item.unit}</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+
                               if (item.isDate) {
                                 return (
                                   <div 
@@ -1262,6 +1338,44 @@ const JourneysPage: React.FC = () => {
                           className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
                         />
                       </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Gender of the baby</label>
+                          <select
+                            value={deliveryBabyGender}
+                            onChange={e => setDeliveryBabyGender(e.target.value)}
+                            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                          >
+                            <option value="">Select gender...</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weight of the baby (lbs)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 7.5"
+                            value={deliveryBabyWeight}
+                            onChange={e => setDeliveryBabyWeight(e.target.value)}
+                            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mode of Delivery</label>
+                          <select
+                            value={deliveryMode}
+                            onChange={e => setDeliveryMode(e.target.value)}
+                            className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                          >
+                            <option value="">Select mode...</option>
+                            <option value="Vaginal">Vaginal</option>
+                            <option value="Cesarean">Cesarean</option>
+                          </select>
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Postpartum Notes</label>
                         <textarea
@@ -1277,7 +1391,18 @@ const JourneysPage: React.FC = () => {
                       </Button>
                       {!selectedJourney.deliveryDate && (selectedJourney.stage === 'Birth' || selectedJourney.stage === 'Postpartum') && (
                         <div className="border-t border-rose-100/60 dark:border-white/5 pt-4">
-                          <Button color="green" className="w-full" onClick={() => { setDeliveryDateInput(''); setShowDeliveryModal(true); }}>
+                          <Button
+                            color="green"
+                            className="w-full"
+                            onClick={() => {
+                              setDeliveryDateInput(selectedJourney.deliveryDate?.split('T')[0] || new Date().toISOString().split('T')[0]);
+                              const birthChecklist = getStageChecklistState(selectedJourney, 'Birth');
+                              setDeliveryBabyGender(typeof birthChecklist.birth_baby_gender === 'string' ? birthChecklist.birth_baby_gender : '');
+                              setDeliveryBabyWeight(typeof birthChecklist.birth_baby_weight === 'string' ? birthChecklist.birth_baby_weight : '');
+                              setDeliveryMode(typeof birthChecklist.birth_delivery_mode === 'string' ? birthChecklist.birth_delivery_mode : '');
+                              setShowDeliveryModal(true);
+                            }}
+                          >
                             <i className="ri-heart-pulse-line mr-2"></i>Record Actual Delivery Date
                           </Button>
                         </div>
@@ -1364,6 +1489,51 @@ const JourneysPage: React.FC = () => {
                         onChange={(e) => setDeliveryDateInput(e.target.value)}
                         className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Gender of the baby
+                      </label>
+                      <select
+                        value={deliveryBabyGender}
+                        onChange={(e) => setDeliveryBabyGender(e.target.value)}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                      >
+                        <option value="">Select gender...</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Weight of the baby (lbs)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="e.g. 7.5"
+                        value={deliveryBabyWeight}
+                        onChange={(e) => setDeliveryBabyWeight(e.target.value)}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Mode of Delivery
+                      </label>
+                      <select
+                        value={deliveryMode}
+                        onChange={(e) => setDeliveryMode(e.target.value)}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                      >
+                        <option value="">Select mode...</option>
+                        <option value="Vaginal">Vaginal</option>
+                        <option value="Cesarean">Cesarean</option>
+                      </select>
                     </div>
 
                     <div className="flex gap-3">

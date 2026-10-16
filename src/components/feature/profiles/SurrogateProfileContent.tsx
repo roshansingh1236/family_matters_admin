@@ -31,11 +31,12 @@ import MedicalReportView from '../MedicalReportView';
 import { GC_STATUSES, GC_MEDICAL_SCREENING_STATUSES } from '../../../types';
 import {
   resolveSurrogateAdditionalProfile,
-  resolveSurrogateIntakeProfile
+  resolveSurrogateIntakeProfile,
+  fillIntakeFromSignup
 } from '../../../utils/surrogateFormData';
 import { medicalIntakeProfileSource } from '../../../utils/surrogateMedicalFromProfile';
 import { normalizeUserDocuments, isImageDoc } from '../../../utils/userDocuments';
-import SurrogateMedicalIntakeView from '../../data/SurrogateMedicalIntakeView';
+import SurrogateMedicalReleaseView from '../../data/SurrogateMedicalReleaseView';
 import { JourneyRoadmap } from '../JourneyRoadmap';
 import ReimbursementTracker from '../ReimbursementTracker';
 
@@ -77,11 +78,28 @@ function surrogateStateFromRow(data: Record<string, any>) {
     form2CompletedAt,
     profileImageUrl: data.profile_image_url ?? data.profileImageUrl,
     formData: fd,
-    form1: intake,
+    form1: withIntakeName(fillIntakeFromSignup(intake, fd), firstName, lastName),
     form2: additional,
     form2Completed: data.form_2_completed ?? data.form2Completed ?? false,
     profileCompleted: data.profile_completed ?? data.profileCompleted ?? false,
   };
+}
+
+// The first application saves first/last name separately (Form 2 saves a
+// single `name`), so the Intake Questionnaire's Name row was blank until
+// Form 2 was done. Fill it from the user's first/last name.
+function withIntakeName(
+  intake: Record<string, unknown> | null,
+  firstName: unknown,
+  lastName: unknown
+): Record<string, unknown> | null {
+  if (!intake) return intake;
+  const existing = typeof intake.name === 'string' ? intake.name.trim() : '';
+  if (existing) return intake;
+  const first = String(intake.firstName ?? intake.first_name ?? firstName ?? '').trim();
+  const last = String(intake.lastName ?? intake.last_name ?? lastName ?? '').trim();
+  const full = [first, last].filter(Boolean).join(' ');
+  return full ? { ...intake, name: full } : intake;
 }
 
 const TABS = [
@@ -91,7 +109,7 @@ const TABS = [
     { id: 'application', label: 'Form 1 (Intake)', icon: 'ri-file-user-line' },
     { id: 'personal', label: 'Form 2 (Detailed)', icon: 'ri-profile-line' },
     { id: 'medical_report', label: 'Medical Reports', icon: 'ri-heart-pulse-line' },
-    { id: 'medical_intake', label: 'Medical Intake', icon: 'ri-file-shield-line' },
+    { id: 'medical_release', label: 'Medical Release', icon: 'ri-file-shield-line' },
     { id: 'clinical', label: 'Clinical Care', icon: 'ri-stethoscope-line' },
     { id: 'finances', label: 'Finances', icon: 'ri-money-dollar-circle-line' },
     { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
@@ -782,13 +800,10 @@ export default function SurrogateProfileContent({
             </div>
         )}
 
-        {activeTab === 'medical_intake' && (
+        {activeTab === 'medical_release' && (
              <div className="space-y-6">
-                <SurrogateMedicalIntakeView
-                  surrogate={surrogate}
-                  onSaveFitness={(v) => handleUpdateField('form2.medicalFitness', v)}
-                  onSaveInfectious={(v) => handleUpdateField('form2.infectiousDisease', v)}
-                  onSavePsych={(v) => handleUpdateField('form2.psychClearance', v)}
+                <SurrogateMedicalReleaseView
+                  userId={surrogate.id}
                   onOpenDocumentsTab={() => setActiveTab('documents')}
                 />
 
