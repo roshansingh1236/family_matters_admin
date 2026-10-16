@@ -27,7 +27,15 @@ export type UserStatus =
   | 'Accepted to Program'
   | 'Ready to Match'
   | 'On Hold'
-  | 'Declined / Inactive';
+  | 'Declined / Inactive'
+  // Surrogate list approved 2026-10-16
+  | 'Reviewed/Contacted'
+  | 'Profile Sent'
+  | 'Profile Received'
+  | 'Psych Evaluation'
+  | 'Psych Complete'
+  | 'Accepted into Program'
+  | 'Rejected';
 
 export interface User {
   id: string;
@@ -94,26 +102,26 @@ export const IP_STATUSES: UserStatus[] = [
   'Declined / Inactive'
 ];
 
+// Surrogate statuses approved by the client on 2026-10-16: the "User Status
+// Confirmation" sheet + the automatic "Review Medical Records" step (set by the
+// app when Form 2 is submitted) + On Hold and Rejected. Keep in step with the
+// app's lib/utils/surrogate_status.dart. Old names are converted by migration
+// 20261016_surrogate_status_list.sql.
 export const GC_STATUSES: UserStatus[] = [
   'New Application',
-  'Reviewed',
-  'Contacted',
-  'Follow up',
-  'Documents Pending',
-  // Set by the app when the surrogate submits Form 2 (client STATUS AND FLOW).
+  'Reviewed/Contacted',
+  'Profile Sent',
+  'Profile Received',
   'Review Medical Records',
   'Interview Scheduled',
   'Medical Records Requested',
   'Medical Records Received',
-  'Medical Records Reviewed',
-  'Background Check Pending',
-  'Background Check Complete',
-  'Psychological Evaluation Scheduled',
-  'Psychological Evaluation Complete',
-  'Accepted to Program',
+  'Psych Evaluation',
+  'Psych Complete',
+  'Accepted into Program',
   'Ready to Match',
   'On Hold',
-  'Declined / Inactive'
+  'Rejected'
 ];
 
 export const GC_MEDICAL_SCREENING_STATUSES: UserStatus[] = [

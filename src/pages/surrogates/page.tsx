@@ -109,7 +109,7 @@ const SurrogatesPage: React.FC = () => {
     try {
       const { error } = await supabase
         .from('users')
-        .update({ status: 'Declined / Inactive', updated_at: new Date().toISOString() })
+        .update({ status: 'Rejected', updated_at: new Date().toISOString() })
         .eq('id', userId);
       if (error) throw error;
       fetchSurrogates();
@@ -120,10 +120,10 @@ const SurrogatesPage: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     const s = status?.toLowerCase();
-    if (s === 'matched' || s === 'ready to match' || s === 'accepted to program') return <Badge color="green">{status}</Badge>;
-    if (s?.includes('new') || s === 'contacted') return <Badge color="blue">{status}</Badge>;
+    if (s === 'matched' || s === 'ready to match' || s === 'accepted to program' || s === 'accepted into program') return <Badge color="green">{status}</Badge>;
+    if (s?.includes('new') || s === 'contacted' || s === 'reviewed/contacted') return <Badge color="blue">{status}</Badge>;
     if (s?.includes('pending') || s?.includes('scheduled')) return <Badge color="yellow">{status}</Badge>;
-    if (s === 'declined / inactive' || s === 'on hold') return <Badge color="red">{status}</Badge>;
+    if (s === 'declined / inactive' || s === 'rejected' || s === 'on hold') return <Badge color="red">{status}</Badge>;
     return <Badge color="gray">{status}</Badge>;
   };
 

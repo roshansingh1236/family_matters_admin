@@ -50,6 +50,7 @@ const StatusBadge = ({ status }: { status?: string }) => {
     'Rematch': 'bg-amber-100 text-amber-700 border-amber-200',
     'On Hold': 'bg-gray-100 text-gray-600 border-gray-200',
     'Accepted to Program': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+    'Accepted into Program': 'bg-indigo-100 text-indigo-700 border-indigo-200',
   };
   const cls = colors[status ?? ''] ?? 'bg-gray-100 text-gray-500 border-gray-200';
   return (

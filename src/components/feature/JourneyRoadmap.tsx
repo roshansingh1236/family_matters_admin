@@ -34,9 +34,9 @@ export const JourneyRoadmap: React.FC<JourneyRoadmapProps> = ({ role, currentSta
 
   // Simple status mapping logic for demonstration parity with mobile
   const determineStatus = (idx: number): 'completed' | 'current' | 'upcoming' => {
-     if (currentStatus === 'Accepted to Program' || currentStatus === 'Matched') return 'completed';
+     if (currentStatus === 'Accepted to Program' || currentStatus === 'Accepted into Program' || currentStatus === 'Matched') return 'completed';
      if (idx === 0 && (currentStatus === 'New Inquiry' || currentStatus === 'New Application')) return 'current';
-     if (idx === 1 && (currentStatus === 'Screening' || currentStatus === 'Reviewed')) return 'current';
+     if (idx === 1 && (currentStatus === 'Screening' || currentStatus === 'Reviewed' || currentStatus === 'Reviewed/Contacted')) return 'current';
      return idx < 1 ? 'completed' : 'upcoming';
   };
 

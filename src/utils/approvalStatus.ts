@@ -14,6 +14,7 @@
 const APPROVED_STATUSES = new Set([
   'approved',
   'accepted to program',
+  'accepted into program', // surrogate list approved 2026-10-16
   'match pending',   // intended parent — match-eligible (post-approval)
   'ready to match',  // surrogate — match-eligible (post-approval)
   'matched',

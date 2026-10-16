@@ -487,7 +487,8 @@ export default function SurrogateProfileContent({
                 </select>
              </div>
              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 backdrop-blur">
-                <i className="ri-stethoscope-line text-base"></i> <span className="font-medium mr-1">Medical:</span>
+                {/* Per client: only Status decides what the surrogate sees in the app. This is the agency's own note on medical screening. */}
+                <i className="ri-stethoscope-line text-base"></i> <span className="font-medium mr-1" title="Internal only — not shown to the surrogate. Her app follows Status.">Medical (internal):</span>
                 <select
                   value={surrogate.medical_screening_status ?? surrogate.medicalScreeningStatus ?? 'Not Started'}
                   onChange={async (e) => {
