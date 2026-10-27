@@ -46,16 +46,25 @@ const TasksPage: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
+      // `*`: names live in different columns depending on how the user signed
+      // up, and naming a column the database lacks fails the whole query.
       const { data, error: fetchError } = await supabase
         .from('users')
-        .select('id, email, full_name, role');
+        .select('*');
 
       if (fetchError) throw fetchError;
 
-      const usersData = (data || []).map(u => ({
-        id: u.id,
-        name: (u.full_name || u.email || 'Unknown User') as string
-      }));
+      const usersData = (data || []).map((u: any) => {
+        const fd = u.form_data && typeof u.form_data === 'object' ? u.form_data : {};
+        const name =
+          u.full_name ||
+          [u.first_name, u.last_name].filter(Boolean).join(' ') ||
+          [fd.firstName, fd.lastName].filter(Boolean).join(' ') ||
+          u.email ||
+          'Unknown User';
+        return { id: u.id, name: u.role ? `${name} (${u.role})` : name };
+      });
+      usersData.sort((a, b) => a.name.localeCompare(b.name));
       setUsers(usersData);
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -66,6 +75,11 @@ const TasksPage: React.FC = () => {
     fetchTasks();
     fetchUsers();
   }, []);
+
+  // The assignee's name isn't stored on the task; look it up.
+  const userNames = useMemo(() => new Map(users.map(u => [u.id, u.name])), [users]);
+  const assigneeLabel = (task: Task) =>
+    (task.assignee && userNames.get(task.assignee)) || task.assigneeName || 'Unassigned';
 
   const filteredTasks = useMemo(() => {
     if (!Array.isArray(tasks)) return [];
@@ -124,9 +138,9 @@ const TasksPage: React.FC = () => {
 
       await fetchTasks();
       setShowModal(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Failed to save task');
+      setError(`Failed to save task${err?.message ? `: ${err.message}` : ''}`);
     } finally {
       setIsLoading(false);
     }
@@ -275,7 +289,7 @@ const TasksPage: React.FC = () => {
                           <div className="flex items-center gap-4 mt-3 text-sm text-gray-500 dark:text-gray-400">
                             <span className="flex items-center gap-1">
                               <i className="ri-user-line"></i>
-                              {task.assigneeName || 'Unassigned'}
+                              {assigneeLabel(task)}
                             </span>
                             <span className="flex items-center gap-1">
                               <i className="ri-calendar-line"></i>
@@ -336,7 +350,7 @@ const TasksPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Assigned To</h4>
-                          <p className="text-gray-600 dark:text-gray-300">{selectedTask.assigneeName || 'Unassigned'}</p>
+                          <p className="text-gray-600 dark:text-gray-300">{assigneeLabel(selectedTask)}</p>
                         </div>
                         <div>
                           <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Due Date</h4>
@@ -385,8 +399,10 @@ const TasksPage: React.FC = () => {
           {/* Create/Edit Modal */}
           {showModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-                <form onSubmit={handleSubmit} className="p-6">
+              {/* No overflow clipping from md up, so the Assign To list can open
+                  in full; small screens keep scrolling so nothing is cut off. */}
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto md:max-h-none md:overflow-visible shadow-2xl">
+                <form onSubmit={handleSubmit} className="p-6 md:p-8">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                       {formData.id ? 'Edit Task' : 'New Task'}
@@ -413,6 +429,15 @@ const TasksPage: React.FC = () => {
                       />
                     </div>
 
+                    <SearchableDropdown
+                      label="Assign To"
+                      options={users}
+                      value={formData.assignee || ''}
+                      onChange={(value) => setFormData({ ...formData, assignee: value })}
+                      placeholder="Select User"
+                      required
+                    />
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                       <textarea
@@ -425,29 +450,15 @@ const TasksPage: React.FC = () => {
                       ></textarea>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <SearchableDropdown
-                          label="Assign To"
-                          options={users}
-                          value={formData.assignee || ''}
-                          onChange={(value) => setFormData({ ...formData, assignee: value })}
-                          placeholder="Select User"
-                          required
-                        />
-                      </div>
-
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Due Date</label>
-                        <input
-                          type="date"
-                          required
-                          value={formData.dueDate}
-                          onChange={e => setFormData({ ...formData, dueDate: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
-                        />
-                      </div>
+                    <div className="sm:w-1/2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Due Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.dueDate}
+                        onChange={e => setFormData({ ...formData, dueDate: e.target.value })}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                      />
                     </div>
 
                     {formData.id && (
