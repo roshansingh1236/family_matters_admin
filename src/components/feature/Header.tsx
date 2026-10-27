@@ -17,7 +17,6 @@ const PAGE_TITLES: Record<string, { label: string; icon: string }> = {
   '/inquiries':   { label: 'Inquiries',         icon: 'ri-question-answer-line' },
   '/tasks':       { label: 'Tasks',             icon: 'ri-task-line' },
   '/calendar':    { label: 'Calendar',          icon: 'ri-calendar-event-line' },
-  '/appointments':{ label: 'Appointments',      icon: 'ri-time-line' },
   '/baby-watch':  { label: 'Baby Watch',        icon: 'ri-heart-pulse-line' },
   '/medical':     { label: 'Medical',           icon: 'ri-hospital-line' },
   '/screening':   { label: 'Screening',         icon: 'ri-stethoscope-line' },

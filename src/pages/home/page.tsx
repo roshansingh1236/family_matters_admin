@@ -26,7 +26,7 @@ const HomePage: React.FC = () => {
   };
 
   const handleAppointmentClick = () => {
-    navigate('/appointments');
+    navigate('/calendar');
   };
 
   useEffect(() => {
