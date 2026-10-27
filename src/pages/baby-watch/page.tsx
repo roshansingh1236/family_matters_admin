@@ -55,11 +55,35 @@ const BabyWatchPage: React.FC = () => {
 
       if (fetchError) throw fetchError;
 
-      const casesData = (data || []).map(c => ({
-        id: c.id,
-        ...c,
-        displayName: `Journey #${c.case_number}`
-      }));
+      // Names of each journey's surrogate and intended parent.
+      const userIds = [...new Set((data || []).flatMap(c => [c.surrogate_id, c.parent_id]).filter(Boolean))];
+      const names: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: users } = await supabase.from('users').select('*').in('id', userIds);
+        for (const u of users || []) {
+          const fd = u.form_data && typeof u.form_data === 'object' ? u.form_data : {};
+          names[u.id] =
+            u.full_name ||
+            [u.first_name, u.last_name].filter(Boolean).join(' ') ||
+            [fd.firstName, fd.lastName].filter(Boolean).join(' ') ||
+            u.email ||
+            'Unknown';
+        }
+      }
+
+      const casesData = (data || []).map(c => {
+        const surrogateName = c.surrogate_id ? names[c.surrogate_id] : '';
+        const parentName = c.parent_id ? names[c.parent_id] : '';
+        return {
+          ...c,
+          id: c.id,
+          surrogateId: c.surrogate_id || '',
+          surrogateName: surrogateName || '',
+          parentId: c.parent_id || '',
+          parentName: parentName || '',
+          displayName: `Journey #${c.case_number}${surrogateName || parentName ? ` · ${[surrogateName, parentName].filter(Boolean).join(' & ')}` : ''}`
+        };
+      });
       setCases(casesData);
     } catch (err) {
       console.error('Error fetching cases:', err);
@@ -70,6 +94,9 @@ const BabyWatchPage: React.FC = () => {
     fetchUpdates();
     fetchCases();
   }, []);
+
+  // The journey an update belongs to (with its people), for cards and details.
+  const journeyFor = (caseId?: string) => cases.find(c => c.id === caseId);
 
   const filteredUpdates = selectedCase === 'all' 
     ? updates 
@@ -221,6 +248,27 @@ const BabyWatchPage: React.FC = () => {
                     )}
                     
                     <div className="p-6 space-y-4 flex-1 flex flex-col">
+                      {(() => {
+                        const journey = journeyFor(update.caseId);
+                        return (
+                          <div className="rounded-xl bg-rose-50/60 dark:bg-white/5 px-3 py-2 text-xs">
+                            <div className="flex items-center gap-1.5 font-semibold text-gray-900 dark:text-white">
+                              <i className="ri-route-line text-rose-500"></i>
+                              {journey ? `Journey #${journey.case_number}` : 'Journey not found'}
+                              {journey?.stage && (
+                                <span className="ml-auto font-medium text-gray-500 dark:text-gray-400">{journey.stage}</span>
+                              )}
+                            </div>
+                            {journey && (journey.surrogateName || journey.parentName) && (
+                              <div className="mt-1 space-y-0.5 text-gray-600 dark:text-gray-400">
+                                {journey.surrogateName && <div className="truncate"><i className="ri-user-heart-line mr-1"></i>Surrogate: {journey.surrogateName}</div>}
+                                {journey.parentName && <div className="truncate"><i className="ri-parent-line mr-1"></i>Parent: {journey.parentName}</div>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-rose-500 dark:text-rose-400">
                           {update.gestationalAge}
@@ -331,9 +379,26 @@ const BabyWatchPage: React.FC = () => {
                         </div>
                         <div className="p-4 rounded-2xl bg-rose-50/40 dark:bg-white/5 border border-gray-100 dark:border-white/5">
                           <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
-                            <i className="ri-user-line text-purple-500"></i> Surrogate
+                            <i className="ri-route-line text-purple-500"></i> Journey
                           </p>
-                          <p className="text-lg font-bold text-gray-900 dark:text-white">{selectedUpdate.surrogateName || 'N/A'}</p>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">
+                            {journeyFor(selectedUpdate.caseId) ? `#${journeyFor(selectedUpdate.caseId).case_number}` : 'N/A'}
+                          </p>
+                          {journeyFor(selectedUpdate.caseId)?.stage && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{journeyFor(selectedUpdate.caseId).stage}</p>
+                          )}
+                        </div>
+                        <div className="p-4 rounded-2xl bg-rose-50/40 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
+                            <i className="ri-user-heart-line text-purple-500"></i> Surrogate
+                          </p>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">{journeyFor(selectedUpdate.caseId)?.surrogateName || 'N/A'}</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-rose-50/40 dark:bg-white/5 border border-gray-100 dark:border-white/5">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1 items-center flex gap-2">
+                            <i className="ri-parent-line text-purple-500"></i> Intended Parent
+                          </p>
+                          <p className="text-lg font-bold text-gray-900 dark:text-white">{journeyFor(selectedUpdate.caseId)?.parentName || 'N/A'}</p>
                         </div>
                       </div>
 
