@@ -13,6 +13,23 @@ export function isNonEmptyRecord(v: unknown): v is Record<string, unknown> {
   );
 }
 
+/**
+ * Family photo URLs the surrogate uploaded on the last step of Form 2
+ * (form_data.surrogate_profile.familyPhotos). Accepts form_data as stored,
+ * including a JSON string.
+ */
+export function surrogateFamilyPhotos(formData: unknown): string[] {
+  let fd = formData;
+  if (typeof fd === 'string') {
+    try { fd = JSON.parse(fd); } catch { return []; }
+  }
+  const profile = isNonEmptyRecord(fd) ? fd.surrogate_profile : undefined;
+  const photos = isNonEmptyRecord(profile) ? profile.familyPhotos : undefined;
+  return Array.isArray(photos)
+    ? photos.filter((u): u is string => typeof u === 'string' && u.startsWith('http'))
+    : [];
+}
+
 export function resolveSurrogateIntakeProfile(
   formData: Record<string, unknown>,
   row: Record<string, unknown>

@@ -32,7 +32,8 @@ import { GC_STATUSES, GC_MEDICAL_SCREENING_STATUSES } from '../../../types';
 import {
   resolveSurrogateAdditionalProfile,
   resolveSurrogateIntakeProfile,
-  fillIntakeFromSignup
+  fillIntakeFromSignup,
+  surrogateFamilyPhotos
 } from '../../../utils/surrogateFormData';
 import { medicalIntakeProfileSource } from '../../../utils/surrogateMedicalFromProfile';
 import { normalizeUserDocuments, isImageDoc } from '../../../utils/userDocuments';
@@ -642,16 +643,23 @@ export default function SurrogateProfileContent({
         )}
 
         {activeTab === 'gallery' && (() => {
-            const personalPhotos = (surrogate.documents ?? []).filter(
-                (f: any) => String(f?.category ?? '').toLowerCase() === 'personal' && isImageDoc(f)
-            );
+            const familyPhotos = surrogateFamilyPhotos(surrogate.formData).map((url, i) => ({
+                url,
+                name: `Family photo ${i + 1} (from app)`,
+            }));
+            const personalPhotos = [
+                ...familyPhotos,
+                ...(surrogate.documents ?? []).filter(
+                    (f: any) => String(f?.category ?? '').toLowerCase() === 'personal' && isImageDoc(f)
+                ),
+            ];
 
             return (
                 <Card>
                     <div className="p-4">
                         <div className="mb-6">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Photo Gallery</h3>
-                            <p className="text-sm text-gray-500 mt-1">Photos uploaded with the "Personal" tag in Documents.</p>
+                            <p className="text-sm text-gray-500 mt-1">Family photos the surrogate added in the app, plus photos uploaded with the "Personal" tag in Documents.</p>
                         </div>
                         {personalPhotos.length === 0 ? (
                             <div className="p-12 text-center border-dashed border-2 rounded-2xl">
@@ -826,7 +834,8 @@ export default function SurrogateProfileContent({
                         {/* Auto-fill from OB history */}
                         {(() => {
                           const d = (medicalIntakeProfileSource(surrogate) ?? surrogate.form2) as any;
-                          const obEntries = d ? [1,2,3].map(n => ({ n, provider: d[`pregnancy${n}OBGYN`], facility: d[`pregnancy${n}Hospital`] })).filter(e => e.provider || e.facility) : [];
+                          // Form 2 records up to 10 pregnancies.
+                          const obEntries = d ? Array.from({ length: 10 }, (_, i) => i + 1).map(n => ({ n, provider: d[`pregnancy${n}OBGYN`], facility: d[`pregnancy${n}Hospital`] })).filter(e => e.provider || e.facility) : [];
                           if (obEntries.length === 0) return null;
                           return (
                             <div>

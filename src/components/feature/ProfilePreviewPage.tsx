@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
+import { surrogateFamilyPhotos } from '../../utils/surrogateFormData';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ interface UserPreview {
   documents?: Array<{ url: string; name: string; type?: string }>;
   about?: Record<string, any>;
   formData?: Record<string, any>;
+  form_data?: Record<string, any> | string;
   form2Data?: Record<string, any>;
   parent1?: Record<string, any>;
   parent2?: Record<string, any>;
@@ -174,6 +176,7 @@ export default function ProfilePreviewPage() {
     const imgs: string[] = [];
     const url = user?.profile_image_url ?? user?.profileImageUrl;
     if (url) imgs.push(url);
+    imgs.push(...surrogateFamilyPhotos(user?.form_data ?? user?.formData));
     user?.documents?.filter(isImageDoc).forEach((d) => imgs.push(d.url));
     return imgs;
   }, [user]);
