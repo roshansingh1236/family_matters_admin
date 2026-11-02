@@ -1,492 +1,312 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
-import DataSection from '../../components/data/DataSection';
+import { supabase } from '../../lib/supabase';
 import type { User, UserStatus } from '../../types';
 import { GC_STATUSES } from '../../types';
-
-const statusDefinitions = [
-  {
-    id: 'all',
-    label: 'All',
-    filter: (_surrogate: User) => true
-  },
-  {
-    id: 'new_application',
-    label: 'New Application',
-    filter: (surrogate: User) => surrogate.status === 'New Application'
-  },
-  {
-    id: 'pre_screen',
-    label: 'Pre-Screen',
-    filter: (surrogate: User) => surrogate.status === 'Pre-Screen'
-  },
-  {
-    id: 'screening',
-    label: 'Screening',
-    filter: (surrogate: User) => surrogate.status === 'Screening in Progress'
-  },
-  {
-    id: 'accepted',
-    label: 'Accepted',
-    filter: (surrogate: User) => surrogate.status === 'Accepted to Program'
-  },
-  {
-    id: 'on_hold',
-    label: 'On Hold',
-    filter: (surrogate: User) => surrogate.status === 'On Hold'
-  },
-  {
-    id: 'declined',
-    label: 'Declined',
-    filter: (surrogate: User) => surrogate.status === 'Declined / Inactive'
-  }
-];
+import AddUserDialog from '../../components/feature/AddUserDialog';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
+import { approvalSyncFields } from '../../utils/approvalStatus';
 
 const SurrogatesPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('all');
-  const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('grid');
-  const [selectedSurrogate, setSelectedSurrogate] = useState<User | null>(null);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [surrogates, setSurrogates] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [viewStyle, setViewStyle] = useState<'grid' | 'table'>('table');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'name' | 'date' | 'status'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const activeStatus = searchParams.get('status');
+
+  useEffect(() => {
+    if (activeStatus) setStatusFilter(activeStatus);
+  }, [activeStatus]);
 
   const fetchSurrogates = async () => {
+    setIsLoading(true);
     try {
-      const { data, error: err } = await supabase
+      const { data, error } = await supabase
         .from('users')
         .select('*')
-        .in('role', ['Surrogate', 'gestationalCarrier']);
+        .eq('role', 'Surrogate')
+        .order('created_at', { ascending: false });
 
-      if (err) throw err;
-      
-      const mappedData: User[] = (data || []).map(u => ({
-        id: u.id,
-        ...u,
-        profileCompleted: u.profile_completed || u.profileCompleted,
-        form2Completed: u.form2_completed || u.form2Completed || u.form_2_completed,
-        formData: u.form_data || u.formData || u.formdata,
-        form2: u.form2,
-        form2Data: u.form2_data || u.form2Data || u.form2data,
-        updatedAt: u.updated_at,
-        createdAt: u.created_at
-      }));
-      
-      setSurrogates(mappedData);
-      setIsLoading(false);
-      setError(null);
-    } catch (err: any) {
-      console.error('Failed to load surrogates', err);
-      setError('Unable to load surrogate records. Please try again later.');
+      if (error) throw error;
+      setSurrogates(data || []);
+    } catch (error) {
+      console.error('Error fetching surrogates:', error);
+    } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchSurrogates();
-
-    const channel = supabase
-      .channel('public:users:surrogates')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'users'
-      }, (payload: any) => {
-        if (payload.new && (payload.new.role === 'Surrogate' || payload.new.role === 'gestationalCarrier')) {
-            fetchSurrogates();
-        } else if (payload.old && (payload.old.role === 'Surrogate' || payload.old.role === 'gestationalCarrier')) {
-            fetchSurrogates();
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
+
+  const getDisplayName = (user: User) => {
+    const first = user.firstName || user.first_name || '';
+    const last = user.lastName || user.last_name || '';
+    const combined = [first, last].filter(Boolean).join(' ');
+    return combined || user.email || 'Anonymous Surrogate';
+  };
+
+  const filteredSurrogates = useMemo(() => {
+    let list = surrogates;
+
+    if (statusFilter !== 'all') {
+      list = list.filter(s => (s.status as string).toLowerCase() === statusFilter.toLowerCase());
+    }
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(s => 
+        getDisplayName(s).toLowerCase().includes(q) || 
+        (s.email && s.email.toLowerCase().includes(q))
+      );
+    }
+
+    list = [...list].sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'name') {
+        comparison = getDisplayName(a).localeCompare(getDisplayName(b));
+      } else if (sortBy === 'date') {
+        comparison = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+      } else if (sortBy === 'status') {
+        comparison = (a.status as string || '').localeCompare(b.status as string || '');
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return list;
+  }, [surrogates, statusFilter, searchQuery, sortBy, sortOrder]);
 
   const handleStatusUpdate = async (userId: string, newStatus: UserStatus) => {
     try {
-      const { error: err } = await supabase
+      const { error } = await supabase
         .from('users')
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        })
+        .update({ status: newStatus, ...approvalSyncFields(newStatus), updated_at: new Date().toISOString() })
         .eq('id', userId);
 
-      if (err) throw err;
-      
-      if (selectedSurrogate && selectedSurrogate.id === userId) {
-        setSelectedSurrogate({ ...selectedSurrogate, status: newStatus });
-      }
-    } catch (err) {
-      console.error('Error updating status:', err);
+      if (error) throw error;
+      fetchSurrogates();
+    } catch (error) {
+      console.error('Error updating status:', error);
       alert('Failed to update status');
     }
   };
 
-  const statusCounts = useMemo(() => {
-    return statusDefinitions.reduce<Record<string, number>>((acc, status) => {
-      acc[status.id] = surrogates.filter((surrogate) => status.filter(surrogate)).length;
-      return acc;
-    }, {});
-  }, [surrogates]);
-
-  const filteredSurrogates = useMemo(() => {
-    const currentStatus = statusDefinitions.find((status) => status.id === activeTab);
-    if (!currentStatus) return surrogates;
-    return surrogates.filter((surrogate) => currentStatus.filter(surrogate));
-  }, [activeTab, surrogates]);
-
-  const getStatusBadge = (surrogate: User) => {
-    const status = surrogate.status;
-    switch (status) {
-      case 'New Application': return <Badge color="blue">New App</Badge>;
-      case 'Pre-Screen': return <Badge color="indigo">Pre-Screen</Badge>;
-      case 'Screening in Progress': return <Badge color="purple">Screening</Badge>;
-      case 'Accepted to Program': return <Badge color="green">Accepted</Badge>;
-      case 'On Hold': return <Badge color="gray">On Hold</Badge>;
-      case 'Declined / Inactive': return <Badge color="red">Declined</Badge>;
-      // Legacy Fallbacks
-      case 'Available': return <Badge color="green">Available</Badge>;
-      case 'Potential': return <Badge color="blue">Potential</Badge>;
-      case 'Pregnant': return <Badge color="red">Pregnant</Badge>;
-      default: return <Badge color="gray">{status || 'Unknown'}</Badge>;
+  const handeArchive = async (userId: string) => {
+    if (!window.confirm('Are you sure you want to archive this surrogate?')) return;
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ status: 'Rejected', updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      if (error) throw error;
+      fetchSurrogates();
+    } catch (error) {
+      console.error('Error archiving user:', error);
     }
   };
 
-  const getDisplayName = (surrogate: User) => {
-    const formFirstName = (surrogate.formData as Record<string, unknown> | undefined)?.firstName as string | undefined;
-    const formLastName = (surrogate.formData as Record<string, unknown> | undefined)?.lastName as string | undefined;
-    const combined = [formFirstName, formLastName].filter(Boolean).join(' ');
-    if (combined.length > 0) return combined;
-
-    const firstName = (surrogate.firstName as string | undefined) ?? '';
-    const lastName = (surrogate.lastName as string | undefined) ?? '';
-    const fallbackCombined = [firstName, lastName].filter(Boolean).join(' ');
-    if (fallbackCombined.length > 0) return fallbackCombined;
-
-    return surrogate.email ?? 'Surrogate';
-  };
-
-  const getLocation = (surrogate: User) => {
-    const formData = surrogate.formData as Record<string, unknown> | undefined;
-    const city = (formData?.city as string | undefined) ?? '';
-    const state = (formData?.state as string | undefined) ?? '';
-    return [city, state].filter(Boolean).join(', ') || 'Not specified';
-  };
-
-  const getExperience = (surrogate: User) => {
-    const form2 = (surrogate.form2 as Record<string, unknown> | undefined) ?? {};
-    const pregnancies = (form2?.pregnancyHistory as Record<string, unknown> | undefined)?.total as string | undefined;
-    return pregnancies ?? ((surrogate.form2 as Record<string, unknown> | undefined)?.surrogacyChildren as string | undefined) ?? '—';
-  };
-
-  const getAvailability = (surrogate: User) => {
-    const form2 = surrogate.form2 as Record<string, unknown> | undefined;
-    const availability = form2?.availability as string | undefined;
-    return availability ?? 'Not provided';
+  const getStatusBadge = (status: string) => {
+    const s = status?.toLowerCase();
+    if (s === 'matched' || s === 'ready to match' || s === 'accepted to program' || s === 'accepted into program') return <Badge color="green">{status}</Badge>;
+    if (s?.includes('new') || s === 'contacted' || s === 'reviewed/contacted') return <Badge color="blue">{status}</Badge>;
+    if (s?.includes('pending') || s?.includes('scheduled')) return <Badge color="yellow">{status}</Badge>;
+    if (s === 'declined / inactive' || s === 'rejected' || s === 'on hold') return <Badge color="red">{status}</Badge>;
+    return <Badge color="gray">{status}</Badge>;
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-gray-50 dark:bg-[#0e0b1a]">
       <Sidebar />
-      
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        
-        <main className="flex-1 overflow-y-auto p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Surrogates Management</h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage all registered surrogates and their profiles.</p>
-              </div>
-              <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
-                <button
-                  onClick={() => setViewStyle('grid')}
-                  className={`p-2 rounded-md transition-colors cursor-pointer ${
-                    viewStyle === 'grid'
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                  }`}
-                  title="Grid View"
-                >
-                  <i className="ri-layout-grid-line text-lg"></i>
-                </button>
-                <button
-                  onClick={() => setViewStyle('table')}
-                  className={`p-2 rounded-md transition-colors cursor-pointer ${
-                    viewStyle === 'table'
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                  }`}
-                  title="Table View"
-                >
-                  <i className="ri-table-line text-lg"></i>
-                </button>
-              </div>
+        <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Surrogates Dashboard</h1>
+              <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm font-medium">Manage gestational carrier applications and active journeys.</p>
             </div>
-
-          {/* Status Tabs */}
-          <div className="mb-6 overflow-x-auto">
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
-              {statusDefinitions.map((status) => (
-                <button
-                  key={status.id}
-                  onClick={() => setActiveTab(status.id)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap cursor-pointer ${
-                    activeTab === status.id
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  {status.label} ({statusCounts[status.id] ?? 0})
-                </button>
-              ))}
+            
+            <div className="flex items-center gap-3">
+               <div className="flex bg-white dark:bg-white/5 p-1 rounded-xl border border-rose-100/50 dark:border-white/10">
+                 <button 
+                   onClick={() => setViewStyle('table')}
+                   className={`p-2 rounded-lg transition-all ${viewStyle === 'table' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                 >
+                   <i className="ri-table-line text-lg"></i>
+                 </button>
+                 <button 
+                   onClick={() => setViewStyle('grid')}
+                   className={`p-2 rounded-lg transition-all ${viewStyle === 'grid' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                 >
+                   <i className="ri-layout-grid-line text-lg"></i>
+                 </button>
+               </div>
+               <Button color="blue" onClick={() => setIsAddDialogOpen(true)}>
+                 <i className="ri-add-line mr-2"></i> Add Surrogate
+               </Button>
             </div>
           </div>
 
-          {error && (
-            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300">
-              {error}
+          <div className="bg-white dark:bg-white/5 p-4 rounded-2xl border border-rose-100/50 dark:border-white/10 mb-6 flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input 
+                type="text" 
+                placeholder="Search by name or email..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none text-sm dark:text-white transition-all"
+              />
             </div>
-          )}
+            <div className="flex gap-2">
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none text-sm dark:text-white"
+              >
+                <option value="all">All Statuses</option>
+                {GC_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select 
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="px-4 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none text-sm dark:text-white"
+              >
+                <option value="date">Sort by Date</option>
+                <option value="name">Sort by Name</option>
+                <option value="status">Sort by Status</option>
+              </select>
+              <button 
+                onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                className="px-3 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-600 dark:text-gray-300 flex items-center justify-center"
+                title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
+              >
+                <i className={sortOrder === 'asc' ? 'ri-sort-asc' : 'ri-sort-desc'}></i>
+              </button>
+            </div>
+          </div>
 
           {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <i className="ri-loader-4-line text-4xl animate-spin text-rose-500"></i>
+            </div>
+          ) : filteredSurrogates.length === 0 ? (
+            <Card className="p-12 text-center border-dashed border-2">
+              <i className="ri-user-heart-line text-4xl text-gray-300 mb-4"></i>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">No surrogates found</h3>
+              <p className="text-sm text-gray-500 mt-1">No surrogates are currently registered with this filter.</p>
+            </Card>
+          ) : viewStyle === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <Card key={index} className="animate-pulse">
-                  <div className="h-48 w-full rounded-lg bg-gray-100 dark:bg-gray-800" />
+              {filteredSurrogates.map((user) => (
+                <Card key={user.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/surrogates/${user.id}`)}>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500 font-bold">
+                        {getDisplayName(user)[0]}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-900 dark:text-white">{getDisplayName(user)}</h3>
+                        <p className="text-[10px] text-gray-400 font-medium">ID: {user.id.split('-')[0]}</p>
+                      </div>
+                    </div>
+                    {getStatusBadge(user.status as string)}
+                  </div>
+
+                  <div className="space-y-2 mb-6">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <i className="ri-mail-line text-gray-400"></i>
+                      <span className="truncate">{user.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <i className="ri-calendar-line text-gray-400"></i>
+                      <span>Joined {formatMMDDYYYY(user.createdAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-rose-50 dark:border-white/5 flex items-center justify-between" onClick={e => e.stopPropagation()}>
+                     <select 
+                       className="text-xs font-semibold bg-rose-50/50 dark:bg-white/5 border-none rounded-lg focus:ring-rose-500 dark:text-white px-3 py-2 cursor-pointer"
+                       value={user.status || 'New Application'}
+                       onChange={(e) => handleStatusUpdate(user.id, e.target.value as UserStatus)}
+                     >
+                        {GC_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                     </select>
+                     <Button size="sm" color="red" variant="outline" onClick={() => handeArchive(user.id)}>
+                       <i className="ri-archive-line"></i>
+                     </Button>
+                  </div>
                 </Card>
               ))}
             </div>
           ) : (
-            <>
-              {filteredSurrogates.length === 0 ? (
-                <Card className="p-6 text-center text-gray-600 dark:text-gray-300">
-                  No surrogate profiles match this filter.
-                </Card>
-              ) : viewStyle === 'grid' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {filteredSurrogates.map((surrogate) => (
-                    <Card
-                      key={surrogate.id}
-                      className="hover:shadow-lg transition-shadow cursor-pointer"
-                      onClick={() => setSelectedSurrogate(surrogate)}
-                    >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center">
-                            <i className="ri-user-heart-line text-pink-600 dark:text-pink-400 text-lg"></i>
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white">{getDisplayName(surrogate)}</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 break-all">ID: {surrogate.id}</p>
-                          </div>
-                        </div>
-                        {getStatusBadge(surrogate)}
-                      </div>
-
-                      <div className="space-y-2 mb-4">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Email:</span>
-                          <span className="text-gray-900 dark:text-white text-right break-words">{surrogate.email ?? '—'}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Location:</span>
-                          <span className="text-gray-900 dark:text-white text-right">{getLocation(surrogate)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Experience:</span>
-                          <span className="text-gray-900 dark:text-white text-right">{getExperience(surrogate)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Availability:</span>
-                          <span className="text-gray-900 dark:text-white text-right">{getAvailability(surrogate)}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          className="flex-1"
-                          onClick={(event: React.MouseEvent) => {
-                            event.stopPropagation();
-                            navigate(`/surrogates/${surrogate.id}`);
-                          }}
-                        >
-                          <i className="ri-eye-line mr-1"></i>
-                          View Profile
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card className="overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs uppercase">
-                        <tr>
-                          <th className="px-6 py-3 font-semibold">Name</th>
-                          <th className="px-6 py-3 font-semibold">Status</th>
-                          <th className="px-6 py-3 font-semibold">Location</th>
-                          <th className="px-6 py-3 font-semibold">Experience</th>
-                          <th className="px-6 py-3 font-semibold text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {filteredSurrogates.map((surrogate) => (
-                          <tr 
-                            key={surrogate.id} 
-                            className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
-                            onClick={() => setSelectedSurrogate(surrogate)}
-                          >
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center flex-shrink-0">
-                                  <i className="ri-user-heart-line text-pink-600 dark:text-pink-400 text-sm"></i>
-                                </div>
-                                <div>
-                                  <div className="font-medium text-gray-900 dark:text-white">
-                                    {getDisplayName(surrogate)}
-                                  </div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-500 font-mono">
-                                    {surrogate.id.split('-')[0]}...
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              {getStatusBadge(surrogate)}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                              {getLocation(surrogate)}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                              {getExperience(surrogate)}
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={(event: React.MouseEvent) => {
-                                  event.stopPropagation();
-                                  navigate(`/surrogates/${surrogate.id}`);
-                                }}
-                              >
-                                <i className="ri-eye-line"></i>
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              )}
-            </>
-          )}
-
-          {/* Surrogate Detail Modal */}
-          {selectedSurrogate && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Surrogate Profile</h2>
-                    <button
-                      onClick={() => setSelectedSurrogate(null)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
-                    >
-                      <i className="ri-close-line text-gray-600 dark:text-gray-400"></i>
-                    </button>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center">
-                        <i className="ri-user-heart-line text-pink-600 dark:text-pink-400 text-2xl"></i>
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{getDisplayName(selectedSurrogate)}</h3>
-                        <p className="text-gray-600 dark:text-gray-400 break-all mb-2">Surrogate ID: {selectedSurrogate.id}</p>
-                        
-                        {/* Status Dropdown */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
-                          <div className="relative">
-                            <select
-                              value={selectedSurrogate.status || ''}
-                              onChange={(e) => handleStatusUpdate(selectedSurrogate.id, e.target.value as UserStatus)}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white py-1 pl-2 pr-8"
-                            >
-                              <option value="">Select Status</option>
-                              {GC_STATUSES.map(status => (
-                                <option key={status} value={status}>{status}</option>
-                              ))}
-                            </select>
-                          </div>
-                          {getStatusBadge(selectedSurrogate)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <DataSection
-                      title="Profile Overview"
-                      data={{
-                        Email: selectedSurrogate.email,
-                        Role: selectedSurrogate.role,
-                        'Profile Completed': selectedSurrogate.profileCompleted,
-                        'Form 2 Completed': selectedSurrogate.form2Completed,
-                        'Created At': selectedSurrogate.createdAt,
-                        'Updated At': selectedSurrogate.updatedAt
-                      }}
-                    />
-                    <DataSection
-                      title="Form 1 Responses"
-                      data={(selectedSurrogate.formData as Record<string, unknown>) ?? null}
-                      emptyMessage="No form data available."
-                    />
-                    <DataSection
-                      title="Form 2 Responses"
-                      data={(selectedSurrogate.form2 as Record<string, unknown>) ?? null}
-                      emptyMessage="Form 2 has not been completed."
-                    />
-                    <DataSection
-                      title="Additional Profile Data"
-                      data={(selectedSurrogate.form2Data as Record<string, unknown>) ?? null}
-                      emptyMessage="No additional data provided."
-                    />
-
-                    <div className="flex gap-3">
-                      <Button color="blue" className="flex-1" disabled={selectedSurrogate.status !== 'Accepted to Program'}>
-                        <i className="ri-links-line mr-2"></i>
-                        Create Match
-                      </Button>
-                      <Button variant="outline" className="flex-1">
-                        <i className="ri-message-line mr-2"></i>
-                        Send Message
-                      </Button>
-                      <Button variant="outline" className="flex-1">
-                        <i className="ri-edit-line mr-2"></i>
-                        Edit Profile
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="text-gray-600 dark:text-gray-400 text-[10px] uppercase tracking-widest font-black">
+                    <tr className="bg-rose-50/50 dark:bg-white/5">
+                      <th className="px-6 py-4 font-bold rounded-l-xl">Name</th>
+                      <th className="px-6 py-4 font-bold">Received</th>
+                      <th className="px-6 py-4 font-bold">Status</th>
+                      <th className="px-6 py-4 font-bold text-right rounded-r-xl">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                    {filteredSurrogates.map((user) => (
+                      <tr key={user.id} className="hover:bg-rose-50/20 dark:hover:bg-white/5 transition-colors group cursor-pointer" onClick={() => navigate(`/surrogates/${user.id}`)}>
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-gray-900 dark:text-white">{getDisplayName(user)}</div>
+                          <div className="text-[10px] text-gray-400">{user.email}</div>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-gray-600 dark:text-gray-400">
+                          {formatMMDDYYYY(user.createdAt)}
+                        </td>
+                        <td className="px-6 py-4">
+                          {getStatusBadge(user.status as string)}
+                        </td>
+                        <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
+                           <div className="flex items-center justify-end gap-3">
+                             <select 
+                               className="text-xs font-semibold bg-rose-50/50 dark:bg-white/5 border-none rounded-lg focus:ring-rose-500 dark:text-white px-3 py-2 cursor-pointer"
+                               value={user.status || 'New Application'}
+                               onChange={(e) => handleStatusUpdate(user.id, e.target.value as UserStatus)}
+                             >
+                                {GC_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                             </select>
+                             <button className="p-2 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" onClick={() => handeArchive(user.id)}>
+                               <i className="ri-delete-bin-line text-base"></i>
+                             </button>
+                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
+            </Card>
           )}
         </main>
       </div>
+
+      <AddUserDialog
+        isOpen={isAddDialogOpen}
+        role="Surrogate"
+        onClose={() => setIsAddDialogOpen(false)}
+        onSuccess={fetchSurrogates}
+      />
     </div>
   );
 };

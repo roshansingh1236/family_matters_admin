@@ -1,9 +1,12 @@
 
 import { supabase } from '../lib/supabase';
+import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 export interface Conversation {
   id?: string;
-  participants: string[]; // User IDs 
+  name?: string; // Group/thread name (e.g. "Care Team — Alice & Bob")
+  participants: string[]; // User IDs
   participantNames: Record<string, string>; // ID -> Name mapping
   lastMessage: string;
   lastMessageTime: string;
@@ -26,6 +29,10 @@ export interface Message {
 export const messagingService = {
   // Get all conversations where admin is a participant
   getConversations: async (adminId: string): Promise<Conversation[]> => {
+    if (!adminId) {
+      console.warn('getConversations called without adminId');
+      return [];
+    }
     try {
       const { data, error } = await supabase
         .from('conversation_participants')
@@ -33,6 +40,7 @@ export const messagingService = {
           conversation_id,
           conversations (
             id,
+            name,
             last_message,
             last_message_at,
             created_at,
@@ -56,6 +64,7 @@ export const messagingService = {
           
           return {
               id: conv.id,
+              name: conv.name,
               participants: participantIds,
               participantNames: names,
               lastMessage: conv.last_message,
@@ -96,6 +105,7 @@ export const messagingService = {
 
       const conversation: Conversation = {
           id: (convData as any).id,
+          name: (convData as any).name,
           participants: participantIds,
           participantNames: names,
           lastMessage: (convData as any).last_message,
@@ -112,17 +122,34 @@ export const messagingService = {
             sender:sender_id ( full_name )
         `)
         .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-      
+        .order('created_at', { ascending: true, nullsFirst: false });
+
       if (msgError) throw msgError;
 
-      const messages: Message[] = (msgData || []).map(m => ({
+      // Per client review: portal messages sometimes appeared above app-user
+      // messages because the two clients populate different timestamp columns
+      // ('created_at' vs 'timestamp'). Resort by whichever is newer to enforce
+      // a consistent chronological order regardless of source.
+      const resolveTs = (m: any): number => {
+        const created = m?.created_at ? Date.parse(m.created_at) : NaN;
+        const ts = m?.timestamp ? Date.parse(m.timestamp) : NaN;
+        if (Number.isNaN(created) && Number.isNaN(ts)) return 0;
+        if (Number.isNaN(created)) return ts;
+        if (Number.isNaN(ts)) return created;
+        return Math.max(created, ts);
+      };
+
+      const sortedMsgs = [...(msgData || [])].sort(
+        (a: any, b: any) => resolveTs(a) - resolveTs(b)
+      );
+
+      const messages: Message[] = sortedMsgs.map(m => ({
           id: m.id,
           senderId: m.sender_id,
           senderName: m.sender?.full_name || 'Unknown',
           text: m.content,
           mediaUrl: m.attachments?.[0],
-          timestamp: m.created_at,
+          timestamp: m.created_at || m.timestamp,
           read: m.is_read
       }));
 
@@ -138,35 +165,83 @@ export const messagingService = {
     adminId: string,
     userId: string
   ): Promise<string> => {
+    if (!adminId || !userId) {
+      throw new Error('Admin ID and User ID are required to create a conversation');
+    }
     try {
-      // Check if conversation already exists (simplified to check for exact pair in participants table)
-      // This logic is better handled via an RPC or clever select in Supabase, 
-      // but for similarity to the original:
-      const { data: existing, error: existError } = await supabase.rpc('find_conversation_by_participants', {
-          p_user_ids: [adminId, userId]
+      // 1. Manually check if conversation already exists
+      const { data: adminParticipants, error: adminErr } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', adminId);
+
+      if (adminErr) {
+        console.warn('Error checking admin participants:', adminErr);
+      } else if (adminParticipants && adminParticipants.length > 0) {
+        const convIds = adminParticipants.map(p => p.conversation_id);
+        
+        const { data: existing, error: existError } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', userId)
+          .in('conversation_id', convIds)
+          .maybeSingle();
+
+        if (!existError && existing) {
+          console.log('Found existing conversation:', existing.conversation_id);
+          return existing.conversation_id;
+        }
+      }
+
+      // Fetch user names for denormalization (required by Flutter app)
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .in('id', [adminId, userId]);
+
+      const names: Record<string, string> = {};
+      (usersData || []).forEach(u => {
+        names[u.id] = u.full_name || 'Unknown User';
       });
 
-      if (!existError && existing) return existing;
-
-      // Create new conversation
+      // 2. Create new conversation
       const { data: conv, error: convError } = await supabase
         .from('conversations')
-        .insert({ last_message: 'Started a new conversation' })
+        .insert({ 
+          last_message: 'Started a new conversation',
+          last_message_at: new Date().toISOString(),
+          participants: [adminId, userId],
+          participant_names: names
+        })
         .select('id')
-        .maybeSingle();
+        .single();
       
-      if (convError) throw convError;
-      if (!conv) throw new Error('Failed to create conversation');
+      if (convError) {
+        console.error('Failed to insert into conversations table:', convError);
+        throw convError;
+      }
+      
+      if (!conv) throw new Error('Failed to create conversation: No ID returned');
 
-      // Add participants
-      await supabase.from('conversation_participants').insert([
+      // 3. Add participants
+      const { error: partError } = await supabase.from('conversation_participants').insert([
           { conversation_id: conv.id, user_id: adminId, role: 'admin' },
           { conversation_id: conv.id, user_id: userId, role: 'user' }
       ]);
 
+      if (partError) {
+        console.error('Failed to add participants:', partError);
+        // Attempt to cleanup the orphaned conversation if possible
+        await supabase.from('conversations').delete().eq('id', conv.id);
+        throw partError;
+      }
+
       return conv.id;
     } catch (error) {
-      console.error('Error creating conversation:', error);
+      console.error('CRITICAL: Error in createConversation:', error);
+      if (typeof error === 'object' && error !== null) {
+        console.error('Error Details:', JSON.stringify(error, null, 2));
+      }
       throw error;
     }
   },
@@ -176,7 +251,8 @@ export const messagingService = {
     conversationId: string,
     senderId: string,
     text: string,
-    media?: { url: string; type: 'image' | 'file' }
+    media?: { url: string; type: 'image' | 'file' },
+    senderName?: string
   ): Promise<void> => {
     try {
       const { error: msgError } = await supabase
@@ -184,6 +260,7 @@ export const messagingService = {
         .insert({
           conversation_id: conversationId,
           sender_id: senderId,
+          sender_name: senderName || 'Admin',
           content: text,
           attachments: media?.url ? [media.url] : [],
           is_read: false
@@ -199,6 +276,31 @@ export const messagingService = {
             last_message_at: new Date().toISOString()
         })
         .eq('id', conversationId);
+
+      // Push: notify the other participants of the new message.
+      try {
+        const { data: parts } = await supabase
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', conversationId);
+        const recipients = (parts || [])
+          .map((p: { user_id: string }) => p.user_id)
+          .filter((uid: string) => uid !== senderId);
+        void pushService.send(
+          recipients,
+          senderName || 'New message',
+          media ? `Sent a ${media.type}` : text.substring(0, 120),
+          { type: 'message', conversationId },
+        );
+        void emailService.send(
+          recipients,
+          senderName || 'New message',
+          media ? `Sent a ${media.type}` : text.substring(0, 120),
+          { type: 'message', conversationId },
+        );
+      } catch (e) {
+        console.error('message push failed', e);
+      }
 
     } catch (error) {
       console.error('Error sending message:', error);

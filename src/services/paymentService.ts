@@ -1,8 +1,14 @@
 
 import { supabase } from '../lib/supabase';
 import type { Payment } from '../types';
+import { financialsService } from './financialsService';
 
 const TABLE_NAME = 'payments';
+
+// Empty strings from unselected <select> options are invalid for uuid columns
+// ("invalid input syntax for type uuid"). Coerce them to null.
+const uuidOrNull = (v: unknown): string | null =>
+  typeof v === 'string' && v.trim() !== '' ? v : null;
 
 export const paymentService = {
   // Fetch all payments
@@ -40,9 +46,9 @@ export const paymentService = {
       const { data, error } = await supabase
         .from(TABLE_NAME)
         .insert({
-          journey_id: payment.journeyId,
-          surrogate_id: payment.surrogateId,
-          parent_id: payment.parentId,
+          journey_id: uuidOrNull(payment.journeyId),
+          surrogate_id: uuidOrNull(payment.surrogateId),
+          parent_id: uuidOrNull(payment.parentId),
           amount: payment.amount,
           type: payment.type,
           category: payment.category,
@@ -73,11 +79,34 @@ export const paymentService = {
       if (updates.referenceNumber) mappedUpdates.reference_number = updates.referenceNumber;
       if (updates.description || updates.notes) mappedUpdates.description = updates.description || updates.notes;
 
+      // When marking a surrogate payment as paid, deduct it from the IP's trust
+      // account for the journey. This throws (blocking the update) if the trust
+      // balance is $0 or insufficient.
+      const isPaid = typeof updates.status === 'string' &&
+        ['paid', 'completed'].includes(updates.status.toLowerCase());
+      if (isPaid) {
+        const { data: current } = await supabase
+          .from(TABLE_NAME)
+          .select('status, amount, journey_id, surrogate_id')
+          .eq('id', id)
+          .single();
+        const alreadyPaid = typeof current?.status === 'string' &&
+          ['paid', 'completed'].includes(current.status.toLowerCase());
+        if (!alreadyPaid) {
+          await financialsService.deductFromTrust(
+            current?.journey_id,
+            Number(updates.amount ?? current?.amount ?? 0),
+            'Surrogate payment',
+            current?.surrogate_id,
+          );
+        }
+      }
+
       const { error } = await supabase
         .from(TABLE_NAME)
         .update(mappedUpdates)
         .eq('id', id);
-        
+
       if (error) throw error;
     } catch (error) {
       console.error('Error updating payment:', error);

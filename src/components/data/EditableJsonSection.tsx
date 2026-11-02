@@ -107,7 +107,7 @@ const EditableJsonSection: React.FC<EditableJsonSectionProps> = ({
             onChange={(event) => setJsonValue(event.target.value)}
             rows={14}
             spellCheck={false}
-            className="w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 font-mono text-sm text-gray-800 dark:text-gray-100 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-2xl border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] px-4 py-3 font-mono text-sm text-gray-800 dark:text-gray-100 shadow-inner focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-blue-500"
             placeholder={`{\n  "example": "value"\n}`}
           />
           {errorMessage && <p className="text-xs font-medium text-red-500 dark:text-red-400">{errorMessage}</p>}
@@ -131,8 +131,20 @@ const EditableJsonSection: React.FC<EditableJsonSectionProps> = ({
           </div>
         </>
       ) : (
-        <DataSection title="" data={data ?? undefined} emptyMessage={emptyMessage} />
+        <DataSection 
+          title="" 
+          data={
+            templateData 
+              ? Object.keys(templateData).reduce((acc, key) => {
+                  acc[key] = data && Object.prototype.hasOwnProperty.call(data, key) ? data[key] : templateData[key];
+                  return acc;
+                }, {} as Record<string, unknown>)
+              : (data || undefined)
+          } 
+          emptyMessage={emptyMessage} 
+        />
       )}
+
     </div>
   );
 };

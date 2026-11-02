@@ -1,7 +1,99 @@
 import { supabase } from '../lib/supabase';
-import type { Journey, JourneyStatus, CaseMilestone } from '../types';
+import type { Journey, JourneyStatus, JourneyStage, CaseMilestone } from '../types';
+import { auditService } from './auditService';
+import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 const TABLE_NAME = 'journeys';
+
+// All operational sub-stages in order
+export const JOURNEY_STAGES: JourneyStage[] = [
+  'Medical Screening',
+  'Legal',
+  'Embryo Transfer',
+  'Pregnancy',
+  'Birth',
+  'Postpartum',
+];
+
+// ─── Per-stage progression checklists ──────────────────────────────────────
+// The admin must complete every item for the CURRENT stage before the journey
+// can advance to the next stage.
+//
+// NOTE: these are PLACEHOLDER items. Replace the lists below with Breann's
+// finalized checklist for each stage — only the `label` text needs to change
+// (and add/remove rows). Keep `id` stable once items are in production so saved
+// progress is preserved.
+export type StageChecklistItem = {
+  id: string;
+  label: string;
+  /** Item is completed by picking a date. */
+  isDate?: boolean;
+  /** Item is completed by choosing one of these options (dropdown). */
+  options?: string[];
+  /** Item is completed by entering a number. */
+  isNumber?: boolean;
+  /** Unit shown next to a number input (e.g. "lbs"). */
+  unit?: string;
+};
+
+export const STAGE_CHECKLISTS: Record<JourneyStage, StageChecklistItem[]> = {
+  'Medical Screening': [
+    { id: 'ms_records_collected', label: 'Medical Reports approved by Clinic', isDate: true },
+    { id: 'ms_screening_scheduled', label: 'Medical screening scheduled', isDate: true },
+    { id: 'ms_cleared', label: 'Medically Cleared for Legal', isDate: true },
+  ],
+  'Legal': [
+    { id: 'legal_clearance', label: 'Legal Clearance', isDate: true },
+    { id: 'legal_parental_est', label: 'Parental establishment/Birth Order completion date', isDate: true },
+  ],
+  'Embryo Transfer': [
+    { id: 'et_fet_calendar_received', label: 'FET Calendar Received', isDate: true },
+    { id: 'et_date', label: 'Embryo transfer date', isDate: true },
+    { id: 'et_first_hcg', label: 'First HCG date', isDate: true },
+    { id: 'et_second_hcg', label: 'Second HCG date', isDate: true },
+  ],
+  'Pregnancy': [
+    { id: 'preg_first_ob_scheduled', label: '1st OB Appointment Scheduled', isDate: true },
+    { id: 'preg_heartbeat', label: 'Heartbeat detection date', isDate: true },
+    { id: 'preg_first_trimester', label: 'First trimester completion date', isDate: true },
+    { id: 'preg_anatomy_scan', label: 'Anatomy scan completion date', isDate: true },
+    { id: 'preg_fetal_echo', label: 'Fetal echocardiogram completion date', isDate: true },
+    { id: 'preg_birth_plan', label: 'Birth plan completion date', isDate: true },
+  ],
+  'Birth': [
+    { id: 'birth_delivery_date', label: 'Delivery date', isDate: true },
+    { id: 'birth_baby_gender', label: 'Gender of the baby', options: ['Male', 'Female'] },
+    { id: 'birth_baby_weight', label: 'Weight of the baby', isNumber: true, unit: 'lbs' },
+    { id: 'birth_delivery_mode', label: 'Mode of Delivery', options: ['Vaginal', 'Cesarean'] },
+    { id: 'birth_delivery_docs', label: 'Delivery Documentation' },
+  ],
+  'Postpartum': [
+    { id: 'pp_six_weeks', label: 'Six Weeks Postpartum followup visit', isDate: true },
+    { id: 'pp_three_months', label: 'Three Months Postpartum Cancel Insurance Policy', isDate: true },
+    { id: 'pp_trust_closure', label: 'Trust Account Closure', isDate: true },
+  ],
+};
+
+/** Saved checklist state ({itemId: true}) for a given stage on a journey. */
+export function getStageChecklistState(
+  journey: Pick<Journey, 'journeyNotes'>,
+  stage: JourneyStage,
+): Record<string, boolean | string> {
+  const notes = (journey.journeyNotes as any) || {};
+  return (notes.stageChecklists?.[stage] as Record<string, boolean | string>) || {};
+}
+
+/** True when every checklist item for [stage] is checked. */
+export function isStageChecklistComplete(
+  journey: Pick<Journey, 'journeyNotes'>,
+  stage: JourneyStage,
+): boolean {
+  const items = STAGE_CHECKLISTS[stage] || [];
+  if (items.length === 0) return true;
+  const state = getStageChecklistState(journey, stage);
+  return items.every((i) => !!state[i.id]);
+}
 
 // Helper to map DB snake_case to Frontend camelCase
 const mapJourneyFromDb = (dbJourney: any): Journey => ({
@@ -12,9 +104,12 @@ const mapJourneyFromDb = (dbJourney: any): Journey => ({
   gestationalCarrierId: dbJourney.surrogate_id || dbJourney.gestational_carrier_id,
   caseManagerId: dbJourney.case_manager_id,
   status: dbJourney.status,
+  stage: dbJourney.stage || 'Medical Screening',
   createdAt: dbJourney.created_at,
   completedAt: dbJourney.completed_at,
   estimatedDeliveryDate: dbJourney.estimated_delivery_date,
+  deliveryDate: dbJourney.delivery_date,
+  postpartumNotes: dbJourney.postpartum_notes,
   milestones: dbJourney.milestones || [],
   documents: dbJourney.documents || [],
   payments: dbJourney.payments || [],
@@ -24,7 +119,7 @@ const mapJourneyFromDb = (dbJourney: any): Journey => ({
 });
 
 export const journeyService = {
-  // Fetch all journeys
+  // ─── Fetch all journeys ────────────────────────────────────────────────────
   getAllJourneys: async (): Promise<Journey[]> => {
     try {
       const { data, error } = await supabase
@@ -40,7 +135,7 @@ export const journeyService = {
     }
   },
 
-  // Get a specific journey
+  // ─── Get a specific journey ────────────────────────────────────────────────
   getJourneyById: async (id: string): Promise<Journey | null> => {
     try {
       const { data, error } = await supabase
@@ -57,7 +152,24 @@ export const journeyService = {
     }
   },
 
-  // Create a new journey (usually from a match)
+  // ─── Get journey by match ID ───────────────────────────────────────────────
+  getJourneyByMatchId: async (matchId: string): Promise<Journey | null> => {
+    try {
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('match_id', matchId)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data ? mapJourneyFromDb(data) : null;
+    } catch (error) {
+      console.error('Error fetching journey by match:', error);
+      throw error;
+    }
+  },
+
+  // ─── Create a new journey (called via matchService.activateMatch) ──────────
   createJourney: async (journeyData: any): Promise<string> => {
     try {
       const { data, error } = await supabase
@@ -68,8 +180,9 @@ export const journeyService = {
           parent_id: journeyData.intendedParentId,
           surrogate_id: journeyData.gestationalCarrierId,
           case_manager_id: journeyData.caseManagerId,
-          status: journeyData.status || 'Medical Screening',
-          journey_notes: journeyData.journeyNotes || {}
+          status: 'Active',
+          stage: 'Medical Screening',
+          journey_notes: journeyData.journeyNotes || {},
         })
         .select('id')
         .single();
@@ -82,11 +195,48 @@ export const journeyService = {
     }
   },
 
-  // Update journey status
+  // ─── Update journey stage (operational sub-stage progression) ──────────────
+  updateJourneyStage: async (id: string, newStage: JourneyStage): Promise<void> => {
+    try {
+      const { data: before } = await supabase
+        .from(TABLE_NAME)
+        .select('stage, parent_id, surrogate_id')
+        .eq('id', id)
+        .single();
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .update({ stage: newStage, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      auditService.log(`Journey stage changed: ${before?.stage} → ${newStage}`, 'journey', id, {
+        before: { stage: before?.stage },
+        after: { stage: newStage },
+      });
+      // Push: notify both parties of the new journey stage.
+      void pushService.send(
+        [before?.parent_id, before?.surrogate_id],
+        'Journey update',
+        `Your journey has moved to "${newStage}".`,
+        { type: 'journey_stage', journeyId: id, stage: newStage },
+      );
+      void emailService.send(
+        [before?.parent_id, before?.surrogate_id],
+        'Journey update',
+        `Your journey has moved to "${newStage}".`,
+        { type: 'journey_stage', journeyId: id, stage: newStage },
+      );
+    } catch (error) {
+      console.error('Error updating journey stage:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update journey status (top-level: Active → Completed/Cancelled) ──────
   updateJourneyStatus: async (id: string, newStatus: JourneyStatus): Promise<void> => {
     try {
       const updateData: any = {
-        status: newStatus
+        status: newStatus,
+        updated_at: new Date().toISOString(),
       };
       
       if (newStatus === 'Completed') {
@@ -105,13 +255,62 @@ export const journeyService = {
     }
   },
 
-  // Update Milestones
+  // ─── Update delivery date + sync Match → Delivered ────────────────────────
+  updateDeliveryDate: async (id: string, deliveryDate: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .update({
+          delivery_date: deliveryDate,
+          stage: 'Postpartum',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Per spec: recording delivery must also advance Match status to Delivered
+      const journey = await journeyService.getJourneyById(id);
+      if (journey?.matchId) {
+        await supabase
+          .from('matches')
+          .update({
+            status: 'Delivered',
+            delivery_date: deliveryDate,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', journey.matchId)
+          .eq('status', 'Active'); // Only advance if currently Active
+      }
+    } catch (error) {
+      console.error('Error updating delivery date:', error);
+      throw error;
+    }
+  },
+
+  // ─── Get next stage ────────────────────────────────────────────────────────
+  getNextStage: (currentStage: string): JourneyStage | null => {
+    const idx = JOURNEY_STAGES.indexOf(currentStage as JourneyStage);
+    if (idx !== -1 && idx < JOURNEY_STAGES.length - 1) {
+      return JOURNEY_STAGES[idx + 1];
+    }
+    return null;
+  },
+
+  // ─── Get stage progress percentage ─────────────────────────────────────────
+  getStageProgress: (stage: string): number => {
+    const idx = JOURNEY_STAGES.indexOf(stage as JourneyStage);
+    if (idx === -1) return 0;
+    return Math.round(((idx + 1) / JOURNEY_STAGES.length) * 100);
+  },
+
+  // ─── Update Milestones ─────────────────────────────────────────────────────
   updateMilestone: async (journeyId: string, milestone: CaseMilestone): Promise<void> => {
     try {
       const journey = await journeyService.getJourneyById(journeyId) as any;
       if (!journey) throw new Error('Journey not found');
       
-      const journeyNotes = journey.journey_notes || {};
+      const journeyNotes = journey.journeyNotes || {};
       const milestones = journeyNotes.milestones || [];
       const index = milestones.findIndex((m: any) => m.id === milestone.id);
       
@@ -135,7 +334,7 @@ export const journeyService = {
     }
   },
 
-  // Get journeys by status
+  // ─── Get journeys by status ────────────────────────────────────────────────
   getJourneysByStatus: async (status: JourneyStatus): Promise<Journey[]> => {
     try {
       const { data, error } = await supabase
@@ -150,6 +349,236 @@ export const journeyService = {
       console.error('Error fetching journeys by status:', error);
       throw error;
     }
-  }
-};
+  },
 
+  // ─── Update estimated delivery date ───────────────────────────────────────
+  updateEstimatedDeliveryDate: async (id: string, edd: string): Promise<void> => {
+    try {
+      const { error } = await supabase.from(TABLE_NAME).update({
+        estimated_delivery_date: edd,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating EDD:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update medical records section ───────────────────────────────────────
+  updateMedicalRecords: async (id: string, medicalRecords: Record<string, unknown>): Promise<void> => {
+    try {
+      const { error } = await supabase.from(TABLE_NAME).update({
+        medical_records: medicalRecords,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating medical records:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update documents array ───────────────────────────────────────────────
+  updateJourneyDocuments: async (id: string, documents: any[]): Promise<void> => {
+    try {
+      const { error } = await supabase.from(TABLE_NAME).update({
+        documents: documents,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating documents:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update legal agreements section ──────────────────────────────────────
+  updateLegalAgreements: async (id: string, legalAgreements: Record<string, unknown>): Promise<void> => {
+    try {
+      const { error } = await supabase.from(TABLE_NAME).update({
+        legal_agreements: legalAgreements,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating legal agreements:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update a stage's progression checklist (stored in journey_notes) ─────
+  updateStageChecklist: async (
+    journeyId: string,
+    stage: JourneyStage,
+    checklist: Record<string, boolean | string>,
+  ): Promise<void> => {
+    try {
+      const journey = (await journeyService.getJourneyById(journeyId)) as any;
+      if (!journey) throw new Error('Journey not found');
+      const notes = (journey.journeyNotes as any) || {};
+      const stageChecklists = notes.stageChecklists || {};
+      stageChecklists[stage] = checklist;
+      notes.stageChecklists = stageChecklists;
+
+      const { error } = await supabase
+        .from(TABLE_NAME)
+        .update({ journey_notes: notes, updated_at: new Date().toISOString() })
+        .eq('id', journeyId);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating stage checklist:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update journey notes (generic JSON blob) ─────────────────────────────
+  updateJourneyNotes: async (id: string, notes: Record<string, unknown>): Promise<void> => {
+    try {
+      const { error } = await supabase.from(TABLE_NAME).update({
+        journey_notes: notes,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating journey notes:', error);
+      throw error;
+    }
+  },
+
+  // ─── Update postpartum notes ───────────────────────────────────────────────
+  updatePostpartumNotes: async (id: string, notes: string): Promise<void> => {
+    try {
+      const { error } = await supabase.from(TABLE_NAME).update({
+        postpartum_notes: notes,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating postpartum notes:', error);
+      throw error;
+    }
+  },
+
+  // ─── Close escrow + complete match (final lifecycle step per spec) ───────────
+  // Per spec: Match cannot go to Completed until escrow closure is confirmed.
+  // This sets escrow_closed_at on both Journey and Match, then advances both to Completed.
+  closeEscrow: async (journeyId: string, notes?: string): Promise<void> => {
+    try {
+      const closedAt = new Date().toISOString();
+
+      // Update journey to Completed
+      const journeyUpdate: any = {
+        status: 'Completed',
+        completed_at: closedAt,
+        updated_at: closedAt,
+      };
+      if (notes) journeyUpdate.postpartum_notes = notes;
+
+      const { error: journeyError } = await supabase
+        .from(TABLE_NAME)
+        .update(journeyUpdate)
+        .eq('id', journeyId);
+
+      if (journeyError) throw journeyError;
+
+      // Advance linked match: Escrow Closure → Completed
+      const journey = await journeyService.getJourneyById(journeyId);
+      if (journey?.matchId) {
+        const { error: matchError } = await supabase
+          .from('matches')
+          .update({
+            status: 'Completed',
+            escrow_closed_at: closedAt,
+            updated_at: closedAt,
+          })
+          .eq('id', journey.matchId)
+          .eq('status', 'Escrow Closure'); // Only advance if currently at Escrow Closure
+
+        if (matchError) throw matchError;
+      }
+      auditService.log('Escrow closed — Journey and Match marked Completed', 'journey', journeyId, {
+        after: { status: 'Completed', completedAt: closedAt },
+      });
+    } catch (error) {
+      console.error('Error closing escrow:', error);
+      throw error;
+    }
+  },
+
+  // ─── Get journeys by stage ─────────────────────────────────────────────────
+  getJourneysByStage: async (stage: JourneyStage): Promise<Journey[]> => {
+    try {
+      const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('stage', stage)
+        .eq('status', 'Active')
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      return (data || []).map(mapJourneyFromDb);
+    } catch (error) {
+      console.error('Error fetching journeys by stage:', error);
+      throw error;
+    }
+  },
+
+  // ─── Delete journey + journey-scoped rows; clears matches.journey_id (admin) ─
+  deleteJourney: async (journeyId: string): Promise<void> => {
+    const before = await journeyService.getJourneyById(journeyId);
+    if (!before) throw new Error('Journey not found');
+
+    const jids = [journeyId];
+    const now = new Date().toISOString();
+
+    if (before.matchId) {
+      const { error: clearJourneyFk } = await supabase
+        .from('matches')
+        .update({ journey_id: null, updated_at: now })
+        .eq('id', before.matchId)
+        .eq('journey_id', journeyId);
+      if (clearJourneyFk) throw clearJourneyFk;
+    }
+
+    const tablesWithJourneyId = [
+      'agency_financials',
+      'baby_watch_updates',
+      'appointments',
+      'payments',
+      'tasks',
+      'documents',
+    ] as const;
+    for (const t of tablesWithJourneyId) {
+      const { error } = await supabase.from(t).delete().in('journey_id', jids);
+      if (error) throw error;
+    }
+
+    const { data: convs, error: convSelErr } = await supabase
+      .from('conversations')
+      .select('id')
+      .in('journey_id', jids);
+    if (convSelErr) throw convSelErr;
+    const cids = (convs || []).map((c: { id: string }) => c.id);
+    if (cids.length > 0) {
+      const { error: msgErr } = await supabase.from('messages').delete().in('conversation_id', cids);
+      if (msgErr) throw msgErr;
+      const { error: partErr } = await supabase.from('conversation_participants').delete().in('conversation_id', cids);
+      if (partErr) throw partErr;
+    }
+    const { error: convDelErr } = await supabase.from('conversations').delete().in('journey_id', jids);
+    if (convDelErr) throw convDelErr;
+
+    const { error: delJourneyErr } = await supabase.from(TABLE_NAME).delete().eq('id', journeyId);
+    if (delJourneyErr) throw delJourneyErr;
+
+    await auditService.log('Journey deleted', 'journey', journeyId, {
+      before: {
+        caseNumber: before.caseNumber,
+        matchId: before.matchId,
+        status: before.status,
+        stage: before.stage,
+      },
+    });
+  },
+};

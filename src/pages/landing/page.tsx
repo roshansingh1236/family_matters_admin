@@ -5,13 +5,13 @@ const LandingPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 overflow-x-hidden">
+    <div className="min-h-screen bg-white dark:bg-[#0e0b1a] overflow-x-hidden">
       {/* Navigation */}
       <nav className="fixed w-full z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-rose-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md shadow-rose-500/20">
                 <i className="ri-heart-line text-white text-xl"></i>
               </div>
               <span className="text-xl font-bold text-gray-900 dark:text-white">Family Matters</span>
@@ -19,13 +19,13 @@ const LandingPage: React.FC = () => {
             <div className="flex gap-4">
               <button 
                 onClick={() => navigate('/auth/login')} 
-                className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
               >
                 Log In
               </button>
               <button 
                 onClick={() => navigate('/')}
-                className="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors shadow-lg shadow-blue-600/20"
+                className="px-4 py-2 rounded-full bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white text-sm font-medium transition-colors shadow-lg shadow-rose-500/20"
               >
                 Dashboard
               </button>
@@ -43,12 +43,12 @@ const LandingPage: React.FC = () => {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-          <span className="inline-block px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-sm font-medium mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <span className="inline-block px-4 py-1.5 rounded-full bg-rose-50 dark:bg-rose-500/10 text-rose-500 dark:text-rose-400 text-sm font-medium mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             Reimagining Surrogacy Management
           </span>
           <h1 className="text-5xl lg:text-7xl font-bold text-gray-900 dark:text-white mb-6 tracking-tight animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
             Making Family<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">Actually Matters</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-500 via-pink-500 to-purple-600">Actually Matters</span>
           </h1>
           <p className="max-w-2xl mx-auto text-xl text-gray-600 dark:text-gray-300 mb-10 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
             A comprehensive, modern platform designed to streamline the journey for agencies, surrogates, and intended parents.
@@ -56,11 +56,11 @@ const LandingPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
             <button 
                onClick={() => navigate('/')}
-               className="w-full sm:w-auto px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg transition-transform hover:scale-105 shadow-xl shadow-blue-600/20"
+               className="w-full sm:w-auto px-8 py-4 rounded-full bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-semibold text-lg transition-all hover:scale-105 shadow-xl shadow-rose-500/25"
             >
               Enter Dashboard
             </button>
-            <button className="w-full sm:w-auto px-8 py-4 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white font-semibold text-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <button className="w-full sm:w-auto px-8 py-4 rounded-full bg-white dark:bg-[#15111f] border border-rose-100/60 dark:border-white/5 text-gray-900 dark:text-white font-semibold text-lg hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
               Learn More
             </button>
           </div>
@@ -68,7 +68,7 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* Stats Section */}
-      <section className="py-20 bg-gray-50 dark:bg-gray-800/50">
+      <section className="py-20 bg-rose-50/50 dark:bg-white/5/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
                 {[
@@ -129,11 +129,11 @@ const LandingPage: React.FC = () => {
                 desc: 'Streamlined document collection, verification, and storage workflows.'
               }
             ].map((feature, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow group">
-                <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                  <i className={`${feature.icon} text-2xl text-blue-600 dark:text-blue-400`}></i>
+              <div key={i} className="bg-white dark:bg-[#15111f] p-8 rounded-2xl border border-rose-100/40 dark:border-white/5 hover:shadow-xl transition-shadow group">
+                <div className="w-12 h-12 bg-rose-50 dark:bg-rose-500/10 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                  <i className={`${feature.icon} text-2xl text-rose-500 dark:text-rose-400`}></i>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">{feature.title}</h3>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3">{feature.title}</h3>
                 <p className="text-gray-600 dark:text-gray-400 leading-relaxed">{feature.desc}</p>
               </div>
             ))}
@@ -142,13 +142,13 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* Bottom CTA */}
-      <section className="py-24 bg-blue-600 relative overflow-hidden">
+      <section className="py-24 bg-gradient-to-br from-rose-500 via-pink-600 to-purple-700 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1549420042-2d109bb333e2?q=80&w=2670&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay"></div>
         <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
           <h2 className="text-3xl md:text-5xl font-bold text-white mb-8">Ready to modernize your agency?</h2>
           <button 
              onClick={() => navigate('/auth/signup')}
-             className="px-8 py-4 bg-white text-blue-600 rounded-full font-bold text-lg hover:bg-gray-100 transition-colors shadow-xl"
+             className="px-8 py-4 bg-white text-rose-600 rounded-full font-bold text-lg hover:bg-gray-100 transition-colors shadow-xl"
           >
             Get Started Now
           </button>
@@ -156,7 +156,7 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-12">
+      <footer className="bg-gray-50 dark:bg-[#0e0b1a] border-t border-gray-200 dark:border-gray-800 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
            <div className="flex items-center gap-2">
               <div className="w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center">

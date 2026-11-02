@@ -9,8 +9,11 @@ import { paymentService } from '../../services/paymentService';
 import type { Payment } from '../../services/paymentService';
 import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
 import UserSelector from '../../components/feature/UserSelector';
+import { useAuth } from '../../contexts/AuthContext';
+import { canViewFinancials } from '../../utils/permissions';
 
 const PaymentsPage: React.FC = () => {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState('all');
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [showNewPaymentModal, setShowNewPaymentModal] = useState(false);
@@ -100,16 +103,29 @@ const PaymentsPage: React.FC = () => {
     : payments.filter(p => p.status.toLowerCase() === activeTab);
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         
         <main className="flex-1 overflow-y-auto p-6">
+          {/* RBAC Gate: Per spec, if user lacks permission, data does not appear at all */}
+          {!canViewFinancials(profile?.role) ? (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+                <i className="ri-lock-line text-red-600 dark:text-red-400 text-3xl"></i>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Restricted</h2>
+              <p className="text-gray-600 dark:text-gray-400 max-w-md">
+                You do not have permission to view payment data. Only Admin and Finance roles can access this page.
+              </p>
+            </div>
+          ) : (
+          <>
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Compensation</h1>
-              <p className="text-gray-600 dark:text-gray-400">Track surrogate compensation and expenses.</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Compensation</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track surrogate compensation and expenses.</p>
             </div>
             <Button color="blue" onClick={() => { setFormData(initialFormData); setShowNewPaymentModal(true); }}>
                <i className="ri-add-line mr-2"></i> Record Payment
@@ -121,28 +137,28 @@ const PaymentsPage: React.FC = () => {
               <div className="text-green-100 mb-1">Total Paid</div>
               <div className="text-3xl font-bold">${stats.totalPaid.toLocaleString()}</div>
             </Card>
-            <Card className="bg-white dark:bg-gray-800">
+            <Card className="bg-white dark:bg-[#15111f]">
               <div className="text-gray-500 dark:text-gray-400 mb-1">Pending Approval</div>
               <div className="text-3xl font-bold text-yellow-600 dark:text-yellow-500">${stats.pending.toLocaleString()}</div>
             </Card>
-            <Card className="bg-white dark:bg-gray-800">
+            <Card className="bg-white dark:bg-[#15111f]">
               <div className="text-gray-500 dark:text-gray-400 mb-1">Upcomming (Scheduled)</div>
               <div className="text-3xl font-bold text-blue-600 dark:text-blue-500">${stats.upcoming.toLocaleString()}</div>
             </Card>
-            <Card className="bg-white dark:bg-gray-800">
+            <Card className="bg-white dark:bg-[#15111f]">
               <div className="text-red-500 mb-1">Overdue</div>
               <div className="text-3xl font-bold text-red-600">${stats.overdue.toLocaleString()}</div>
             </Card>
           </div>
 
-            <div className="mb-6 flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+            <div className="mb-6 flex space-x-1 bg-gray-100 dark:bg-[#15111f] p-1 rounded-lg w-fit">
               {['all', 'paid', 'pending', 'scheduled', 'overdue'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
                     activeTab === tab
-                      ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
@@ -155,7 +171,7 @@ const PaymentsPage: React.FC = () => {
               {isLoading ? (
                   <div className="flex justify-center py-12"><i className="ri-loader-4-line text-3xl animate-spin text-blue-600"></i></div>
               ) : filteredPayments.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500 bg-white dark:bg-gray-800 rounded-lg">No payments found.</div>
+                  <div className="text-center py-12 text-gray-500 bg-white dark:bg-[#15111f] rounded-2xl">No payments found.</div>
               ) : (
                   filteredPayments.map(payment => (
                     <Card key={payment.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedPayment(payment)}>
@@ -200,15 +216,15 @@ const PaymentsPage: React.FC = () => {
             {/* Payment Detail Modal */}
             {selectedPayment && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                  <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-xl">
+                  <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full p-6 shadow-xl">
                     <div className="flex justify-between items-start mb-6">
                       <h2 className="text-2xl font-bold dark:text-white">Payment Details</h2>
                       <button onClick={() => setSelectedPayment(null)}><i className="ri-close-line text-2xl text-gray-500"></i></button>
                     </div>
 
                     <div className="space-y-4 mb-6">
-                       <div className="flex justify-between border-b dark:border-gray-700 pb-2">
-                          <span className="text-gray-600 dark:text-gray-400">Recipient</span>
+                       <div className="flex justify-between border-b dark:border-white/5 pb-2">
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Recipient</span>
                           <span className="font-medium dark:text-white">
                             {selectedPayment.surrogateName || selectedPayment.parentName}
                             <span className="ml-2 text-xs text-gray-400">
@@ -216,12 +232,12 @@ const PaymentsPage: React.FC = () => {
                             </span>
                           </span>
                        </div>
-                       <div className="flex justify-between border-b dark:border-gray-700 pb-2">
-                          <span className="text-gray-600 dark:text-gray-400">Amount</span>
+                       <div className="flex justify-between border-b dark:border-white/5 pb-2">
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Amount</span>
                           <span className="font-bold text-xl text-green-600">${Number(selectedPayment.amount).toLocaleString()}</span>
                        </div>
-                       <div className="flex justify-between border-b dark:border-gray-700 pb-2">
-                          <span className="text-gray-600 dark:text-gray-400">Type</span>
+                       <div className="flex justify-between border-b dark:border-white/5 pb-2">
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Type</span>
                           <div className="flex flex-col items-end">
                             <span className="font-medium dark:text-white">{selectedPayment.type}</span>
                             <span className={`text-xs px-2 py-0.5 rounded-full mt-1 ${
@@ -233,22 +249,22 @@ const PaymentsPage: React.FC = () => {
                             </span>
                           </div>
                        </div>
-                       <div className="flex justify-between border-b dark:border-gray-700 pb-2">
-                          <span className="text-gray-600 dark:text-gray-400">Status</span>
+                       <div className="flex justify-between border-b dark:border-white/5 pb-2">
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Status</span>
                           <Badge color={statusColors[selectedPayment.status]}>{selectedPayment.status}</Badge>
                        </div>
-                       <div className="flex justify-between border-b dark:border-gray-700 pb-2">
-                          <span className="text-gray-600 dark:text-gray-400">Due Date</span>
+                       <div className="flex justify-between border-b dark:border-white/5 pb-2">
+                          <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Due Date</span>
                           <span className="font-medium dark:text-white">{selectedPayment.dueDate}</span>
                        </div>
                        {selectedPayment.paidDate && (
-                           <div className="flex justify-between border-b dark:border-gray-700 pb-2">
-                              <span className="text-gray-600 dark:text-gray-400">Paid Date</span>
+                           <div className="flex justify-between border-b dark:border-white/5 pb-2">
+                              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Paid Date</span>
                               <span className="font-medium dark:text-white">{selectedPayment.paidDate}</span>
                            </div>
                        )}
                        {selectedPayment.notes && (
-                           <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg text-sm text-gray-600 dark:text-gray-300">
+                           <div className="bg-gray-50 dark:bg-white/5 p-3 rounded-lg text-sm text-gray-600 dark:text-gray-300">
                                {selectedPayment.notes}
                            </div>
                        )}
@@ -265,7 +281,7 @@ const PaymentsPage: React.FC = () => {
             {/* New/Edit Payment Modal */}
             {showNewPaymentModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                  <div className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-xl">
+                  <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full p-6 shadow-xl">
                      <h2 className="text-xl font-bold mb-4 dark:text-white">{formData.id ? 'Edit Payment' : 'New Payment'}</h2>
                      <form onSubmit={handleSavePayment} className="space-y-4">
                         <UserSelector 
@@ -301,14 +317,14 @@ const PaymentsPage: React.FC = () => {
                             <button 
                                 type="button"
                                 onClick={() => setShowMedicalModal(true)}
-                                className="w-full py-2 px-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
+                                className="w-full py-2 px-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-white/10 text-gray-500 hover:border-blue-500 hover:text-blue-500 transition-all flex items-center justify-center gap-2"
                             >
                                 <i className="ri-health-book-line"></i>
                                 Associated Medical Record
                             </button>
                         </div>
 
-                        <div className="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                        <div className="flex p-1 bg-gray-100 dark:bg-white/5 rounded-lg">
                             <button
                                 type="button"
                                 onClick={() => setFormData({...formData, category: 'Withdrawn'})}
@@ -338,12 +354,12 @@ const PaymentsPage: React.FC = () => {
                                 type="number" 
                                 placeholder="Amount" 
                                 required 
-                                className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                className="p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                 value={formData.amount || ''} 
                                 onChange={e => setFormData({...formData, amount: Number(e.target.value)})} 
                             />
                             <select 
-                                className="p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                className="p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                 value={formData.type} 
                                 onChange={e => setFormData({...formData, type: e.target.value as any})}
                             >
@@ -362,7 +378,7 @@ const PaymentsPage: React.FC = () => {
                                <input 
                                     type="date" 
                                     required 
-                                    className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    className="w-full p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                     value={formData.dueDate} 
                                     onChange={e => setFormData({...formData, dueDate: e.target.value})} 
                                 />
@@ -370,7 +386,7 @@ const PaymentsPage: React.FC = () => {
                            <div>
                                <label className="text-xs text-gray-500">Status</label>
                                <select 
-                                    className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    className="w-full p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                     value={formData.status} 
                                     onChange={e => setFormData({...formData, status: e.target.value as any})}
                                 >
@@ -387,7 +403,7 @@ const PaymentsPage: React.FC = () => {
                                 <label className="text-xs text-gray-500">Paid Date</label>
                                 <input 
                                     type="date" 
-                                    className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    className="w-full p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white"
                                     value={formData.paidDate || ''} 
                                     onChange={e => setFormData({...formData, paidDate: e.target.value})} 
                                 />
@@ -395,7 +411,7 @@ const PaymentsPage: React.FC = () => {
                         )}
                         <textarea 
                             placeholder="Description / Notes" 
-                            className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                            className="w-full p-2 border rounded dark:bg-white/5 dark:border-white/10 dark:text-white" 
                             rows={3}
                             value={formData.notes || ''} 
                             onChange={e => setFormData({...formData, notes: e.target.value})}
@@ -414,6 +430,8 @@ const PaymentsPage: React.FC = () => {
                isOpen={showMedicalModal}
                onClose={() => setShowMedicalModal(false)}
             />
+          </>
+          )}
         </main>
       </div>
     </div>

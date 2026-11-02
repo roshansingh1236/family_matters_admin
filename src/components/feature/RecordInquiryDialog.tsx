@@ -18,8 +18,22 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
     role: 'Intended Parents',
     age: '',
     location: '',
-    experience: ''
+    experience: '',
+    // "How did you hear about us?" — required on every phone inquiry so we
+    // can tell whether callers came from the marketing site, the mobile app,
+    // a referral, etc.
+    inquirySource: '' as '' | 'Website' | 'App' | 'Referral' | 'Social Media' | 'Event' | 'Other',
+    inquirySourceOther: ''
   });
+
+  const INQUIRY_SOURCES: Array<'Website' | 'App' | 'Referral' | 'Social Media' | 'Event' | 'Other'> = [
+    'Website',
+    'App',
+    'Referral',
+    'Social Media',
+    'Event',
+    'Other'
+  ];
 
   if (!isOpen) return null;
 
@@ -28,19 +42,32 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
     setLoading(true);
 
     try {
+      const inquirySource = formData.inquirySource === 'Other'
+        ? (formData.inquirySourceOther.trim() || 'Other')
+        : formData.inquirySource;
+
+      const extraData: Record<string, unknown> = variant === 'detailed'
+        ? {
+            age: formData.age,
+            location: formData.location,
+            experience: formData.experience
+          }
+        : {};
+      if (inquirySource) extraData.inquirySource = inquirySource;
+
       const data: any = {
         full_name: formData.name,
         email: formData.email,
         phone: formData.phone,
         description: formData.message,
         source: 'phone',
+        // Dedicated column so we can filter/group by channel without
+        // touching the JSON blob. `data.inquirySource` is kept as the
+        // source of truth for free-text "Other" values.
+        inquiry_source: inquirySource || null,
         status: 'new',
         role: variant === 'detailed' ? (formData.role === 'Surrogate' ? 'Surrogate' : 'Intended Parent') : 'inquiry',
-        data: variant === 'detailed' ? {
-            age: formData.age,
-            location: formData.location,
-            experience: formData.experience
-        } : {}
+        data: extraData
       };
 
       // If email is provided, try to create an Auth user
@@ -88,7 +115,8 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
 
       setFormData({
         name: '', email: '', phone: '', message: '',
-        role: 'Intended Parents', age: '', location: '', experience: ''
+        role: 'Intended Parents', age: '', location: '', experience: '',
+        inquirySource: '', inquirySourceOther: ''
       });
       onSuccess();
       onClose();
@@ -102,13 +130,13 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-[#15111f] rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Record Phone {variant === 'detailed' ? 'Request' : 'Inquiry'}</h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer"
             >
               <i className="ri-close-line text-gray-600 dark:text-gray-400"></i>
             </button>
@@ -127,7 +155,7 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                     className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
                       formData.role === 'Intended Parents'
                         ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        : 'border-rose-100/60 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                     }`}
                   >
                     Intended Parent
@@ -138,7 +166,7 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                     className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
                       formData.role === 'Surrogate'
                         ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        : 'border-rose-100/60 dark:border-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                     }`}
                   >
                     Surrogate
@@ -156,7 +184,7 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors"
                 placeholder="Caller's Name"
               />
             </div>
@@ -171,7 +199,7 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                   required
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                  className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors"
                   placeholder="Phone Number"
                 />
               </div>
@@ -184,10 +212,36 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                  className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors"
                   placeholder="Email (Optional)"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                How did they hear about us? *
+              </label>
+              <select
+                required
+                value={formData.inquirySource}
+                onChange={(e) => setFormData({ ...formData, inquirySource: e.target.value as typeof formData.inquirySource })}
+                className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors"
+              >
+                <option value="" disabled>Select a source…</option>
+                {INQUIRY_SOURCES.map((src) => (
+                  <option key={src} value={src}>{src}</option>
+                ))}
+              </select>
+              {formData.inquirySource === 'Other' && (
+                <input
+                  type="text"
+                  value={formData.inquirySourceOther}
+                  onChange={(e) => setFormData({ ...formData, inquirySourceOther: e.target.value })}
+                  className="mt-2 w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors"
+                  placeholder="Please specify…"
+                />
+              )}
             </div>
 
             {variant === 'detailed' && (
@@ -201,7 +255,7 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                       type="text"
                       value={formData.age}
                       onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                      className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                      className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors"
                       placeholder="Age"
                     />
                   </div>
@@ -213,7 +267,7 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                       type="text"
                       value={formData.location}
                       onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                      className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors"
                       placeholder="City, State"
                     />
                   </div>
@@ -227,7 +281,7 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                     rows={2}
                     value={formData.experience}
                     onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors resize-none"
+                    className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors resize-none"
                     placeholder="Relevant experience..."
                   />
                 </div>
@@ -242,7 +296,7 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
                 rows={variant === 'detailed' ? 3 : 4}
                 value={formData.message}
                 onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors resize-none"
+                className="w-full px-4 py-2 rounded-lg border border-rose-100/60 dark:border-white/5 bg-white dark:bg-[#0e0b1a] text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none transition-colors resize-none"
                 placeholder="Notes from the call..."
               />
             </div>
@@ -251,7 +305,7 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
               >
                 Cancel
               </button>

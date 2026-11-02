@@ -1,5 +1,7 @@
 
 import { supabase } from '../lib/supabase';
+import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 export interface Task {
   id?: string;
@@ -14,6 +16,11 @@ export interface Task {
 }
 
 const TABLE_NAME = 'tasks';
+
+// Completion lives in tasks.status ('Pending' | 'In Progress' | 'Completed' |
+// 'Cancelled'). Don't write an is_completed column: older databases don't have
+// one, and sending it makes the whole insert / update fail.
+const isDone = (t: { status?: string | null }) => t.status === 'Completed';
 
 export const taskService = {
   // Fetch all tasks
@@ -31,7 +38,7 @@ export const taskService = {
           description: t.description,
           assignee: t.user_id || t.assignee,
           dueDate: t.due_date,
-          isCompleted: t.is_completed ?? (t.status === 'Completed'),
+          isCompleted: isDone(t),
           createdAt: t.created_at
       })) as Task[];
     } catch (error) {
@@ -50,13 +57,27 @@ export const taskService = {
           title: task.title,
           description: task.description,
           due_date: task.dueDate,
-          is_completed: task.isCompleted,
           status: task.isCompleted ? 'Completed' : 'Pending'
         })
         .select('id')
         .single();
       
       if (error) throw error;
+
+      // Push: notify the assignee of the new task.
+      void pushService.send(
+        [task.assignee],
+        'New task assigned',
+        task.title || 'You have a new task.',
+        { type: 'task', taskId: data.id },
+      );
+      void emailService.send(
+        [task.assignee],
+        'New task assigned',
+        task.title || 'You have a new task.',
+        { type: 'task', taskId: data.id },
+      );
+
       return data.id;
     } catch (error) {
       console.error('Error creating task:', error);
@@ -69,10 +90,12 @@ export const taskService = {
     try {
       const mappedUpdates: any = {};
       if (updates.title) mappedUpdates.title = updates.title;
-      if (updates.description) mappedUpdates.description = updates.description;
+      if (updates.description !== undefined) mappedUpdates.description = updates.description;
       if (updates.assignee) mappedUpdates.user_id = updates.assignee;
       if (updates.dueDate) mappedUpdates.due_date = updates.dueDate;
-      if (updates.isCompleted !== undefined) mappedUpdates.status = updates.isCompleted ? 'Completed' : 'Pending';
+      if (updates.isCompleted !== undefined) {
+        mappedUpdates.status = updates.isCompleted ? 'Completed' : 'Pending';
+      }
 
       const { error } = await supabase
         .from(TABLE_NAME)
@@ -117,7 +140,7 @@ export const taskService = {
           description: t.description,
           assignee: t.user_id,
           dueDate: t.due_date,
-          isCompleted: t.is_completed ?? (t.status === 'Completed'),
+          isCompleted: isDone(t),
           createdAt: t.created_at
       })) as Task[];
     } catch (error) {
@@ -129,11 +152,11 @@ export const taskService = {
   // Get tasks by status
   getTasksByStatus: async (isCompleted: boolean): Promise<Task[]> => {
     try {
-      const { data, error } = await supabase
-        .from(TABLE_NAME)
-        .select('*')
-        .eq('is_completed', isCompleted)
-        .order('due_date', { ascending: true });
+      const query = supabase.from(TABLE_NAME).select('*');
+      const { data, error } = await (isCompleted
+        ? query.eq('status', 'Completed')
+        : query.neq('status', 'Completed')
+      ).order('due_date', { ascending: true });
         
       if (error) throw error;
       return (data || []).map(t => ({
@@ -142,7 +165,7 @@ export const taskService = {
           description: t.description,
           assignee: t.user_id,
           dueDate: t.due_date,
-          isCompleted: t.is_completed ?? (t.status === 'Completed'),
+          isCompleted: isDone(t),
           createdAt: t.created_at
       })) as Task[];
     } catch (error) {

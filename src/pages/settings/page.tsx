@@ -5,8 +5,10 @@ import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Toast from '../../components/base/Toast';
+import AccessCodesSection from '../../components/feature/AccessCodesSection';
 import { useAuth } from '../../contexts/AuthContext';
 import DataSection from '../../components/data/DataSection';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const SettingsPage: React.FC = () => {
   const { user, profile, profileLoading } = useAuth();
@@ -81,7 +83,7 @@ const SettingsPage: React.FC = () => {
 
   const memberSince = useMemo(() => {
     if (user?.metadata?.creationTime) {
-      return new Date(user.metadata.creationTime).toLocaleDateString();
+      return formatMMDDYYYY(user.metadata.creationTime);
     }
     return null;
   }, [user]);
@@ -120,6 +122,7 @@ const SettingsPage: React.FC = () => {
     { id: 'general', label: 'General', icon: 'ri-settings-3-line' },
     { id: 'notifications', label: 'Notifications', icon: 'ri-notification-3-line' },
     { id: 'security', label: 'Security', icon: 'ri-shield-check-line' },
+    { id: 'access', label: 'Access Codes', icon: 'ri-lock-2-line' },
     { id: 'matching', label: 'Matching Rules', icon: 'ri-links-line' },
     { id: 'billing', label: 'Billing', icon: 'ri-money-dollar-circle-line' },
     { id: 'integrations', label: 'Integrations', icon: 'ri-plug-line' }
@@ -139,8 +142,8 @@ const SettingsPage: React.FC = () => {
     <div className="space-y-8">
       {profileLoading ? (
         <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
-          <div className="h-48 bg-gray-100 dark:bg-gray-800 rounded"></div>
+          <div className="h-4 bg-gray-200 dark:bg-white/5 rounded w-1/3"></div>
+          <div className="h-48 bg-gray-100 dark:bg-[#15111f] rounded"></div>
         </div>
       ) : (
         <div className="space-y-6">
@@ -189,7 +192,7 @@ const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="space-y-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+      <div className="space-y-6 border-t border-rose-100/60 dark:border-white/5 pt-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Site Name
@@ -198,7 +201,7 @@ const SettingsPage: React.FC = () => {
             type="text"
             value={settings.siteName}
             onChange={(e) => setSettings(prev => ({ ...prev, siteName: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white"
           />
         </div>
         <div>
@@ -209,7 +212,7 @@ const SettingsPage: React.FC = () => {
             type="email"
             value={settings.adminEmail}
             onChange={(e) => setSettings(prev => ({ ...prev, adminEmail: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white"
           />
         </div>
         <div>
@@ -219,7 +222,7 @@ const SettingsPage: React.FC = () => {
           <select
             value={settings.timezone}
             onChange={(e) => setSettings(prev => ({ ...prev, timezone: e.target.value }))}
-            className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white"
           >
             <option value="UTC-5">Eastern Time (UTC-5)</option>
             <option value="UTC-6">Central Time (UTC-6)</option>
@@ -307,7 +310,7 @@ const SettingsPage: React.FC = () => {
         <select
           value={settings.security.sessionTimeout}
           onChange={(e) => handleSettingChange('security', 'sessionTimeout', e.target.value)}
-          className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white"
         >
           <option value="15">15 minutes</option>
           <option value="30">30 minutes</option>
@@ -322,7 +325,7 @@ const SettingsPage: React.FC = () => {
         <select
           value={settings.security.passwordExpiry}
           onChange={(e) => handleSettingChange('security', 'passwordExpiry', e.target.value)}
-          className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white"
         >
           <option value="30">30 days</option>
           <option value="60">60 days</option>
@@ -341,6 +344,8 @@ const SettingsPage: React.FC = () => {
         return renderNotificationSettings();
       case 'security':
         return renderSecuritySettings();
+      case 'access':
+        return <AccessCodesSection onToast={setToast} />;
       case 'matching':
         return (
           <div className="space-y-6">
@@ -369,7 +374,7 @@ const SettingsPage: React.FC = () => {
               <select
                 value={settings.matching.maxMatches}
                 onChange={(e) => handleSettingChange('matching', 'maxMatches', e.target.value)}
-                className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white"
               >
                 <option value="1">1 Match</option>
                 <option value="2">2 Matches</option>
@@ -384,7 +389,7 @@ const SettingsPage: React.FC = () => {
           <div className="space-y-6">
             <div className="text-center py-12">
               <i className="ri-money-dollar-circle-line text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Billing Settings</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Billing Settings</h3>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
                 Configure payment methods and billing preferences
               </p>
@@ -403,7 +408,7 @@ const SettingsPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                      <i className="ri-mail-line text-blue-600 dark:text-blue-400"></i>
+                      <i className="ri-mail-line text-rose-500 dark:text-rose-400"></i>
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 dark:text-white">Email Service</h3>
@@ -436,7 +441,7 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -447,9 +452,9 @@ const SettingsPage: React.FC = () => {
         )}
 
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Settings</h1>
-            <p className="text-gray-600 dark:text-gray-400">Manage your application preferences and configurations.</p>
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your application preferences and configurations.</p>
           </div>
 
           <Card className="mb-8">
@@ -516,12 +521,12 @@ const SettingsPage: React.FC = () => {
             <div className="flex-1">
               <Card>
                 <div className="mb-6">
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  <h2 className="text-base font-bold text-gray-900 dark:text-white">
                     {settingsTabs.find(tab => tab.id === activeTab)?.label}
                   </h2>
                 </div>
                 {renderContent()}
-                <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div className="mt-8 pt-6 border-t border-rose-100/60 dark:border-white/5">
                   <div className="flex gap-3">
                     <Button color="blue">
                       <i className="ri-save-line mr-2"></i>

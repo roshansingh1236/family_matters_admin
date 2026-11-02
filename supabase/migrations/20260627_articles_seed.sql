@@ -1,0 +1,47 @@
+-- ============================================================================
+-- Seed blog / resource articles (2026-06-27)
+-- Uses dollar-quoting ($$...$$) so no single-quote escaping is needed (robust
+-- against editors that convert quotes on paste). Idempotent: each row inserts
+-- only if an article with the same title is absent.
+-- Run AFTER 20260627_articles_blog.sql.
+-- ============================================================================
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$Your Surrogacy Journey, Step by Step$$, $$What to expect from inquiry to delivery$$, $$Surrogacy is a structured process designed to protect everyone involved. It begins with an application and screening, followed by acceptance into the program. Once both the intended parents and the gestational carrier are approved, the agency proposes a match. After both parties accept, the journey officially begins: legal contracts are signed, the medical and embryo-transfer phase starts, and the pregnancy is supported all the way through delivery and postpartum. Each stage has its own milestones and support team. Understanding the full roadmap up front helps reduce anxiety and keeps expectations clear.$$, $$Education$$, $$book$$, $$3182CE$$, $$both$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$Your Surrogacy Journey, Step by Step$$);
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$Understanding the Matching Process$$, $$How surrogates and intended parents are paired$$, $$A great match is the foundation of a positive surrogacy journey. The agency reviews profiles, preferences, and medical eligibility to propose pairings where both sides are likely to be comfortable and aligned. When a match is presented, both the surrogate and the intended parents review it and decide whether to accept. A match is only confirmed once both parties agree. If either party declines, that is completely okay - it simply means the agency will continue searching for a better fit. Open, honest communication during this phase sets the tone for the entire relationship.$$, $$Education$$, $$people$$, $$805AD5$$, $$both$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$Understanding the Matching Process$$);
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$Communicating With Your Care Team$$, $$Making the most of in-app messaging$$, $$Once your match is active, a group conversation connects you, the other party, and your agency coordinator so everyone stays on the same page. Use the chat to ask questions, share updates, and coordinate appointments. For sensitive or private topics, you can message your coordinator directly. Clear, kind, and timely communication builds trust and prevents misunderstandings. Remember that everyone shares the same goal: a healthy, supported journey for all involved.$$, $$Community$$, $$people$$, $$1D9E75$$, $$both$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$Communicating With Your Care Team$$);
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$Becoming a Surrogate: Is It Right for You?$$, $$Eligibility, expectations, and rewards$$, $$Becoming a gestational carrier is a generous, life-changing decision. Most programs require that you have had at least one healthy pregnancy and delivery, are within a certain age range, are a non-smoker, and have a stable, supportive home environment. Beyond the medical criteria, surrogacy asks for emotional readiness and a willingness to communicate openly. In return, you receive comprehensive medical care, dedicated support, fair compensation, and the profound experience of helping a family grow. Take time to reflect, ask questions, and lean on your support network as you consider this path.$$, $$Education$$, $$health$$, $$D85A30$$, $$surrogate$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$Becoming a Surrogate: Is It Right for You?$$);
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$The Medical Screening Process$$, $$What happens during pre-screening$$, $$Before a surrogate can be matched, the agency gathers and reviews medical records to confirm eligibility. This includes prior OB and delivery records, prenatal records, and any relevant lab or imaging results. The agency may request records from your previous providers, which can take time, so early authorization helps things move smoothly. A medical reviewer summarizes the records and determines whether you are cleared for the program. This screening protects your health and ensures the journey starts on solid footing. Your medical details remain private and are never shared with intended parents.$$, $$Health$$, $$health$$, $$0F6E56$$, $$surrogate$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$The Medical Screening Process$$);
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$Staying Healthy During Your Surrogacy Pregnancy$$, $$Nutrition, wellness, and self-care$$, $$A healthy pregnancy starts with consistent prenatal care, balanced nutrition, prescribed prenatal vitamins, gentle exercise, and good sleep. Stay hydrated, attend every scheduled appointment, and report any concerns to your medical team promptly. Emotional wellbeing matters too: stay connected with your support network and do not hesitate to ask for help when you need it. Your care team is there to support both you and the baby throughout the pregnancy.$$, $$Wellness$$, $$health$$, $$639922$$, $$surrogate$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$Staying Healthy During Your Surrogacy Pregnancy$$);
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$Understanding Surrogate Compensation and Reimbursements$$, $$How payments and expenses work$$, $$Surrogate compensation is handled transparently and separately from the agency fees. Beyond base compensation, many approved expenses such as travel, medications, and certain appointments are reimbursable through escrow. Keep receipts for any out-of-pocket costs and submit them through the app so they can be tracked and reimbursed. Your coordinator can walk you through what is covered and the timeline for payments. Knowing how the financial side works lets you focus on the journey itself.$$, $$Finance$$, $$article$$, $$85510B$$, $$surrogate$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$Understanding Surrogate Compensation and Reimbursements$$);
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$The Intended Parent Journey: What to Expect$$, $$From program acceptance to bringing baby home$$, $$For intended parents, the journey begins with a consultation and intake, followed by acceptance into the program. From there, the agency works to present a surrogate match. Once both parties accept, contracts are signed and the medical process begins. Throughout the journey you will have visibility into milestones, appointments, and updates, with your coordinator available to answer questions. Patience and trust are key, as timelines can shift for medical reasons, but a clear process and a strong support team keep everything moving toward the same goal: welcoming your baby.$$, $$Education$$, $$book$$, $$185FA5$$, $$parent$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$The Intended Parent Journey: What to Expect$$);
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$Legal Contracts in Surrogacy$$, $$Why agreements protect everyone$$, $$Before any medical procedures begin, intended parents and the surrogate enter into a legal agreement, each represented by independent counsel. These contracts clarify expectations, responsibilities, compensation, and parental rights, ensuring everyone is protected and aligned. While legal language can feel intimidating, your attorney will explain each section in plain terms. Completing this step thoughtfully creates a secure foundation for the journey ahead.$$, $$Legal$$, $$article$$, $$993C1D$$, $$parent$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$Legal Contracts in Surrogacy$$);
+
+INSERT INTO public.articles (title, subtitle, content, category, icon_name, color_hex, role_target, is_published)
+SELECT $$Supporting Your Surrogate$$, $$Building a positive, respectful relationship$$, $$A strong, respectful relationship with your surrogate makes the journey better for everyone. Agree early on how often you will communicate and through which channels, respect her time and boundaries, and show appreciation for the extraordinary thing she is doing. Small, thoughtful gestures and consistent kindness go a long way. Your coordinator can help set expectations so both sides feel comfortable and supported throughout the pregnancy.$$, $$Community$$, $$people$$, $$534AB7$$, $$parent$$, true
+WHERE NOT EXISTS (SELECT 1 FROM public.articles WHERE title = $$Supporting Your Surrogate$$);

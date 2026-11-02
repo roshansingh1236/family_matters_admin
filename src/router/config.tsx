@@ -1,5 +1,5 @@
-
 import type { RouteObject } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import HomePage from '../pages/home/page';
 import RequestsPage from '../pages/requests/page';
 import InquiriesPage from '../pages/inquiries/page';
@@ -8,7 +8,6 @@ import SurrogateProfilePage from '../pages/surrogates/profile';
 import ParentsPage from '../pages/parents/page';
 import ParentProfilePage from '../pages/parents/profile';
 import MatchesPage from '../pages/matches/page';
-import AppointmentsPage from '../pages/appointments/page';
 import ReportsPage from '../pages/reports/page';
 import SettingsPage from '../pages/settings/page';
 import CalendarPage from '../pages/calendar/page';
@@ -17,6 +16,7 @@ import MedicalPage from '../pages/medical/page';
 import ContractsPage from '../pages/contracts/page';
 import LoginPage from '../pages/auth/login/page';
 import SignupPage from '../pages/auth/signup/page';
+import ForgotPasswordPage from '../pages/auth/forgot-password/page';
 import NotFound from '../pages/NotFound';
 import TasksPage from '../pages/tasks/page';
 import BabyWatchPage from '../pages/baby-watch/page';
@@ -25,6 +25,13 @@ import JourneysPage from '../pages/journeys/page';
 import FinancialsPage from '../pages/financials/page';
 import LandingPage from '../pages/landing/page';
 import ScreeningPage from '../pages/screening/page';
+import ProfilePreviewPage from '../components/feature/ProfilePreviewPage';
+import AuditPage from '../pages/audit/page';
+import ContactsPage from '../pages/contacts/page';
+import ContactDetailPage from '../pages/contacts/detail/page';
+import MarketingPage from '../pages/marketing/page';
+import BlogPage from '../pages/blog/page';
+import NotificationsPage from '../pages/notifications/page';
 
 const routes: RouteObject[] = [
   {
@@ -34,6 +41,14 @@ const routes: RouteObject[] = [
   {
     path: '/requests',
     element: <RequestsPage />,
+  },
+  {
+    path: '/marketing',
+    element: <MarketingPage />,
+  },
+  {
+    path: '/blog',
+    element: <BlogPage />,
   },
   {
     path: '/inquiries',
@@ -60,8 +75,10 @@ const routes: RouteObject[] = [
     element: <MatchesPage />,
   },
   {
+    // Appointments were folded into the calendar (its List view); keep old
+    // links and bookmarks working.
     path: '/appointments',
-    element: <AppointmentsPage />,
+    element: <Navigate to="/calendar" replace />,
   },
   {
     path: '/reports',
@@ -96,6 +113,15 @@ const routes: RouteObject[] = [
     element: <SignupPage />,
   },
   {
+    path: '/auth/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+  {
+    // Landing page for Supabase recovery links (same screen, link mode).
+    path: '/auth/reset-password',
+    element: <ForgotPasswordPage />,
+  },
+  {
     path: '/tasks',
     element: <TasksPage />,
   },
@@ -127,6 +153,26 @@ const routes: RouteObject[] = [
     path: '*',
     element: <NotFound />,
   },
+  {
+    path: '/profile-preview/:id',
+    element: <ProfilePreviewPage />,
+  },
+  {
+    path: '/audit',
+    element: <AuditPage />,
+  },
+  {
+    path: '/contacts',
+    element: <ContactsPage />,
+  },
+  {
+    path: '/contacts/:id',
+    element: <ContactDetailPage />,
+  },
+  {
+    path: '/notifications',
+    element: <NotificationsPage />,
+  }
 ];
 
 export default routes;

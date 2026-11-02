@@ -1,6 +1,8 @@
 
 import { supabase } from '../lib/supabase';
 import { storageService, STORAGE_BUCKETS } from './storageService';
+import { pushService } from './pushService';
+import { emailService } from './emailService';
 
 export interface BabyWatchUpdate {
   id?: string;
@@ -24,6 +26,51 @@ export interface BabyWatchUpdate {
 const TABLE_NAME = 'baby_watch_updates';
 const BUCKET_NAME = STORAGE_BUCKETS.BABY_WATCH;
 
+/**
+ * Tell the journey's surrogate about a new update, and the intended parent
+ * too when it's shared with them (the app only shows parents shared updates).
+ * A push, an email and an in-app notification, like other portal events.
+ * Failures are logged and never block saving the update.
+ */
+async function notifyJourney(
+  journeyId: string,
+  recipients: { surrogate: boolean; parent: boolean },
+  message: string,
+  updateId: string,
+): Promise<void> {
+  try {
+    const { data: journey, error } = await supabase
+      .from('journeys')
+      .select('parent_id, surrogate_id')
+      .eq('id', journeyId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!journey) return;
+
+    const ids = [
+      recipients.surrogate ? journey.surrogate_id : null,
+      recipients.parent ? journey.parent_id : null,
+    ].filter((id): id is string => !!id);
+    if (ids.length === 0) return;
+
+    const title = 'New Baby Watch update';
+    const data = { type: 'baby_watch', updateId, journeyId };
+    void pushService.send(ids, title, message, data);
+    void emailService.send(ids, title, message, data);
+    const { error: notifError } = await supabase
+      .from('notifications')
+      .insert(ids.map((user_id) => ({ user_id, title, message, type: 'baby_watch' })));
+    if (notifError) throw notifError;
+  } catch (e) {
+    console.error('Baby Watch notification failed', e);
+  }
+}
+
+const updateMessage = (u: { gestationalAge?: string; title?: string }) =>
+  u.gestationalAge
+    ? `A new update has been posted: ${u.gestationalAge}. Open the app to see it.`
+    : 'A new update has been posted. Open the app to see it.';
+
 export const babyWatchService = {
   // Fetch all updates
   getAllUpdates: async (): Promise<BabyWatchUpdate[]> => {
@@ -38,6 +85,8 @@ export const babyWatchService = {
           id: u.id,
           caseId: u.journey_id,
           title: u.title,
+          // The date the admin entered (kept in data); else when it was posted.
+          date: u.data?.date || (u.created_at ? String(u.created_at).split('T')[0] : ''),
           medicalNotes: u.description,
           gestationalAge: u.data?.gestationalAge,
           weight: u.data?.weight,
@@ -92,6 +141,10 @@ export const babyWatchService = {
         .single();
       
       if (error) throw error;
+
+      const shared = update.sharedWithParents ?? true;
+      void notifyJourney(update.caseId, { surrogate: true, parent: shared }, updateMessage(update), data.id);
+
       return data.id;
     } catch (error) {
       console.error('Error creating baby watch update:', error);
@@ -102,28 +155,51 @@ export const babyWatchService = {
   // Update an update
   updateUpdate: async (id: string, updates: any, imageFile?: File): Promise<void> => {
     try {
-       const mappedUpdates: any = {
-           updated_at: new Date().toISOString()
-       };
-       if (updates.medicalNotes) mappedUpdates.description = updates.medicalNotes;
-       if (updates.title) mappedUpdates.title = updates.title;
-       
-       // Handle JSONB data updates if needed
-       if (updates.gestationalAge || updates.weight || updates.heartRate) {
-           // This would require fetching current data or using a deep merge via RPC/Logic
-       }
+      // Read the current row: data is one JSON column, so edited fields are
+      // merged into it, and we need to know whether sharing was just turned on.
+      const { data: current, error: fetchError } = await supabase
+        .from(TABLE_NAME)
+        .select('journey_id, data, shared_with_parents')
+        .eq('id', id)
+        .single();
+      if (fetchError) throw fetchError;
 
-       if (imageFile && updates.caseId) {
-           const { url } = await babyWatchService.uploadImage(imageFile, updates.caseId);
-           mappedUpdates.attachments = [url];
-       }
+      const mappedUpdates: any = {
+        updated_at: new Date().toISOString(),
+        data: {
+          ...(current.data || {}),
+          ...(updates.gestationalAge !== undefined ? { gestationalAge: updates.gestationalAge } : {}),
+          ...(updates.weight !== undefined ? { weight: updates.weight } : {}),
+          ...(updates.heartRate !== undefined ? { heartRate: updates.heartRate } : {}),
+          ...(updates.date !== undefined ? { date: updates.date } : {}),
+        },
+      };
+      if (updates.medicalNotes !== undefined) mappedUpdates.description = updates.medicalNotes;
+      if (updates.title) mappedUpdates.title = updates.title;
+      if (updates.sharedWithParents !== undefined) mappedUpdates.shared_with_parents = updates.sharedWithParents;
+      if (updates.caseId) mappedUpdates.journey_id = updates.caseId;
 
-       const { error } = await supabase
+      if (imageFile) {
+        const { url } = await babyWatchService.uploadImage(imageFile, updates.caseId || current.journey_id);
+        mappedUpdates.attachments = [url];
+      }
+
+      const { error } = await supabase
         .from(TABLE_NAME)
         .update(mappedUpdates)
         .eq('id', id);
-        
+
       if (error) throw error;
+
+      // Shared with the parent for the first time: they haven't heard of it yet.
+      if (updates.sharedWithParents === true && !current.shared_with_parents) {
+        void notifyJourney(
+          mappedUpdates.journey_id || current.journey_id,
+          { surrogate: false, parent: true },
+          updateMessage({ gestationalAge: mappedUpdates.data.gestationalAge }),
+          id,
+        );
+      }
     } catch (error) {
       console.error('Error updating baby watch update:', error);
       throw error;
@@ -161,6 +237,7 @@ export const babyWatchService = {
       return (data || []).map(u => ({
           id: u.id,
           caseId: u.journey_id,
+          date: u.data?.date || (u.created_at ? String(u.created_at).split('T')[0] : ''),
           medicalNotes: u.description,
           gestationalAge: u.data?.gestationalAge,
           weight: u.data?.weight,

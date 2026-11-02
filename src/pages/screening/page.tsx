@@ -7,6 +7,7 @@ import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import { screeningService } from '../../services/screeningService';
 import type { MedicalScreening } from '../../types';
+import { formatMMDDYYYY } from '../../utils/dateFormat';
 
 const ScreeningPage: React.FC = () => {
   const [screenings, setScreenings] = useState<MedicalScreening[]>([]);
@@ -55,21 +56,21 @@ const ScreeningPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Medical Screening</h1>
-            <p className="text-gray-600 dark:text-gray-400">Review surrogate medical histories and records.</p>
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Medical Screening</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Review surrogate medical histories and records.</p>
           </div>
 
           {/* List View */}
           <Card>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
-                <thead className="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs uppercase">
+                <thead className="bg-rose-50/50 dark:bg-white/5 text-gray-600 dark:text-gray-400 text-xs uppercase">
                   <tr>
                     <th className="px-6 py-3 font-semibold">Surrogate</th>
                     <th className="px-6 py-3 font-semibold">Date Submitted</th>
@@ -92,7 +93,7 @@ const ScreeningPage: React.FC = () => {
                           <div className="text-xs text-gray-500">{screening.surrogateId}</div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                           {new Date(screening.submittedAt).toLocaleDateString()}
+                           {formatMMDDYYYY(screening.submittedAt)}
                         </td>
                         <td className="px-6 py-4">{getStatusBadge(screening.status)}</td>
                         <td className="px-6 py-4 text-right">
@@ -113,10 +114,10 @@ const ScreeningPage: React.FC = () => {
       {/* Review Modal */}
       {selectedScreening && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+          <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
             
             {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <div className="p-6 border-b border-rose-100/60 dark:border-white/5 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                   Screening Review: {selectedScreening.surrogateName}
@@ -137,8 +138,8 @@ const ScreeningPage: React.FC = () => {
                 
                 {/* Medical History */}
                 <div className="lg:col-span-2 space-y-6">
-                  <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white border-b pb-2 border-gray-200 dark:border-gray-700">
+                  <div className="bg-rose-50/50 dark:bg-white/5 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white border-b pb-2 border-rose-100/60 dark:border-white/5">
                       Obstetric History
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
@@ -169,8 +170,8 @@ const ScreeningPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white border-b pb-2 border-gray-200 dark:border-gray-700">
+                  <div className="bg-rose-50/50 dark:bg-white/5 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white border-b pb-2 border-rose-100/60 dark:border-white/5">
                       Raw Medical Data
                     </h3>
                     <pre className="text-xs bg-gray-100 dark:bg-gray-950 p-4 rounded overflow-x-auto">
@@ -181,7 +182,7 @@ const ScreeningPage: React.FC = () => {
 
                 {/* Sidebar: Documents & Actions */}
                 <div className="space-y-6">
-                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="bg-white dark:bg-[#15111f] border border-rose-100/60 dark:border-white/5 rounded-lg p-4">
                      <h3 className="font-semibold mb-3">Documents</h3>
                      {selectedScreening.documents?.length > 0 ? (
                         <ul className="space-y-2">
@@ -190,7 +191,7 @@ const ScreeningPage: React.FC = () => {
                                <a href={doc.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate max-w-[150px]">
                                  {doc.name}
                                </a>
-                               <span className="text-gray-500 text-xs">{new Date(doc.uploadedAt).toLocaleDateString()}</span>
+                               <span className="text-gray-500 text-xs">{formatMMDDYYYY(doc.uploadedAt)}</span>
                              </li>
                            ))}
                         </ul>
@@ -200,7 +201,7 @@ const ScreeningPage: React.FC = () => {
                   <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
                      <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Admin Review</h3>
                      <textarea
-                       className="w-full text-sm p-3 border rounded-md dark:bg-gray-700 dark:border-gray-600 min-h-[100px] mb-3"
+                       className="w-full text-sm p-3 border rounded-md dark:bg-white/5 dark:border-white/10 min-h-[100px] mb-3"
                        placeholder="Enter review notes..."
                        value={reviewNotes}
                        onChange={(e) => setReviewNotes(e.target.value)}
