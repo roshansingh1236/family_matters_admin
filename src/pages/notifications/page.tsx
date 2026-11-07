@@ -167,7 +167,7 @@ export default function NotificationsPage() {
 
   const handleItemClick = (notification: Notification) => {
     if (notification.type === 'appointment') {
-      navigate('/appointments');
+      navigate('/calendar');
     } else if (notification.type === 'system_alert') {
       navigate('/matches');
     } else {

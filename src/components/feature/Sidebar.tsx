@@ -33,7 +33,6 @@ const menuItems: NavItem[] = [
   { type: 'divider', label: 'Operations' },
   { icon: 'ri-task-line',                label: 'Tasks',             path: '/tasks' },
   { icon: 'ri-calendar-event-line',      label: 'Calendar',          path: '/calendar' },
-  { icon: 'ri-time-line',                label: 'Appointments',      path: '/appointments' },
   { icon: 'ri-heart-pulse-line',         label: 'Baby Watch',        path: '/baby-watch' },
   { icon: 'ri-hospital-line',            label: 'Medical',           path: '/medical' },
   { icon: 'ri-stethoscope-line',         label: 'Screening',         path: '/screening' },

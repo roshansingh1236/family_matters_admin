@@ -1,6 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatMMDDYYYY } from '../../utils/dateFormat';
 
+// Form 2 in the app asks for up to 10 pregnancies, each with these fields
+// (stored as pregnancy1Name … pregnancy10Surrogacy).
+const MAX_PREGNANCIES = 10;
+const PREGNANCY_NUMBERS = Array.from({ length: MAX_PREGNANCIES }, (_, i) => i + 1);
+const PREGNANCY_FIELDS = [
+  'Name',
+  'Gender',
+  'DOB',
+  'Weight',
+  'Delivery',
+  'GestationalAge',
+  'Complications',
+  'OBGYN',
+  'Hospital',
+  'Surrogacy'
+];
+const PREGNANCY_KEYS = PREGNANCY_NUMBERS.flatMap((n) =>
+  PREGNANCY_FIELDS.map((field) => `pregnancy${n}${field}`)
+);
+
 type SectionDef = {
   id: string;
   title: string;
@@ -109,35 +129,7 @@ const SECTIONS: SectionDef[] = [
     icon: 'ri-parent-line',
     keys: [
       'numberOfPregnancies',
-      'pregnancy1Name',
-      'pregnancy1Gender',
-      'pregnancy1DOB',
-      'pregnancy1Weight',
-      'pregnancy1Delivery',
-      'pregnancy1GestationalAge',
-      'pregnancy1Complications',
-      'pregnancy1OBGYN',
-      'pregnancy1Hospital',
-      'pregnancy2Name',
-      'pregnancy2Gender',
-      'pregnancy2DOB',
-      'pregnancy2Weight',
-      'pregnancy2Delivery',
-      'pregnancy2GestationalAge',
-      'pregnancy2Complications',
-      'pregnancy2OBGYN',
-      'pregnancy2Hospital',
-      'pregnancy2Surrogacy',
-      'pregnancy3Name',
-      'pregnancy3Gender',
-      'pregnancy3DOB',
-      'pregnancy3Weight',
-      'pregnancy3Delivery',
-      'pregnancy3GestationalAge',
-      'pregnancy3Complications',
-      'pregnancy3OBGYN',
-      'pregnancy3Hospital',
-      'pregnancy3Surrogacy',
+      ...PREGNANCY_KEYS,
       'additionalPregnancyInfo'
     ]
   },
@@ -195,41 +187,46 @@ const SECTIONS: SectionDef[] = [
 
 const SKIP_OTHER_KEYS = new Set(['surrogate_profile', 'form2', 'gc_additional']);
 
-const BOOLEAN_KEYS = new Set([
-  'receivedVaccination',
-  'openToVaccination',
-  'hasTransportation',
-  'canTravelForIVF',
-  'hasFlexibleSchedule',
-  'hasCustody',
-  'hasCollegeDegree',
-  'isEmployed',
-  'partnerEmployed',
-  'regularCycles',
-  'onBirthControl',
-  'isBreastfeeding',
-  'usedTHC',
-  'postpartumDepression',
-  'bedrest',
-  'hepatitisBVaccination',
-  'rhogamInjection',
-  'fertilityTreatments',
-  'hadMiscarriage',
-  'understandsAppointments',
-  'allowOBAppointments',
-  'allowDeliveryRoom',
-  'helpCoupleWithChildren',
-  'helpSameSexCouple',
-  'helpSingleParent',
-  'reduceTripletsToTwins',
-  'reduceTwinsToSingleton',
-  'terminateIfNecessary',
-  'terminateDownSyndrome',
-  'amniocentesis',
-  'agreeToFetalTesting',
-  'willingForSplitTwins',
-  'smoker'
-]);
+// Stored as true/false.
+const BOOLEAN_KEYS = new Set(['smoker']);
+
+// The app's Form 2 saves these answers as text, with the choices the
+// surrogate picks from. Saving true/false here instead would break Form 2
+// when she reopens it.
+const YES_NO = ['Yes', 'No'];
+const YES_NO_MAYBE = ['Yes', 'No', 'Maybe'];
+const CHOICE_KEYS: Record<string, string[]> = {
+  receivedVaccination: YES_NO,
+  openToVaccination: YES_NO_MAYBE,
+  hasTransportation: YES_NO,
+  canTravelForIVF: YES_NO_MAYBE,
+  hasFlexibleSchedule: YES_NO_MAYBE,
+  hasCustody: YES_NO,
+  hasCollegeDegree: YES_NO,
+  isEmployed: YES_NO,
+  partnerEmployed: ['Yes', 'No', 'N/A'],
+  regularCycles: YES_NO,
+  onBirthControl: YES_NO,
+  isBreastfeeding: YES_NO,
+  usedTHC: YES_NO_MAYBE,
+  hepatitisBVaccination: YES_NO_MAYBE,
+  rhogamInjection: YES_NO_MAYBE,
+  fertilityTreatments: YES_NO,
+  hadMiscarriage: YES_NO,
+  understandsAppointments: YES_NO,
+  allowOBAppointments: YES_NO_MAYBE,
+  allowDeliveryRoom: YES_NO_MAYBE,
+  helpCoupleWithChildren: YES_NO_MAYBE,
+  helpSameSexCouple: YES_NO,
+  helpSingleParent: YES_NO,
+  reduceTripletsToTwins: YES_NO,
+  reduceTwinsToSingleton: YES_NO,
+  terminateIfNecessary: YES_NO,
+  terminateDownSyndrome: YES_NO,
+  amniocentesis: YES_NO,
+  agreeToFetalTesting: YES_NO_MAYBE,
+  willingForSplitTwins: YES_NO
+};
 
 const NUMERIC_KEYS = new Set([
   'weight',
@@ -239,17 +236,13 @@ const NUMERIC_KEYS = new Set([
   'childrenBirthed',
   'surrogacyChildren',
   'numberOfPregnancies',
-  'pregnancy1Weight',
-  'pregnancy2Weight',
-  'pregnancy3Weight'
+  ...PREGNANCY_NUMBERS.map((n) => `pregnancy${n}Weight`)
 ]);
 
 const DATE_KEYS = new Set([
   'dob',
   'lastPapSmear',
-  'pregnancy1DOB',
-  'pregnancy2DOB',
-  'pregnancy3DOB'
+  ...PREGNANCY_NUMBERS.map((n) => `pregnancy${n}DOB`)
 ]);
 
 const LONG_TEXT_KEYS = new Set([
@@ -260,7 +253,9 @@ const LONG_TEXT_KEYS = new Set([
   'hobbies',
   'personality',
   'additionalPregnancyInfo',
-  'miscarriageDetails'
+  'miscarriageDetails',
+  'postpartumDepression',
+  'bedrest'
 ]);
 
 const formatLabel = (key: string) =>
@@ -333,17 +328,26 @@ function FieldEditor({ fieldKey, rawValue, displayValue, onSave, variant = 'sect
   const [saving, setSaving] = useState(false);
   const initialString = useMemo(() => {
     if (rawValue === null || rawValue === undefined) return '';
-    if (typeof rawValue === 'boolean') return rawValue ? 'true' : 'false';
+    if (typeof rawValue === 'boolean') {
+      // Older edits saved choice answers as true/false.
+      if (fieldKey in CHOICE_KEYS) return rawValue ? 'Yes' : 'No';
+      return rawValue ? 'true' : 'false';
+    }
     if (Array.isArray(rawValue)) return rawValue.join(', ');
     if (typeof rawValue === 'object') return JSON.stringify(rawValue, null, 2);
     return String(rawValue);
-  }, [rawValue]);
+  }, [rawValue, fieldKey]);
   const [draft, setDraft] = useState(initialString);
 
   useEffect(() => {
     if (!editing) setDraft(initialString);
   }, [editing, initialString]);
 
+  const choices = CHOICE_KEYS[fieldKey];
+  // Keep an unexpected stored answer selectable rather than silently dropping it.
+  const choiceOptions = choices && initialString && !choices.includes(initialString)
+    ? [...choices, initialString]
+    : choices;
   const isBool = BOOLEAN_KEYS.has(fieldKey);
   const isNum = NUMERIC_KEYS.has(fieldKey);
   const isDate = DATE_KEYS.has(fieldKey);
@@ -360,6 +364,7 @@ function FieldEditor({ fieldKey, rawValue, displayValue, onSave, variant = 'sect
   };
 
   const parsed = (): unknown => {
+    if (choiceOptions) return draft;
     if (isBool) return draft === 'true';
     if (isNum) {
       const t = draft.trim();
@@ -392,7 +397,18 @@ function FieldEditor({ fieldKey, rawValue, displayValue, onSave, variant = 'sect
     return (
       <div className="flex flex-col gap-2">
         <span className={labelCls}>{formatLabel(fieldKey)}</span>
-        {isBool ? (
+        {choiceOptions ? (
+          <select
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="text-sm rounded-lg border border-rose-200 dark:border-white/10 bg-white dark:bg-[#0e0b1a] px-2 py-1.5 text-gray-900 dark:text-gray-100"
+          >
+            <option value="">—</option>
+            {choiceOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        ) : isBool ? (
           <select
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -470,9 +486,23 @@ export default function SurrogateIntakeFormView({ data, onSaveField, readOnly = 
     const used = new Set<string>();
     const sectionRows: { section: SectionDef; entries: [string, unknown, string][] }[] = [];
 
+    // Only list the pregnancies the surrogate reported (or that have answers),
+    // not all ten slots.
+    const reported = Number(data.numberOfPregnancies) || 0;
+    const shownPregnancies = new Set(
+      PREGNANCY_NUMBERS.filter(
+        (n) => n <= reported || PREGNANCY_FIELDS.some((f) => !isEmpty(data[`pregnancy${n}${f}`]))
+      )
+    );
+    const isHiddenPregnancyKey = (key: string) => {
+      const m = key.match(/^pregnancy(\d+)[A-Z]/);
+      return m !== null && !shownPregnancies.has(Number(m[1]));
+    };
+
     for (const section of SECTIONS) {
       const entries: [string, unknown, string][] = [];
       for (const key of section.keys) {
+        if (isHiddenPregnancyKey(key)) continue;
         const raw = data[key];
         if (raw !== undefined && raw !== null && typeof raw === 'object' && !Array.isArray(raw)) continue;
         const text = formatValue(raw, key);
@@ -489,7 +519,9 @@ export default function SurrogateIntakeFormView({ data, onSaveField, readOnly = 
       for (const section of SECTIONS) {
         const hasSection = sectionRows.some((s) => s.section.id === section.id);
         if (hasSection) continue;
-        const entries: [string, unknown, string][] = section.keys.map((k) => [k, data[k], formatValue(data[k], k)]);
+        const entries: [string, unknown, string][] = section.keys
+          .filter((k) => !isHiddenPregnancyKey(k))
+          .map((k) => [k, data[k], formatValue(data[k], k)]);
         sectionRows.push({ section, entries });
       }
     }

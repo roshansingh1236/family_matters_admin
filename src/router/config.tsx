@@ -1,4 +1,5 @@
 import type { RouteObject } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import HomePage from '../pages/home/page';
 import RequestsPage from '../pages/requests/page';
 import InquiriesPage from '../pages/inquiries/page';
@@ -7,7 +8,6 @@ import SurrogateProfilePage from '../pages/surrogates/profile';
 import ParentsPage from '../pages/parents/page';
 import ParentProfilePage from '../pages/parents/profile';
 import MatchesPage from '../pages/matches/page';
-import AppointmentsPage from '../pages/appointments/page';
 import ReportsPage from '../pages/reports/page';
 import SettingsPage from '../pages/settings/page';
 import CalendarPage from '../pages/calendar/page';
@@ -75,8 +75,10 @@ const routes: RouteObject[] = [
     element: <MatchesPage />,
   },
   {
+    // Appointments were folded into the calendar (its List view); keep old
+    // links and bookmarks working.
     path: '/appointments',
-    element: <AppointmentsPage />,
+    element: <Navigate to="/calendar" replace />,
   },
   {
     path: '/reports',

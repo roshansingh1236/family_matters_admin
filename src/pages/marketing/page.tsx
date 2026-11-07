@@ -5,8 +5,41 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Badge from '../../components/base/Badge';
 import { supabase } from '../../lib/supabase';
-import { storageService, STORAGE_BUCKETS } from '../../services/storageService';
+import { STORAGE_BUCKETS } from '../../services/storageService';
 import Toast from '../../components/base/Toast';
+
+// Private bucket (see 20261027_private_marketing_assets.sql): only Admin /
+// Agency Staff can read it, and files open through short-lived signed links.
+const MARKETING_BUCKET = 'marketing';
+const SIGNED_URL_SECONDS = 10 * 60;
+
+// Files used to live under marketing/<folder>/ in the public `users` bucket.
+// Move any still there into the private bucket, once per folder per session.
+const movedFolders = new Set<string>();
+async function moveLegacyFiles(folder: string): Promise<number> {
+  if (movedFolders.has(folder)) return 0;
+  const { data: legacy, error } = await supabase.storage
+    .from(STORAGE_BUCKETS.USERS)
+    .list(`marketing/${folder}`, { limit: 1000 });
+  if (error) throw error;
+
+  let moved = 0;
+  // `list` also returns a placeholder entry for empty folders; skip it.
+  for (const file of (legacy || []).filter(f => f.id && f.name !== '.emptyFolderPlaceholder')) {
+    const { error: moveError } = await supabase.storage
+      .from(STORAGE_BUCKETS.USERS)
+      .move(`marketing/${folder}/${file.name}`, `${folder}/${file.name}`, { destinationBucket: MARKETING_BUCKET });
+    if (moveError) throw moveError;
+    await supabase
+      .from('marketing_assets')
+      .update({ storage_path: `${folder}/${file.name}`, file_url: null })
+      .eq('folder_id', folder)
+      .eq('name', file.name);
+    moved++;
+  }
+  movedFolders.add(folder);
+  return moved;
+}
 
 const FOLDERS = [
   { id: 'marketing_materials', label: 'Marketing Materials', icon: 'ri-advertisement-line', color: 'rose' },
@@ -27,6 +60,17 @@ export default function MarketingPage() {
   const fetchFiles = useCallback(async () => {
     setIsLoading(true);
     try {
+      try {
+        const moved = await moveLegacyFiles(activeFolder);
+        if (moved > 0) {
+          setToast({ message: `Moved ${moved} file${moved === 1 ? '' : 's'} to private storage`, type: 'success' });
+        }
+      } catch (moveErr) {
+        // Leave them where they are; the next visit tries again.
+        console.error('Moving marketing files to private storage failed:', moveErr);
+        setToast({ message: 'Some older files could not be moved to private storage yet', type: 'error' });
+      }
+
       // Fetch dynamic metadata from database
       const { data: dbAssets } = await supabase
         .from('marketing_assets')
@@ -36,8 +80,8 @@ export default function MarketingPage() {
 
       // Also list physical files in storage
       const { data: storageFiles, error: storageError } = await supabase.storage
-        .from(STORAGE_BUCKETS.USERS)
-        .list(`marketing/${activeFolder}`, {
+        .from(MARKETING_BUCKET)
+        .list(activeFolder, {
           limit: 100,
           offset: 0,
           sortBy: { column: 'name', order: 'asc' },
@@ -45,12 +89,12 @@ export default function MarketingPage() {
 
       if (storageError) throw storageError;
       
-      const mergedFiles = (storageFiles || []).map(file => {
+      const mergedFiles = (storageFiles || []).filter(f => f.id && f.name !== '.emptyFolderPlaceholder').map(file => {
         const dbMatch = dbAssets?.find(a => a.name === file.name);
         return {
           ...file,
           dbId: dbMatch?.id,
-          url: storageService.getPublicUrl(STORAGE_BUCKETS.USERS, `marketing/${activeFolder}/${file.name}`),
+          path: `${activeFolder}/${file.name}`,
           displayName: dbMatch?.metadata?.originalName || file.name.split('-').slice(1).join('-') || file.name
         };
       });
@@ -82,15 +126,18 @@ export default function MarketingPage() {
     setIsUploading(true);
     try {
       const fileName = `${Date.now()}-${file.name}`;
-      const path = `marketing/${activeFolder}/${fileName}`;
-      
-      const uploadResult = await storageService.uploadFile(STORAGE_BUCKETS.USERS, path, file);
-      
+      const path = `${activeFolder}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(MARKETING_BUCKET)
+        .upload(path, file, { cacheControl: '3600', upsert: false });
+      if (uploadError) throw uploadError;
+
       // Register in Database for dynamic tracking
       await supabase.from('marketing_assets').insert({
         name: fileName,
         folder_id: activeFolder,
-        file_url: uploadResult.url,
+        storage_path: path,
         file_type: file.type,
         file_size: file.size,
         metadata: { originalName: file.name }
@@ -110,7 +157,10 @@ export default function MarketingPage() {
     if (!confirm('Are you sure you want to delete this asset?')) return;
     
     try {
-      await storageService.deleteFile(STORAGE_BUCKETS.USERS, `marketing/${activeFolder}/${fileName}`);
+      const { error: removeError } = await supabase.storage
+        .from(MARKETING_BUCKET)
+        .remove([`${activeFolder}/${fileName}`]);
+      if (removeError) throw removeError;
       if (dbId) {
         await supabase.from('marketing_assets').delete().eq('id', dbId);
       }
@@ -119,6 +169,27 @@ export default function MarketingPage() {
     } catch (err: any) {
       console.error('Delete failed:', err);
       setToast({ message: 'Delete failed', type: 'error' });
+    }
+  };
+
+  // Private files: fetch a short-lived link when the file is opened. The tab
+  // is opened first (synchronously) so the browser doesn't block it as a popup.
+  const openFile = async (path: string, downloadName?: string) => {
+    const tab = window.open('', '_blank');
+    const { data, error } = await supabase.storage
+      .from(MARKETING_BUCKET)
+      .createSignedUrl(path, SIGNED_URL_SECONDS, downloadName ? { download: downloadName } : undefined);
+    if (error || !data?.signedUrl) {
+      tab?.close();
+      console.error('Could not open file:', error);
+      setToast({ message: 'Could not open the file', type: 'error' });
+      return;
+    }
+    if (tab) {
+      tab.opener = null;
+      tab.location.href = data.signedUrl;
+    } else {
+      window.location.href = data.signedUrl;
     }
   };
 
@@ -140,7 +211,9 @@ export default function MarketingPage() {
           <div className="flex justify-between items-end mb-8">
             <div>
               <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Marketing Assets</h1>
-              <p className="text-gray-500 font-medium mt-1">Real-time synchronized brand and media storage.</p>
+              <p className="text-gray-500 font-medium mt-1">
+                <i className="ri-lock-line mr-1"></i>Private brand and media storage, visible only to logged-in staff.
+              </p>
             </div>
             <Button color="blue" onClick={() => fileInputRef.current?.click()} isLoading={isUploading}>
               <i className="ri-upload-cloud-line mr-2"></i> Add Asset
@@ -219,9 +292,12 @@ export default function MarketingPage() {
                             </div>
                           </div>
                           <div className="mt-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
-                            <a href={file.url} target="_blank" rel="noreferrer" className="flex-1 py-2 rounded-lg bg-rose-500 text-white text-[10px] font-black uppercase text-center shadow-lg shadow-rose-500/20">
+                            <button onClick={() => openFile(file.path)} className="flex-1 py-2 rounded-lg bg-rose-500 text-white text-[10px] font-black uppercase text-center shadow-lg shadow-rose-500/20">
                               Open File
-                            </a>
+                            </button>
+                            <button onClick={() => openFile(file.path, file.displayName)} aria-label="Download" title="Download" className="w-10 h-9 rounded-lg bg-gray-100 dark:bg-white/10 text-gray-500 hover:text-rose-500 transition-colors flex items-center justify-center">
+                              <i className="ri-download-2-line"></i>
+                            </button>
                             <button onClick={() => handleDelete(file.name, file.dbId)} className="w-10 h-9 rounded-lg bg-gray-100 dark:bg-white/10 text-gray-500 hover:text-rose-500 transition-colors flex items-center justify-center">
                               <i className="ri-delete-bin-line"></i>
                             </button>

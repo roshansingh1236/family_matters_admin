@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Sidebar } from '../../components/feature/Sidebar';
 import Header from '../../components/feature/Header';
 import Card from '../../components/base/Card';
@@ -12,16 +12,106 @@ import {
   reminderLeadLabel,
   localDateKey,
   localTimeValue,
+  expandRecurrence,
+  recurrenceProblem,
+  describeRecurrence,
+  eventDescription,
+  medicinesSummary,
 } from '../../services/appointmentService';
-import type { Appointment } from '../../services/appointmentService';
+import type {
+  Appointment,
+  Recurrence,
+  RecurrenceFrequency,
+  SeriesInput,
+  SeriesMedicine,
+} from '../../services/appointmentService';
+
+// The "Repeat" part of the event form.
+type RepeatForm = {
+  enabled: boolean;
+  frequency: RecurrenceFrequency;
+  interval: number;
+  weekdays: number[];
+  times: string[];
+  endMode: 'count' | 'date';
+  count: number;
+  endDate: string;
+};
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const addDaysToKey = (key: string, days: number): string => {
+  const [y, m, d] = key.split('-').map(Number);
+  const next = new Date(y, m - 1, d + days);
+  return localDateKey(next.toISOString());
+};
+
+const emptyRepeat = (startDate: string, time: string): RepeatForm => ({
+  enabled: false,
+  frequency: 'daily',
+  interval: 2,
+  weekdays: [new Date(`${startDate}T00:00`).getDay()],
+  times: [time || '09:00'],
+  endMode: 'count',
+  count: 21,
+  endDate: addDaysToKey(startDate, 20),
+});
+
+const toRecurrence = (repeat: RepeatForm, startDate: string): Recurrence => ({
+  frequency: repeat.frequency,
+  interval: repeat.frequency === 'interval' ? repeat.interval : undefined,
+  weekdays: repeat.frequency === 'weekly' ? repeat.weekdays : undefined,
+  startDate,
+  endDate: repeat.endMode === 'date' ? repeat.endDate : undefined,
+  count: repeat.endMode === 'count' ? repeat.count : undefined,
+  times: repeat.times,
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+});
+
+const fromRecurrence = (rec: Recurrence): RepeatForm => ({
+  enabled: true,
+  frequency: rec.frequency,
+  interval: rec.interval ?? 2,
+  weekdays: rec.weekdays ?? [],
+  times: rec.times?.length ? rec.times : ['09:00'],
+  endMode: rec.endDate ? 'date' : 'count',
+  count: rec.count ?? 21,
+  endDate: rec.endDate ?? addDaysToKey(rec.startDate, 20),
+});
+
+const isMedicineType = (type?: string) => type === 'medication' || type === 'injection';
 import UserSelector from '../../components/feature/UserSelector';
 import MultiUserSelector from '../../components/feature/MultiUserSelector';
 import MedicalRecordModal from '../../components/feature/MedicalRecordModal';
 import { supabase } from '../../lib/supabase';
+import CalendarFilterBar from './components/CalendarFilterBar';
+import MonthView from './components/MonthView';
+import TimeGridView from './components/TimeGridView';
+import ListView from './components/ListView';
+import DayPanel from './components/DayPanel';
+import {
+  applyFilters,
+  eventDayKey,
+  eventStartMs,
+  isDose,
+  loadFilters,
+  saveFilters,
+  todayKey,
+  typeDef,
+  usePeople,
+  weekDays,
+} from './calendarUtils';
+import type { CalendarFilters } from './calendarUtils';
 
 const CalendarPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day' | 'list'>('month');
+  // Who / what the calendar shows (remembered in this browser), everyone's
+  // names, and the day whose full list is open in the side panel.
+  const [filters, setFilters] = useState<CalendarFilters>(loadFilters);
+  const people = usePeople();
+  const [openDayKey, setOpenDayKey] = useState<string | null>(null);
+  const closeDayPanel = useCallback(() => setOpenDayKey(null), []);
   const [selectedEvent, setSelectedEvent] = useState<Appointment | null>(null);
   const [showNewEventModal, setShowNewEventModal] = useState(false);
   const [events, setEvents] = useState<Appointment[]>([]);
@@ -35,6 +125,16 @@ const CalendarPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'warning'; message: string } | null>(null);
   const [selectedEventLeads, setSelectedEventLeads] = useState<number[] | null>(null);
+
+  // Repeating schedules: the form's Repeat section and medicine list, the
+  // series being edited (null when creating or editing a single event), and
+  // the schedule of the event open in the detail view.
+  const [repeat, setRepeat] = useState<RepeatForm>(() =>
+    emptyRepeat(localDateKey(new Date().toISOString()), '09:00')
+  );
+  const [medicines, setMedicines] = useState<SeriesMedicine[]>([]);
+  const [editingSeriesId, setEditingSeriesId] = useState<string | null>(null);
+  const [selectedSeries, setSelectedSeries] = useState<(SeriesInput & { id: string }) | null>(null);
 
   // New Event Form State
   const [formData, setFormData] = useState<Partial<Appointment>>({
@@ -65,6 +165,10 @@ const CalendarPage: React.FC = () => {
   useEffect(() => {
     fetchEvents();
   }, []);
+
+  useEffect(() => saveFilters(filters), [filters]);
+
+  const filteredEvents = useMemo(() => applyFilters(events, filters), [events, filters]);
 
   // Per client review: pop up a notification 1 hour before each calendar
   // event. Re-evaluate every minute against today's events. Once an event has
@@ -101,6 +205,9 @@ const CalendarPage: React.FC = () => {
 
       for (const ev of events) {
         if (!ev.id || reminded.has(ev.id)) continue;
+        // A repeating schedule (e.g. daily medication) is the user's to follow;
+        // alerting the admin before every dose would be noise.
+        if (ev.seriesId) continue;
         const isoDate = (ev as any).date as string | undefined;
         const time = (ev as any).time as string | undefined;
         const startStr = time && isoDate && !isoDate.includes('T')
@@ -134,58 +241,6 @@ const CalendarPage: React.FC = () => {
     return () => clearInterval(handle);
   }, [events]);
 
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-
-    const days = [];
-    
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
-    }
-    
-    // Add days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      days.push(day);
-    }
-    
-    return days;
-  };
-
-  const getEventsForDate = (day: number) => {
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const dayStr = String(day).padStart(2, '0');
-    const dateStr = `${year}-${month}-${dayStr}`;
-    // Bucket by the event's local calendar day (the stored value is UTC).
-    return events.filter(event => (localDateKey(event.startsAt) || event.date) === dateStr);
-  };
-
-  const getEventTypeColor = (type: string) => {
-    switch (type) {
-      case 'consultation': return 'bg-blue-500';
-      case 'medical': return 'bg-green-500';
-      case 'legal': return 'bg-purple-500';
-      case 'psychological': return 'bg-orange-500';
-      case 'medication': return 'bg-teal-500';
-      case 'injection': return 'bg-rose-500';
-      case 'reminder': return 'bg-amber-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -201,17 +256,30 @@ const CalendarPage: React.FC = () => {
     }
   };
 
-  const navigateMonth = (direction: 'prev' | 'next') => {
+  // Previous / next month, week or day, depending on the view.
+  const navigate = (direction: 'prev' | 'next') => {
+    const step = direction === 'prev' ? -1 : 1;
     setCurrentDate(prev => {
-      const newDate = new Date(prev);
-      if (direction === 'prev') {
-        newDate.setMonth(prev.getMonth() - 1);
-      } else {
-        newDate.setMonth(prev.getMonth() + 1);
-      }
-      return newDate;
+      if (viewMode === 'week') return new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7 * step);
+      if (viewMode === 'day') return new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + step);
+      return new Date(prev.getFullYear(), prev.getMonth() + step, 1);
     });
   };
+
+  const periodLabel = (() => {
+    if (viewMode === 'week') {
+      const days = weekDays(currentDate);
+      const first = days[0];
+      const last = days[6];
+      const sameMonth = first.getMonth() === last.getMonth();
+      return `${first.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${last.toLocaleDateString(undefined, sameMonth ? { day: 'numeric' } : { month: 'short', day: 'numeric' })}, ${last.getFullYear()}`;
+    }
+    if (viewMode === 'day') {
+      return currentDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    if (viewMode === 'list') return 'Agenda';
+    return currentDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  })();
 
   const emptyForm = (): Partial<Appointment> => ({
     title: '',
@@ -226,12 +294,30 @@ const CalendarPage: React.FC = () => {
     userId: ''
   });
 
-  const openNewEventModal = () => {
-    setFormData(emptyForm());
+  const openNewEventModal = (dateKey?: string) => {
+    const form = { ...emptyForm(), ...(dateKey ? { date: dateKey } : {}) };
+    setFormData(form);
     setReminderLeads([]);
+    setRepeat(emptyRepeat(form.date!, form.time!));
+    setMedicines([]);
+    setEditingSeriesId(null);
     setFormError(null);
     setShowNewEventModal(true);
   };
+
+  const closeEventModal = () => {
+    setShowNewEventModal(false);
+    setEditingSeriesId(null);
+  };
+
+  const updateRepeat = (changes: Partial<RepeatForm>) => setRepeat(prev => ({ ...prev, ...changes }));
+
+  const updateMedicine = (index: number, changes: Partial<SeriesMedicine>) =>
+    setMedicines(prev => prev.map((m, i) => (i === index ? { ...m, ...changes } : m)));
+
+  // The schedule being entered, when the event repeats.
+  const recurrence = repeat.enabled && formData.date ? toRecurrence(repeat, formData.date) : null;
+  const plannedStarts = recurrence ? expandRecurrence(recurrence) : [];
 
   const toggleReminderLead = (minutes: number) => {
     setReminderLeads(prev =>
@@ -243,8 +329,10 @@ const CalendarPage: React.FC = () => {
     setFormData(prev => ({ ...prev, type }));
     // A medication / injection / reminder exists to notify the user, so start
     // with sensible push reminders the admin can still change.
+    // A repeating one (daily medication) only needs the at-the-time push;
+    // "1 day before" would also notify her the evening before every dose.
     if (isReminderEventType(type) && reminderLeads.length === 0) {
-      setReminderLeads([1440, 0]);
+      setReminderLeads(repeat.enabled ? [0] : [1440, 0]);
     }
   };
 
@@ -265,13 +353,23 @@ const CalendarPage: React.FC = () => {
       return;
     }
 
+    if (recurrence) {
+      await saveSeries(recurrence, attendees.length);
+      return;
+    }
+
     setIsSaving(true);
     let eventId: string | undefined = formData.id;
     try {
         if (formData.id) {
             await appointmentService.updateAppointment(formData.id, formData as any);
         } else {
-            eventId = await appointmentService.createAppointment(formData as any);
+            // A one-off medication / injection: the medicines go at the start of
+            // the description, where the push reminder shows them.
+            const notes = isMedicineType(formData.type)
+              ? eventDescription(medicines, formData.notes)
+              : formData.notes;
+            eventId = await appointmentService.createAppointment({ ...formData, notes } as any);
         }
     } catch (error) {
         console.error("Failed to save event", error);
@@ -315,6 +413,93 @@ const CalendarPage: React.FC = () => {
     setIsSaving(false);
   };
 
+  // Create a repeating schedule, or change the one being edited.
+  const saveSeries = async (rec: Recurrence, attendeeCount: number) => {
+    const problem = recurrenceProblem(rec);
+    if (problem) {
+      setFormError(problem);
+      return;
+    }
+    if (attendeeCount === 0) {
+      setFormError('Choose the surrogate or parent this schedule is for.');
+      return;
+    }
+
+    const input: SeriesInput = {
+      title: formData.title!.trim(),
+      type: formData.type || 'reminder',
+      location: formData.location,
+      notes: formData.notes,
+      userId: formData.userId,
+      participants: formData.participants || [],
+      medicines: isMedicineType(formData.type) ? medicines.filter(m => m.name.trim()) : [],
+      recurrence: rec,
+      reminderLeads,
+    };
+
+    setIsSaving(true);
+    try {
+      const result = editingSeriesId
+        ? await appointmentService.updateSeries(editingSeriesId, input)
+        : await appointmentService.createSeries(input);
+      const what = editingSeriesId ? 'Schedule updated' : 'Schedule created';
+      setNotice({
+        type: result.occurrences > 0 ? 'success' : 'warning',
+        message: result.occurrences > 0
+          ? `${what}: ${result.occurrences} event${result.occurrences === 1 ? '' : 's'} on the calendar` +
+            (reminderLeads.length > 0 ? ` with ${result.remindersScheduled} push reminder${result.remindersScheduled === 1 ? '' : 's'}.` : '.')
+          : `${what}, but every date in it has already passed, so nothing was added to the calendar.`,
+      });
+      await fetchEvents();
+      setShowNewEventModal(false);
+      setEditingSeriesId(null);
+      setFormData(emptyForm());
+      setReminderLeads([]);
+    } catch (error: any) {
+      console.error('Failed to save schedule', error);
+      setFormError(`Could not save the schedule${error?.message ? `: ${error.message}` : '.'}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Open the form on the whole schedule of the selected event.
+  const handleEditSeries = () => {
+    if (!selectedSeries) return;
+    const s = selectedSeries;
+    setFormData({
+      ...emptyForm(),
+      title: s.title,
+      type: s.type,
+      location: s.location,
+      notes: s.notes,
+      userId: s.userId,
+      participants: s.participants,
+      date: s.recurrence.startDate,
+      time: s.recurrence.times?.[0] || '09:00',
+    });
+    setRepeat(fromRecurrence(s.recurrence));
+    setMedicines(s.medicines);
+    setReminderLeads(s.reminderLeads);
+    setEditingSeriesId(s.id);
+    setFormError(null);
+    setShowNewEventModal(true);
+    setSelectedEvent(null);
+  };
+
+  const handleDeleteUpcoming = async (seriesId: string) => {
+    if (!confirm('Delete every upcoming event in this schedule? Past ones stay on the calendar.')) return;
+    try {
+      const removed = await appointmentService.deleteUpcomingInSeries(seriesId);
+      await fetchEvents();
+      setSelectedEvent(null);
+      setNotice({ type: 'success', message: `Schedule stopped: ${removed} upcoming event${removed === 1 ? '' : 's'} removed.` });
+    } catch (error) {
+      console.error('Failed to delete schedule', error);
+      setNotice({ type: 'warning', message: 'Could not stop the schedule. Please try again.' });
+    }
+  };
+
   const handleEditEvent = async () => {
     if (selectedEvent) {
         const event = selectedEvent;
@@ -324,6 +509,10 @@ const CalendarPage: React.FC = () => {
             date: localDateKey(event.startsAt) || event.date,
             time: localTimeValue(event.startsAt) || event.time?.substring(0, 5) || '09:00'
         });
+        // Editing one event (a one-off, or a single occurrence of a schedule).
+        setRepeat(emptyRepeat(localDateKey(event.startsAt) || event.date, localTimeValue(event.startsAt)));
+        setMedicines([]);
+        setEditingSeriesId(null);
         setReminderLeads(selectedEventLeads ?? []);
         setFormError(null);
         setShowNewEventModal(true);
@@ -419,81 +608,68 @@ const CalendarPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [selectedEvent]);
 
-  const renderMonthView = () => {
-    const days = getDaysInMonth(currentDate);
-    
-    return (
-      <div className="bg-white dark:bg-[#15111f] rounded-2xl border border-rose-100/60 dark:border-white/5">
-        {/* Calendar Header */}
-        <div className="grid grid-cols-7 border-b border-rose-100/60 dark:border-white/5">
-          {daysOfWeek.map(day => (
-            <div key={day} className="p-4 text-center font-semibold text-gray-700 dark:text-gray-300 border-r border-rose-100/60 dark:border-white/5 last:border-r-0">
-              {day}
-            </div>
-          ))}
-        </div>
-        
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7">
-          {days.map((day, index) => (
-            <div
-              key={index}
-              className="min-h-[120px] p-2 border-r border-b border-rose-100/60 dark:border-white/5 last:border-r-0 relative hover:bg-rose-50/60 dark:hover:bg-white/5 transition-colors"
-            >
-              {day && (
-                <>
-                  <div className={`font-semibold mb-2 ${
-                      day === new Date().getDate() && 
-                      currentDate.getMonth() === new Date().getMonth() && 
-                      currentDate.getFullYear() === new Date().getFullYear() 
-                      ? 'bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center' 
-                      : 'text-gray-900 dark:text-white'
-                  }`}>{day}</div>
-                  <div className="space-y-1">
-                    {getEventsForDate(day).map(event => (
-                      <div
-                        key={event.id}
-                        onClick={() => setSelectedEvent(event)}
-                        className={`text-xs p-1 rounded cursor-pointer text-white ${getEventTypeColor(event.type)} hover:opacity-80 shadow-sm truncate`}
-                      >
-                        <span className="font-bold mr-1">{event.time}</span>
-                        {event.title}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  // Load the schedule of the selected event, if it repeats
+  useEffect(() => {
+    setSelectedSeries(null);
+    const seriesId = selectedEvent?.seriesId;
+    if (!seriesId) return;
+    let cancelled = false;
+    appointmentService.getSeries(seriesId)
+      .then(series => { if (!cancelled) setSelectedSeries(series); })
+      .catch(error => console.error('Failed to load schedule', error));
+    return () => { cancelled = true; };
+  }, [selectedEvent]);
+
+  // Next few events from now. Single doses are left out (they'd fill the
+  // list); today's dose count is shown instead.
+  const upcomingEvents = useMemo(() => {
+    const now = Date.now();
+    return filteredEvents
+      .filter(e => !isDose(e) && e.status === 'scheduled' && eventStartMs(e) >= now)
+      .sort((a, b) => eventStartMs(a) - eventStartMs(b))
+      .slice(0, 5);
+  }, [filteredEvents]);
+
+  const todaysDoseCount = useMemo(() => {
+    const key = todayKey();
+    return filteredEvents.filter(e => isDose(e) && eventDayKey(e) === key).length;
+  }, [filteredEvents]);
 
   const renderUpcomingEvents = () => (
     <Card>
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Upcoming Events</h3>
       <div className="space-y-3">
-        {events.slice(0, 5).map(event => (
+        {upcomingEvents.map(event => (
           <div
             key={event.id}
             onClick={() => setSelectedEvent(event)}
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer"
           >
-            <div className={`w-3 h-3 rounded-full ${getEventTypeColor(event.type)}`}></div>
-            <div className="flex-1">
+            <div className={`w-3 h-3 flex-shrink-0 rounded-full ${typeDef(event.type).color}`}></div>
+            <div className="flex-1 min-w-0">
               <div className="font-medium text-gray-900 dark:text-white line-clamp-1">{event.title}</div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
-                {event.date} at {event.time}
+                {new Date(eventStartMs(event)).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} at {event.time}
               </div>
             </div>
             {getStatusBadge(event.status)}
           </div>
         ))}
-        {events.length === 0 && (
+        {upcomingEvents.length === 0 && (
             <p className="text-gray-500 text-center py-4">No upcoming events</p>
         )}
       </div>
+      {todaysDoseCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpenDayKey(todayKey())}
+          className="mt-4 flex w-full items-center gap-2 rounded-lg bg-teal-50 dark:bg-teal-500/10 px-3 py-2 text-left text-sm font-medium text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-500/20 cursor-pointer"
+        >
+          <i className="ri-capsule-line"></i>
+          {todaysDoseCount} medication dose{todaysDoseCount === 1 ? '' : 's'} today
+          <i className="ri-arrow-right-s-line ml-auto"></i>
+        </button>
+      )}
     </Card>
   );
 
@@ -513,10 +689,11 @@ const CalendarPage: React.FC = () => {
               </div>
               <div className="flex gap-3">
                 <div className="flex bg-gray-100 dark:bg-[#15111f] rounded-lg p-1">
-                  {(['month', 'week', 'day'] as const).map(mode => (
+                  {(['month', 'week', 'day', 'list'] as const).map(mode => (
                     <button
                       key={mode}
                       onClick={() => setViewMode(mode)}
+                      aria-pressed={viewMode === mode}
                       className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer capitalize ${
                         viewMode === mode
                           ? 'bg-white dark:bg-white/5 text-rose-500 dark:text-rose-400 shadow-sm'
@@ -527,7 +704,7 @@ const CalendarPage: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <Button color="blue" onClick={openNewEventModal}>
+                <Button color="blue" onClick={() => openNewEventModal()}>
                   <i className="ri-add-line mr-2"></i>
                   New Event
                 </Button>
@@ -554,53 +731,69 @@ const CalendarPage: React.FC = () => {
             </div>
           )}
 
+          <CalendarFilterBar filters={filters} onChange={setFilters} />
+
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Main Calendar */}
             <div className="lg:col-span-3">
               <Card>
                 {/* Calendar Navigation */}
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-                  </h2>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => navigateMonth('prev')}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
-                    >
-                      <i className="ri-arrow-left-line text-gray-600 dark:text-gray-400"></i>
-                    </button>
-                    <button
-                      onClick={() => setCurrentDate(new Date())}
-                      className="px-3 py-2 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg cursor-pointer"
-                    >
-                      Today
-                    </button>
-                    <button
-                      onClick={() => navigateMonth('next')}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
-                    >
-                      <i className="ri-arrow-right-line text-gray-600 dark:text-gray-400"></i>
-                    </button>
-                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{periodLabel}</h2>
+                  {viewMode !== 'list' && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => navigate('prev')}
+                        aria-label={`Previous ${viewMode}`}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer"
+                      >
+                        <i className="ri-arrow-left-line text-gray-600 dark:text-gray-400"></i>
+                      </button>
+                      <button
+                        onClick={() => setCurrentDate(new Date())}
+                        className="px-3 py-2 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-white/5 rounded-lg cursor-pointer"
+                      >
+                        Today
+                      </button>
+                      <button
+                        onClick={() => navigate('next')}
+                        aria-label={`Next ${viewMode}`}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer"
+                      >
+                        <i className="ri-arrow-right-line text-gray-600 dark:text-gray-400"></i>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {viewMode === 'month' && renderMonthView()}
-                
-                {viewMode === 'week' && (
-                  <div className="text-center py-12">
-                    <i className="ri-calendar-line text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
-                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Week View</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Week view coming soon</p>
-                  </div>
+                {viewMode === 'month' && (
+                  <MonthView
+                    month={currentDate}
+                    events={filteredEvents}
+                    showDoses={filters.showDoses}
+                    onSelectEvent={setSelectedEvent}
+                    onOpenDay={setOpenDayKey}
+                  />
                 )}
-                
-                {viewMode === 'day' && (
-                  <div className="text-center py-12">
-                    <i className="ri-calendar-line text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
-                    <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">Day View</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Day view coming soon</p>
-                  </div>
+
+                {(viewMode === 'week' || viewMode === 'day') && (
+                  <TimeGridView
+                    days={viewMode === 'week' ? weekDays(currentDate) : [currentDate]}
+                    events={filteredEvents}
+                    showDoses={filters.showDoses}
+                    people={people}
+                    onSelectEvent={setSelectedEvent}
+                    onOpenDay={setOpenDayKey}
+                  />
+                )}
+
+                {viewMode === 'list' && (
+                  <ListView
+                    events={filteredEvents}
+                    showDoses={filters.showDoses}
+                    people={people}
+                    onSelectEvent={setSelectedEvent}
+                  />
                 )}
               </Card>
             </div>
@@ -608,28 +801,19 @@ const CalendarPage: React.FC = () => {
             {/* Sidebar */}
             <div className="space-y-6">
               {renderUpcomingEvents()}
-              
-              <Card>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Event Types</h3>
-                <div className="space-y-2">
-                  {[
-                    { type: 'consultation', label: 'Consultations', color: 'bg-blue-500' },
-                    { type: 'medical', label: 'Medical', color: 'bg-green-500' },
-                    { type: 'legal', label: 'Legal', color: 'bg-purple-500' },
-                    { type: 'psychological', label: 'Psychological', color: 'bg-orange-500' },
-                    { type: 'medication', label: 'Medication reminders', color: 'bg-teal-500' },
-                    { type: 'injection', label: 'Injection reminders', color: 'bg-rose-500' },
-                    { type: 'reminder', label: 'Other reminders', color: 'bg-amber-500' }
-                  ].map(item => (
-                    <div key={item.type} className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${item.color}`}></div>
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
             </div>
           </div>
+
+          {openDayKey && (
+            <DayPanel
+              dateKey={openDayKey}
+              events={filteredEvents.filter(e => eventDayKey(e) === openDayKey)}
+              people={people}
+              onClose={closeDayPanel}
+              onSelectEvent={setSelectedEvent}
+              onAddEvent={(dateKey) => { setOpenDayKey(null); openNewEventModal(dateKey); }}
+            />
+          )}
 
           {/* Event Detail Modal */}
           {selectedEvent && (
@@ -677,7 +861,7 @@ const CalendarPage: React.FC = () => {
                         {(selectedEvent.participants && Array.isArray(selectedEvent.participants) && selectedEvent.participants.length > 0) ? selectedEvent.participants.map((participantId, index) => (
                           <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full border border-blue-100 dark:border-blue-800 shadow-sm">
                             <i className="ri-user-line text-xs"></i>
-                            <span className="font-medium">{participantNames[participantId] || 'Loading...'}</span>
+                            <span className="font-medium">{people[participantId]?.name ?? participantNames[participantId] ?? 'Loading...'}</span>
                           </div>
                         )) : (
                             <span className="text-gray-500 italic text-sm">No participants</span>
@@ -701,6 +885,23 @@ const CalendarPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {selectedEvent.seriesId && (
+                      <div className="rounded-lg border border-teal-100 dark:border-teal-500/20 bg-teal-50/60 dark:bg-teal-500/10 p-3 text-sm">
+                        <div className="flex items-center gap-2 font-medium text-teal-800 dark:text-teal-300">
+                          <i className="ri-repeat-line"></i>
+                          Part of a repeating schedule
+                        </div>
+                        <div className="mt-1 text-gray-700 dark:text-gray-300">
+                          {selectedSeries ? describeRecurrence(selectedSeries.recurrence) : 'Loading...'}
+                        </div>
+                        {selectedSeries && selectedSeries.medicines.length > 0 && (
+                          <div className="mt-1 text-gray-700 dark:text-gray-300">
+                            Medicines: {medicinesSummary(selectedSeries.medicines)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {selectedEvent.notes && (
                       <div>
                         <span className="text-gray-600 dark:text-gray-400 font-medium">Notes:</span>
@@ -713,13 +914,25 @@ const CalendarPage: React.FC = () => {
                     <div className="flex gap-3 pt-4">
                       <Button color="blue" className="flex-1" onClick={handleEditEvent}>
                         <i className="ri-edit-line mr-2"></i>
-                        Edit
+                        {selectedEvent.seriesId ? 'Edit this one' : 'Edit'}
                       </Button>
                       <Button variant="outline" className="flex-1" color="red" onClick={() => selectedEvent.id && handleDeleteEvent(selectedEvent.id)}>
                         <i className="ri-delete-bin-line mr-2"></i>
-                        Delete
+                        {selectedEvent.seriesId ? 'Delete this one' : 'Delete'}
                       </Button>
                     </div>
+                    {selectedEvent.seriesId && (
+                      <div className="flex gap-3">
+                        <Button color="blue" variant="outline" className="flex-1" onClick={handleEditSeries} disabled={!selectedSeries}>
+                          <i className="ri-repeat-line mr-2"></i>
+                          Edit schedule
+                        </Button>
+                        <Button variant="outline" className="flex-1" color="red" onClick={() => handleDeleteUpcoming(selectedEvent.seriesId!)}>
+                          <i className="ri-stop-circle-line mr-2"></i>
+                          Delete upcoming
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -729,14 +942,14 @@ const CalendarPage: React.FC = () => {
           {/* New Event Modal */}
           {showNewEventModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full shadow-2xl">
+              <div className="bg-white dark:bg-[#15111f] rounded-2xl max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                      {formData.id ? 'Edit Event' : 'New Event'}
+                      {editingSeriesId ? 'Edit Schedule' : formData.id ? 'Edit Event' : 'New Event'}
                     </h2>
                     <button
-                      onClick={() => setShowNewEventModal(false)}
+                      onClick={closeEventModal}
                       className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
                     >
                       <i className="ri-close-line text-gray-600 dark:text-gray-400"></i>
@@ -789,10 +1002,17 @@ const CalendarPage: React.FC = () => {
                        </Button>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    {editingSeriesId && (
+                      <p className="flex items-start gap-2 rounded-lg bg-teal-50/60 dark:bg-teal-500/10 px-3 py-2 text-xs text-teal-800 dark:text-teal-300">
+                        <i className="ri-information-line mt-0.5"></i>
+                        Saving replaces every upcoming event in this schedule. Events that have already happened stay as they are.
+                      </p>
+                    )}
+
+                    <div className={repeat.enabled ? '' : 'grid grid-cols-2 gap-4'}>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Date
+                          {repeat.enabled ? 'Start date' : 'Date'}
                         </label>
                         <input
                           type="date"
@@ -801,18 +1021,196 @@ const CalendarPage: React.FC = () => {
                           className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Time
-                        </label>
-                        <input
-                          type="time"
-                          value={formData.time}
-                          onChange={e => setFormData({...formData, time: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
-                        />
-                      </div>
+                      {!repeat.enabled && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Time
+                          </label>
+                          <input
+                            type="time"
+                            value={formData.time}
+                            onChange={e => setFormData({...formData, time: e.target.value})}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
+                          />
+                        </div>
+                      )}
                     </div>
+
+                    {/* Repeat: only when creating, or when editing a whole schedule */}
+                    {!formData.id && (
+                      <fieldset className="rounded-xl border border-gray-200 dark:border-white/10 p-4 space-y-4">
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={repeat.enabled}
+                            disabled={!!editingSeriesId}
+                            onChange={e => {
+                              const enabled = e.target.checked;
+                              updateRepeat({
+                                enabled,
+                                // Start from the time already chosen above.
+                                ...(enabled && repeat.times.length === 1 ? { times: [formData.time || '09:00'] } : {}),
+                              });
+                              // Swap the one-off default reminders for the repeating default.
+                              const isDefault = (leads: number[]) => leads.length === 2 && leads.includes(1440) && leads.includes(0);
+                              if (enabled && isDefault(reminderLeads)) setReminderLeads([0]);
+                              if (!enabled && isReminderEventType(formData.type) && reminderLeads.length === 1 && reminderLeads[0] === 0) {
+                                setReminderLeads([1440, 0]);
+                              }
+                            }}
+                            className="h-4 w-4 rounded border-gray-300 dark:border-white/20 accent-rose-500"
+                          />
+                          Repeat this event
+                        </label>
+
+                        {repeat.enabled && (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Repeats</label>
+                              <select
+                                value={repeat.frequency}
+                                onChange={e => updateRepeat({ frequency: e.target.value as RecurrenceFrequency })}
+                                className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
+                              >
+                                <option value="daily">Every day</option>
+                                <option value="interval">Every few days</option>
+                                <option value="weekly">On certain days of the week</option>
+                              </select>
+                            </div>
+
+                            {repeat.frequency === 'interval' && (
+                              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                Every
+                                <input
+                                  type="number"
+                                  min={2}
+                                  max={30}
+                                  value={repeat.interval}
+                                  onChange={e => updateRepeat({ interval: Number(e.target.value) })}
+                                  className="w-20 px-2 py-1.5 border border-gray-300 dark:border-white/10 rounded-lg dark:bg-white/5 dark:text-white outline-none"
+                                />
+                                days
+                              </label>
+                            )}
+
+                            {repeat.frequency === 'weekly' && (
+                              <div className="flex flex-wrap gap-2">
+                                {WEEKDAY_LABELS.map((label, day) => {
+                                  const on = repeat.weekdays.includes(day);
+                                  return (
+                                    <button
+                                      key={label}
+                                      type="button"
+                                      aria-pressed={on}
+                                      onClick={() => updateRepeat({
+                                        weekdays: on ? repeat.weekdays.filter(d => d !== day) : [...repeat.weekdays, day],
+                                      })}
+                                      className={`px-3 py-1.5 rounded-full text-sm font-medium border cursor-pointer ${
+                                        on
+                                          ? 'bg-rose-500 border-rose-500 text-white'
+                                          : 'border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-300'
+                                      }`}
+                                    >
+                                      {label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Time{repeat.times.length === 1 ? '' : 's'} each day
+                              </label>
+                              <div className="space-y-2">
+                                {repeat.times.map((time, i) => (
+                                  <div key={i} className="flex items-center gap-2">
+                                    <input
+                                      type="time"
+                                      value={time}
+                                      onChange={e => updateRepeat({ times: repeat.times.map((t, j) => (j === i ? e.target.value : t)) })}
+                                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
+                                    />
+                                    {repeat.times.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => updateRepeat({ times: repeat.times.filter((_, j) => j !== i) })}
+                                        aria-label="Remove time"
+                                        className="p-2 text-gray-500 hover:text-red-500 cursor-pointer"
+                                      >
+                                        <i className="ri-close-line"></i>
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => updateRepeat({ times: [...repeat.times, '20:00'] })}
+                                  className="text-sm font-medium text-rose-500 hover:text-rose-600 cursor-pointer"
+                                >
+                                  <i className="ri-add-line mr-1"></i>Add another time
+                                </button>
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ends</span>
+                              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="repeat-end"
+                                    checked={repeat.endMode === 'count'}
+                                    onChange={() => updateRepeat({ endMode: 'count' })}
+                                    className="accent-rose-500"
+                                  />
+                                  After
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={366}
+                                    value={repeat.count}
+                                    onFocus={() => updateRepeat({ endMode: 'count' })}
+                                    onChange={e => updateRepeat({ count: Number(e.target.value) })}
+                                    className="w-20 px-2 py-1.5 border border-gray-300 dark:border-white/10 rounded-lg dark:bg-white/5 dark:text-white outline-none"
+                                  />
+                                  days
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="repeat-end"
+                                    checked={repeat.endMode === 'date'}
+                                    onChange={() => updateRepeat({ endMode: 'date' })}
+                                    className="accent-rose-500"
+                                  />
+                                  On
+                                  <input
+                                    type="date"
+                                    value={repeat.endDate}
+                                    min={formData.date}
+                                    onFocus={() => updateRepeat({ endMode: 'date' })}
+                                    onChange={e => updateRepeat({ endDate: e.target.value })}
+                                    className="px-2 py-1.5 border border-gray-300 dark:border-white/10 rounded-lg dark:bg-white/5 dark:text-white outline-none"
+                                  />
+                                </label>
+                              </div>
+                            </div>
+
+                            {recurrence && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {plannedStarts.length > 0
+                                  ? <>
+                                      {describeRecurrence(recurrence)}: <strong>{plannedStarts.length}</strong> event{plannedStarts.length === 1 ? '' : 's'} on the calendar
+                                      {editingSeriesId ? ' (only the upcoming ones are replaced)' : ''}.
+                                    </>
+                                  : recurrenceProblem(recurrence)}
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </fieldset>
+                    )}
 
                     <div>
                        <MultiUserSelector 
@@ -841,6 +1239,56 @@ const CalendarPage: React.FC = () => {
                         <option value="reminder">Other reminder / action needed</option>
                       </select>
                     </div>
+
+                    {/* Medicines: new medication / injection events and schedules.
+                        An existing one-off event keeps them in its notes. */}
+                    {isMedicineType(formData.type) && !formData.id && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Medicines
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                          Shown on the user's calendar and at the start of each push reminder.
+                        </p>
+                        <div className="space-y-2">
+                          {medicines.map((medicine, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={medicine.name}
+                                onChange={e => updateMedicine(i, { name: e.target.value })}
+                                placeholder="Medicine, e.g. Estrace"
+                                aria-label={`Medicine ${i + 1} name`}
+                                className="flex-[3] min-w-0 px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
+                              />
+                              <input
+                                type="text"
+                                value={medicine.dose}
+                                onChange={e => updateMedicine(i, { dose: e.target.value })}
+                                placeholder="Dose, e.g. 2 mg"
+                                aria-label={`Medicine ${i + 1} dose`}
+                                className="flex-[2] min-w-0 px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-rose-500 dark:bg-white/5 dark:text-white outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setMedicines(prev => prev.filter((_, j) => j !== i))}
+                                aria-label="Remove medicine"
+                                className="p-2 text-gray-500 hover:text-red-500 cursor-pointer"
+                              >
+                                <i className="ri-close-line"></i>
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setMedicines(prev => [...prev, { name: '', dose: '' }])}
+                            className="text-sm font-medium text-rose-500 hover:text-rose-600 cursor-pointer"
+                          >
+                            <i className="ri-add-line mr-1"></i>Add medicine
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <fieldset>
                       <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -880,9 +1328,14 @@ const CalendarPage: React.FC = () => {
                     <div className="flex gap-3 pt-4">
                       <Button color="blue" className="flex-1" onClick={handleCreateEvent} disabled={isSaving}>
                         <i className="ri-save-line mr-2"></i>
-                        {isSaving ? 'Saving...' : formData.id ? 'Update Event' : 'Create Event'}
+                        {isSaving
+                          ? 'Saving...'
+                          : editingSeriesId ? 'Update Schedule'
+                          : formData.id ? 'Update Event'
+                          : repeat.enabled ? 'Create Schedule'
+                          : 'Create Event'}
                       </Button>
-                      <Button variant="outline" className="flex-1" onClick={() => setShowNewEventModal(false)}>
+                      <Button variant="outline" className="flex-1" onClick={closeEventModal}>
                         Cancel
                       </Button>
                     </div>

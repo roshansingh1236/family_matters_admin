@@ -34,7 +34,8 @@ import { GC_STATUSES, GC_MEDICAL_SCREENING_STATUSES } from '../../../types';
 import {
   resolveSurrogateAdditionalProfile,
   resolveSurrogateIntakeProfile,
-  fillIntakeFromSignup
+  fillIntakeFromSignup,
+  surrogateFamilyPhotos
 } from '../../../utils/surrogateFormData';
 import { medicalIntakeProfileSource } from '../../../utils/surrogateMedicalFromProfile';
 import { normalizeUserDocuments, isImageDoc } from '../../../utils/userDocuments';
@@ -691,16 +692,23 @@ export default function SurrogateProfileContent({
         )}
 
         {activeTab === 'gallery' && (() => {
-          const personalPhotos = (surrogate.documents ?? []).filter(
-            (f: any) => String(f?.category ?? '').toLowerCase() === 'personal' && isImageDoc(f)
-          );
+          const familyPhotos = surrogateFamilyPhotos(surrogate.formData).map((url, i) => ({
+            url,
+            name: `Family photo ${i + 1} (from app)`,
+          }));
+          const personalPhotos = [
+            ...familyPhotos,
+            ...(surrogate.documents ?? []).filter(
+              (f: any) => String(f?.category ?? '').toLowerCase() === 'personal' && isImageDoc(f)
+            ),
+          ];
 
           return (
             <Card>
               <div className="p-4">
                 <div className="mb-6">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Photo Gallery</h3>
-                  <p className="text-sm text-gray-500 mt-1">Photos uploaded with the "Personal" tag in Documents.</p>
+                  <p className="text-sm text-gray-500 mt-1">Family photos the surrogate added in the app, plus photos uploaded with the "Personal" tag in Documents.</p>
                 </div>
                 {personalPhotos.length === 0 ? (
                   <div className="p-12 text-center border-dashed border-2 rounded-2xl">
@@ -866,211 +874,212 @@ export default function SurrogateProfileContent({
 
             {/* Medical Record Request Tracking — per spec: track per-provider requests */}
             <Card className="xl:col-span-2">
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-base font-semibold text-gray-800 dark:text-white">Medical Record Requests</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Track record retrieval from each provider/facility. Authorization must be on file before requesting.</p>
-                  </div>
-                  <Button size="sm" onClick={() => setShowAddRequest(v => !v)}>
-                    <i className="ri-add-line mr-1"></i> Add Request
-                  </Button>
-                </div>
-
-                {showAddRequest && (
-                  <div className="mb-4 p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 space-y-3">
-                    {/* Auto-fill from OB history */}
-                    {(() => {
-                      const d = (medicalIntakeProfileSource(surrogate) ?? surrogate.form2) as any;
-                      const obEntries = d ? [1, 2, 3].map(n => ({ n, provider: d[`pregnancy${n}OBGYN`], facility: d[`pregnancy${n}Hospital`] })).filter(e => e.provider || e.facility) : [];
-                      if (obEntries.length === 0) return null;
-                      return (
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Auto-fill from OB History</label>
-                          <select onChange={e => {
-                            const idx = parseInt(e.target.value);
-                            if (isNaN(idx)) return;
-                            const entry = obEntries[idx];
-                            setNewRequest(p => ({ ...p, pregnancyNumber: entry.n, providerName: entry.provider || '', facilityName: entry.facility || '' }));
-                          }} className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-3 py-1.5 text-sm">
-                            <option value="">— select pregnancy to auto-fill —</option>
-                            {obEntries.map((e, i) => <option key={i} value={i}>Pregnancy #${e.n} – ${e.provider || e.facility}</option>)}
-                          </select>
-                        </div>
-                      );
-                    })()}
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {[
-                        { label: 'Provider / Practice Name', key: 'providerName', type: 'text' },
-                        { label: 'Facility / Hospital', key: 'facilityName', type: 'text' },
-                        { label: 'Record Type', key: 'recordType', type: 'select', options: ['OB delivery records', 'Prenatal records', 'Operative report', 'Lab results', 'Imaging', 'Clearance letter', 'Mental health documentation', 'Other'] },
-                        { label: 'Pregnancy #', key: 'pregnancyNumber', type: 'number' },
-                        { label: 'Date Requested', key: 'dateRequested', type: 'date' },
-                        { label: 'Request Method', key: 'requestMethod', type: 'select', options: ['Fax', 'Portal', 'Email', 'Mail'] },
-                        { label: 'Follow-up Date', key: 'followUpDate', type: 'date' },
-                        { label: 'Status', key: 'status', type: 'select', options: ['Not Requested', 'Requested', 'Follow-Up Needed', 'Received (Partial)', 'Received (Complete)', 'Unable to Obtain'] },
-                        { label: 'Notes', key: 'notes', type: 'text' },
-                      ].map(field => (
-                        <div key={field.key}>
-                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{field.label}</label>
-                          {field.type === 'select' ? (
-                            <select value={(newRequest as any)[field.key] || ''} onChange={e => setNewRequest(p => ({ ...p, [field.key]: e.target.value }))} className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-3 py-1.5 text-sm">
-                              <option value="">—</option>
-                              {field.options!.map(o => <option key={o} value={o}>{o}</option>)}
-                            </select>
-                          ) : (
-                            <input type={field.type} value={(newRequest as any)[field.key] || ''} onChange={e => setNewRequest(p => ({ ...p, [field.key]: field.type === 'number' ? parseInt(e.target.value) : e.target.value }))} className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-3 py-1.5 text-sm" />
-                          )}
-                        </div>
-                      ))}
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-base font-semibold text-gray-800 dark:text-white">Medical Record Requests</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Track record retrieval from each provider/facility. Authorization must be on file before requesting.</p>
+                      </div>
+                      <Button size="sm" onClick={() => setShowAddRequest(v => !v)}>
+                        <i className="ri-add-line mr-1"></i> Add Request
+                      </Button>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="checkbox" checked={newRequest.authorizationOnFile || false} onChange={e => setNewRequest(p => ({ ...p, authorizationOnFile: e.target.checked }))} className="rounded" />
-                        Authorization on file
-                      </label>
-                      <Button size="sm" onClick={async () => {
-                        if (!newRequest.providerName?.trim()) return;
-                        const updated = await screeningService.saveRecordRequest(id, newRequest as any);
-                        setRecordRequests(updated);
-                        setShowAddRequest(false);
-                        setNewRequest({ status: 'Not Requested', authorizationOnFile: false, recordType: 'OB delivery records' });
-                      }}>Save Request</Button>
-                    </div>
-                  </div>
-                )}
 
-                {recordRequests.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic">No record requests yet.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {recordRequests.map(req => {
-                      const statusColor: any = {
-                        'Received (Complete)': 'green',
-                        'Received (Partial)': 'yellow',
-                        'Requested': 'blue',
-                        'Follow-Up Needed': 'yellow',
-                        'Unable to Obtain': 'red',
-                        'Not Requested': 'gray',
-                      }[req.status] || 'gray';
-                      const hipaaColor: any = { Signed: 'green', Sent: 'blue', Expired: 'red', 'Not Sent': 'gray' }[req.hipaaAuthStatus || 'Not Sent'] || 'gray';
-                      return (
-                        <div key={req.id} className="rounded-xl border border-gray-200 dark:border-white/10 p-3 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2 justify-between">
+                    {showAddRequest && (
+                      <div className="mb-4 p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 space-y-3">
+                        {/* Auto-fill from OB history */}
+                        {(() => {
+                          const d = (medicalIntakeProfileSource(surrogate) ?? surrogate.form2) as any;
+                          // Form 2 records up to 10 pregnancies.
+                          const obEntries = d ? Array.from({ length: 10 }, (_, i) => i + 1).map(n => ({ n, provider: d[`pregnancy${n}OBGYN`], facility: d[`pregnancy${n}Hospital`] })).filter(e => e.provider || e.facility) : [];
+                          if (obEntries.length === 0) return null;
+                          return (
                             <div>
-                              <span className="font-medium text-sm">{req.providerName}</span>
-                              {req.facilityName && <span className="text-xs text-gray-500 ml-2">@ {req.facilityName}</span>}
-                              {req.pregnancyNumber && <span className="ml-2 text-xs bg-gray-100 dark:bg-white/10 rounded px-1">Preg #{req.pregnancyNumber}</span>}
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Auto-fill from OB History</label>
+                              <select onChange={e => {
+                                const idx = parseInt(e.target.value);
+                                if (isNaN(idx)) return;
+                                const entry = obEntries[idx];
+                                setNewRequest(p => ({ ...p, pregnancyNumber: entry.n, providerName: entry.provider || '', facilityName: entry.facility || '' }));
+                              }} className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-3 py-1.5 text-sm">
+                                <option value="">— select pregnancy to auto-fill —</option>
+                                {obEntries.map((e, i) => <option key={i} value={i}>Pregnancy #${e.n} – ${e.provider || e.facility}</option>)}
+                              </select>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Badge color={statusColor}>{req.status}</Badge>
-                              {req.blockingIssues && <Badge color="red">Blocking</Badge>}
-                              <button onClick={async () => {
-                                if (!window.confirm('Delete this record request?')) return;
-                                const updated = await screeningService.deleteRecordRequest(id, req.id);
-                                setRecordRequests(updated);
-                              }} className="text-red-400 hover:text-red-600 text-xs"><i className="ri-delete-bin-line"></i></button>
+                          );
+                        })()}
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {[
+                            { label: 'Provider / Practice Name', key: 'providerName', type: 'text' },
+                            { label: 'Facility / Hospital', key: 'facilityName', type: 'text' },
+                            { label: 'Record Type', key: 'recordType', type: 'select', options: ['OB delivery records','Prenatal records','Operative report','Lab results','Imaging','Clearance letter','Mental health documentation','Other'] },
+                            { label: 'Pregnancy #', key: 'pregnancyNumber', type: 'number' },
+                            { label: 'Date Requested', key: 'dateRequested', type: 'date' },
+                            { label: 'Request Method', key: 'requestMethod', type: 'select', options: ['Fax','Portal','Email','Mail'] },
+                            { label: 'Follow-up Date', key: 'followUpDate', type: 'date' },
+                            { label: 'Status', key: 'status', type: 'select', options: ['Not Requested','Requested','Follow-Up Needed','Received (Partial)','Received (Complete)','Unable to Obtain'] },
+                            { label: 'Notes', key: 'notes', type: 'text' },
+                          ].map(field => (
+                            <div key={field.key}>
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{field.label}</label>
+                              {field.type === 'select' ? (
+                                <select value={(newRequest as any)[field.key] || ''} onChange={e => setNewRequest(p => ({ ...p, [field.key]: e.target.value }))} className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-3 py-1.5 text-sm">
+                                  <option value="">—</option>
+                                  {field.options!.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              ) : (
+                                <input type={field.type} value={(newRequest as any)[field.key] || ''} onChange={e => setNewRequest(p => ({ ...p, [field.key]: field.type === 'number' ? parseInt(e.target.value) : e.target.value }))} className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-3 py-1.5 text-sm" />
+                              )}
                             </div>
-                          </div>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                            <span>Type: {req.recordType}</span>
-                            <span>Requested: {req.dateRequested ? new Date(req.dateRequested).toLocaleDateString() : '—'}</span>
-                            <span>Method: {req.requestMethod || '—'}</span>
-                            <span>Follow-up: {req.followUpDate ? new Date(req.followUpDate).toLocaleDateString() : '—'}</span>
-                            <span>Auth on file: {req.authorizationOnFile ? <span className="text-green-600 font-medium">Yes</span> : <span className="text-red-500">No</span>}</span>
-                          </div>
-                          {/* Inline status + HIPAA + review summary controls */}
-                          <div className="flex flex-wrap gap-2 items-center">
-                            <select value={req.status} onChange={async e => {
-                              const updated = await screeningService.updateRecordRequest(id, req.id, { status: e.target.value as MedicalRecordRequestStatus });
-                              setRecordRequests(updated);
-                            }} className="text-xs rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-2 py-1">
-                              {['Not Requested', 'Requested', 'Follow-Up Needed', 'Received (Partial)', 'Received (Complete)', 'Unable to Obtain'].map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                            <span className="text-xs text-gray-400">HIPAA:</span>
-                            <select value={req.hipaaAuthStatus || 'Not Sent'} onChange={async e => {
-                              const updated = await screeningService.updateHipaaAuth(id, req.id, e.target.value as HipaaAuthStatus);
-                              setRecordRequests(updated);
-                            }} className="text-xs rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-2 py-1">
-                              {['Not Sent', 'Sent', 'Signed', 'Expired'].map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                            <Badge color={hipaaColor}>{req.hipaaAuthStatus || 'Not Sent'}</Badge>
-                            {req.hipaaAuthSignedAt && <span className="text-xs text-gray-400">Signed {new Date(req.hipaaAuthSignedAt).toLocaleDateString()}</span>}
-                          </div>
-                          {/* Review summary */}
-                          <div className="flex gap-2 items-start">
-                            <input
-                              type="text"
-                              placeholder="Review summary (required before clearance)..."
-                              defaultValue={req.reviewSummary || ''}
-                              onBlur={async e => {
-                                if (e.target.value !== (req.reviewSummary || '')) {
-                                  const updated = await screeningService.updateRecordRequest(id, req.id, {
-                                    reviewSummary: e.target.value,
-                                    clearanceRecommendation: req.clearanceRecommendation,
-                                  });
-                                  setRecordRequests(updated);
-                                }
-                              }}
-                              className="flex-1 text-xs rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-2 py-1"
-                            />
-                            <select defaultValue={req.clearanceRecommendation || ''} onBlur={async e => {
-                              const updated = await screeningService.updateRecordRequest(id, req.id, { clearanceRecommendation: e.target.value as any });
-                              setRecordRequests(updated);
-                            }} className="text-xs rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-2 py-1">
-                              <option value="">— recommendation —</option>
-                              <option>Cleared</option>
-                              <option>Not Cleared</option>
-                              <option>Conditional / Needs Follow-Up</option>
-                            </select>
-                            <label className="flex items-center gap-1 text-xs cursor-pointer whitespace-nowrap">
-                              <input type="checkbox" defaultChecked={req.blockingIssues || false} onChange={async e => {
-                                const updated = await screeningService.updateRecordRequest(id, req.id, { blockingIssues: e.target.checked });
-                                setRecordRequests(updated);
-                              }} className="rounded" />
-                              Blocking
-                            </label>
-                          </div>
-                          {/* Received files linked to this request */}
-                          <div className="mt-1">
-                            <p className="text-xs font-medium text-gray-500 mb-1">Received Files ({(req.receivedFiles || []).length})</p>
-                            {(req.receivedFiles || []).map(f => (
-                              <div key={f.id} className="flex items-center gap-2 text-xs mb-1">
-                                <a href={f.url} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline truncate max-w-xs">{f.name}</a>
-                                <span className="text-gray-400">{f.fileType}</span>
-                                {f.pageCount && <span className="text-gray-400">{f.pageCount}pp</span>}
-                                <span className="text-gray-400">{new Date(f.receivedDate).toLocaleDateString()}</span>
-                                <button onClick={async () => {
-                                  const updated = await screeningService.removeFileFromRequest(id, req.id, f.id);
-                                  setRecordRequests(updated);
-                                }} className="text-red-400 hover:text-red-600"><i className="ri-close-line"></i></button>
-                              </div>
-                            ))}
-                            <button
-                              onClick={() => {
-                                const url = window.prompt('File URL:');
-                                if (!url?.trim()) return;
-                                const name = window.prompt('File name:') || url.split('/').pop() || 'file';
-                                screeningService.addFileToRequest(id, req.id, {
-                                  name,
-                                  url,
-                                  fileType: 'document',
-                                  uploadedBy: 'admin',
-                                  receivedDate: new Date().toISOString().split('T')[0],
-                                }).then(updated => setRecordRequests(updated));
-                              }}
-                              className="text-xs text-blue-500 hover:underline"
-                            >
-                              <i className="ri-attachment-line mr-1"></i>Attach file
-                            </button>
-                          </div>
+                          ))}
                         </div>
-                      );
-                    })}
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" checked={newRequest.authorizationOnFile || false} onChange={e => setNewRequest(p => ({ ...p, authorizationOnFile: e.target.checked }))} className="rounded" />
+                            Authorization on file
+                          </label>
+                          <Button size="sm" onClick={async () => {
+                            if (!newRequest.providerName?.trim()) return;
+                            const updated = await screeningService.saveRecordRequest(id, newRequest as any);
+                            setRecordRequests(updated);
+                            setShowAddRequest(false);
+                            setNewRequest({ status: 'Not Requested', authorizationOnFile: false, recordType: 'OB delivery records' });
+                          }}>Save Request</Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {recordRequests.length === 0 ? (
+                      <p className="text-sm text-gray-400 italic">No record requests yet.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {recordRequests.map(req => {
+                          const statusColor: any = {
+                            'Received (Complete)': 'green',
+                            'Received (Partial)': 'yellow',
+                            'Requested': 'blue',
+                            'Follow-Up Needed': 'yellow',
+                            'Unable to Obtain': 'red',
+                            'Not Requested': 'gray',
+                          }[req.status] || 'gray';
+                          const hipaaColor: any = { Signed: 'green', Sent: 'blue', Expired: 'red', 'Not Sent': 'gray' }[req.hipaaAuthStatus || 'Not Sent'] || 'gray';
+                          return (
+                            <div key={req.id} className="rounded-xl border border-gray-200 dark:border-white/10 p-3 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2 justify-between">
+                                <div>
+                                  <span className="font-medium text-sm">{req.providerName}</span>
+                                  {req.facilityName && <span className="text-xs text-gray-500 ml-2">@ {req.facilityName}</span>}
+                                  {req.pregnancyNumber && <span className="ml-2 text-xs bg-gray-100 dark:bg-white/10 rounded px-1">Preg #{req.pregnancyNumber}</span>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge color={statusColor}>{req.status}</Badge>
+                                  {req.blockingIssues && <Badge color="red">Blocking</Badge>}
+                                  <button onClick={async () => {
+                                    if (!window.confirm('Delete this record request?')) return;
+                                    const updated = await screeningService.deleteRecordRequest(id, req.id);
+                                    setRecordRequests(updated);
+                                  }} className="text-red-400 hover:text-red-600 text-xs"><i className="ri-delete-bin-line"></i></button>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                                <span>Type: {req.recordType}</span>
+                                <span>Requested: {req.dateRequested ? new Date(req.dateRequested).toLocaleDateString() : '—'}</span>
+                                <span>Method: {req.requestMethod || '—'}</span>
+                                <span>Follow-up: {req.followUpDate ? new Date(req.followUpDate).toLocaleDateString() : '—'}</span>
+                                <span>Auth on file: {req.authorizationOnFile ? <span className="text-green-600 font-medium">Yes</span> : <span className="text-red-500">No</span>}</span>
+                              </div>
+                              {/* Inline status + HIPAA + review summary controls */}
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <select value={req.status} onChange={async e => {
+                                  const updated = await screeningService.updateRecordRequest(id, req.id, { status: e.target.value as MedicalRecordRequestStatus });
+                                  setRecordRequests(updated);
+                                }} className="text-xs rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-2 py-1">
+                                  {['Not Requested','Requested','Follow-Up Needed','Received (Partial)','Received (Complete)','Unable to Obtain'].map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <span className="text-xs text-gray-400">HIPAA:</span>
+                                <select value={req.hipaaAuthStatus || 'Not Sent'} onChange={async e => {
+                                  const updated = await screeningService.updateHipaaAuth(id, req.id, e.target.value as HipaaAuthStatus);
+                                  setRecordRequests(updated);
+                                }} className="text-xs rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-2 py-1">
+                                  {['Not Sent','Sent','Signed','Expired'].map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <Badge color={hipaaColor}>{req.hipaaAuthStatus || 'Not Sent'}</Badge>
+                                {req.hipaaAuthSignedAt && <span className="text-xs text-gray-400">Signed {new Date(req.hipaaAuthSignedAt).toLocaleDateString()}</span>}
+                              </div>
+                              {/* Review summary */}
+                              <div className="flex gap-2 items-start">
+                                <input
+                                  type="text"
+                                  placeholder="Review summary (required before clearance)..."
+                                  defaultValue={req.reviewSummary || ''}
+                                  onBlur={async e => {
+                                    if (e.target.value !== (req.reviewSummary || '')) {
+                                      const updated = await screeningService.updateRecordRequest(id, req.id, {
+                                        reviewSummary: e.target.value,
+                                        clearanceRecommendation: req.clearanceRecommendation,
+                                      });
+                                      setRecordRequests(updated);
+                                    }
+                                  }}
+                                  className="flex-1 text-xs rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-2 py-1"
+                                />
+                                <select defaultValue={req.clearanceRecommendation || ''} onBlur={async e => {
+                                  const updated = await screeningService.updateRecordRequest(id, req.id, { clearanceRecommendation: e.target.value as any });
+                                  setRecordRequests(updated);
+                                }} className="text-xs rounded border border-gray-200 dark:border-white/10 bg-white dark:bg-[#15111f] px-2 py-1">
+                                  <option value="">— recommendation —</option>
+                                  <option>Cleared</option>
+                                  <option>Not Cleared</option>
+                                  <option>Conditional / Needs Follow-Up</option>
+                                </select>
+                                <label className="flex items-center gap-1 text-xs cursor-pointer whitespace-nowrap">
+                                  <input type="checkbox" defaultChecked={req.blockingIssues || false} onChange={async e => {
+                                    const updated = await screeningService.updateRecordRequest(id, req.id, { blockingIssues: e.target.checked });
+                                    setRecordRequests(updated);
+                                  }} className="rounded" />
+                                  Blocking
+                                </label>
+                              </div>
+                              {/* Received files linked to this request */}
+                              <div className="mt-1">
+                                <p className="text-xs font-medium text-gray-500 mb-1">Received Files ({(req.receivedFiles || []).length})</p>
+                                {(req.receivedFiles || []).map(f => (
+                                  <div key={f.id} className="flex items-center gap-2 text-xs mb-1">
+                                    <a href={f.url} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline truncate max-w-xs">{f.name}</a>
+                                    <span className="text-gray-400">{f.fileType}</span>
+                                    {f.pageCount && <span className="text-gray-400">{f.pageCount}pp</span>}
+                                    <span className="text-gray-400">{new Date(f.receivedDate).toLocaleDateString()}</span>
+                                    <button onClick={async () => {
+                                      const updated = await screeningService.removeFileFromRequest(id, req.id, f.id);
+                                      setRecordRequests(updated);
+                                    }} className="text-red-400 hover:text-red-600"><i className="ri-close-line"></i></button>
+                                  </div>
+                                ))}
+                                <button
+                                  onClick={() => {
+                                    const url = window.prompt('File URL:');
+                                    if (!url?.trim()) return;
+                                    const name = window.prompt('File name:') || url.split('/').pop() || 'file';
+                                    screeningService.addFileToRequest(id, req.id, {
+                                      name,
+                                      url,
+                                      fileType: 'document',
+                                      uploadedBy: 'admin',
+                                      receivedDate: new Date().toISOString().split('T')[0],
+                                    }).then(updated => setRecordRequests(updated));
+                                  }}
+                                  className="text-xs text-blue-500 hover:underline"
+                                >
+                                  <i className="ri-attachment-line mr-1"></i>Attach file
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </Card>
+                </Card>
           </div>
         )}
 

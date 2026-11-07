@@ -237,7 +237,7 @@ export const SURROGATE_INTAKE_TEMPLATE = {
   numberOfPregnancies: 0,
   pregnancy1Name: '', pregnancy1Gender: '', pregnancy1DOB: '', pregnancy1Weight: '',
   pregnancy1Delivery: '', pregnancy1GestationalAge: '', pregnancy1Complications: '',
-  pregnancy1OBGYN: '', pregnancy1Hospital: '',
+  pregnancy1OBGYN: '', pregnancy1Hospital: '', pregnancy1Surrogacy: '',
   pregnancy2Name: '', pregnancy2Gender: '', pregnancy2DOB: '', pregnancy2Weight: '',
   pregnancy2Delivery: '', pregnancy2GestationalAge: '', pregnancy2Complications: '',
   pregnancy2OBGYN: '', pregnancy2Hospital: '', pregnancy2Surrogacy: '',
@@ -258,7 +258,9 @@ export const SURROGATE_INTAKE_TEMPLATE = {
   helpSameSexCouple: '', helpSingleParent: '', fetusesWilling: '',
   reduceTripletsToTwins: '', reduceTwinsToSingleton: '',
   terminateIfNecessary: '', terminateDownSyndrome: '', amniocentesis: '',
-  agreeToFetalTesting: '', willingForSplitTwins: false, messageToParents: ''
+  agreeToFetalTesting: '', willingForSplitTwins: '', messageToParents: '',
+  // Family Photos (last step of Form 2)
+  familyPhotos: []
 };
 
 // Matches Flutter form_data.parent1 and form_data.parent2 (IntendedParentsSignUpForm / form1.dart + form2.dart)
