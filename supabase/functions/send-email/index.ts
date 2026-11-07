@@ -50,31 +50,47 @@ serve(async (req) => {
     return json({ error: "Invalid JSON" }, 400);
   }
 
+  const directEmails: string[] = Array.isArray(body.emails)
+    ? body.emails.filter((x: unknown) => typeof x === "string" && x)
+    : typeof body.email === "string" && body.email
+    ? [body.email]
+    : typeof body.to === "string" && body.to
+    ? [body.to]
+    : [];
+
   const userIds: string[] = Array.isArray(body.userIds)
     ? body.userIds.filter((x: unknown) => typeof x === "string" && x)
     : [];
-  if (userIds.length === 0) return json({ skipped: true, reason: "no recipients" });
+
+  if (userIds.length === 0 && directEmails.length === 0) {
+    return json({ skipped: true, reason: "no recipients" });
+  }
 
   const subject = (body.subject ?? "Family Matters").toString();
   const message = (body.message ?? "").toString();
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  let dbEmails: string[] = [];
+  if (userIds.length > 0) {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data: users, error } = await supabase
-    .from("users")
-    .select("email")
-    .in("id", Array.from(new Set(userIds)));
+    const { data: users, error } = await supabase
+      .from("users")
+      .select("email")
+      .in("id", Array.from(new Set(userIds)));
 
-  if (error) return json({ error: error.message }, 500);
+    if (error && directEmails.length === 0) return json({ error: error.message }, 500);
 
-  const emails = Array.from(
-    new Set((users || []).map((u: { email: string | null }) => u.email).filter(Boolean)),
-  ) as string[];
+    dbEmails = (users || []).map((u: { email: string | null }) => u.email).filter(Boolean) as string[];
+  }
+
+  const emails = Array.from(new Set([...directEmails, ...dbEmails]));
   if (emails.length === 0) return json({ skipped: true, reason: "no email addresses" });
 
-  const html = `<p>${message.replace(/\n/g, "<br/>")}</p>`;
+  const html = typeof body.html === "string" && body.html.trim()
+    ? body.html
+    : `<p>${message.replace(/\n/g, "<br/>")}</p>`;
 
   const client = new SMTPClient({
     connection: {

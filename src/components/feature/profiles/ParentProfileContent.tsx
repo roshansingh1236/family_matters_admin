@@ -10,8 +10,10 @@ import FileUploadSection from '../../data/FileUploadSection';
 import Toast from '../../base/Toast';
 import Badge from '../../base/Badge';
 import MedicalReportView from '../MedicalReportView';
-import { storageService } from '../../../services/storageService';
+import PasswordProtection, { lockProtectedSection } from '../PasswordProtection';
+import { storageService, STORAGE_BUCKETS } from '../../../services/storageService';
 import { approvalSyncFields } from '../../../utils/approvalStatus';
+import { userService, isAcceptedStatus } from '../../../services/userService';
 import { IP_STATUSES } from '../../../types';
 import {
   resolveParentAdditionalProfile,
@@ -27,10 +29,9 @@ import {
   IP_EMBRYO_RECORDS_TEMPLATE,
   ABOUT_PARENT_TEMPLATE
 } from '../../../constants/jsonTemplates';
-import { STORAGE_BUCKETS } from '../../../services/storageService';
 import { JourneyRoadmap } from '../JourneyRoadmap';
 import ReimbursementTracker from '../ReimbursementTracker';
-import { isImageDoc } from '../../../utils/userDocuments';
+import { normalizeUserDocuments, isImageDoc } from '../../../utils/userDocuments';
 import GalleryPhoto from '../../base/GalleryPhoto';
 
 interface ParentProfileContentProps {
@@ -128,6 +129,10 @@ function parentStateFromRow(data: Record<string, any>) {
 
   return {
     ...data,
+    documents: normalizeUserDocuments(data.documents),
+    agency_documents: normalizeUserDocuments(
+      data.agency_documents ?? data.agencyDocuments ?? fd.agency_documents ?? fd.agencyDocuments
+    ),
     firstName: firstName ?? data.firstName ?? (cleanP1 as any)?.name?.split(' ')[0],
     lastName: lastName ?? data.lastName ?? (cleanP1 as any)?.name?.split(' ').slice(1).join(' '),
     profileImageUrl: data.profile_image_url ?? data.profileImageUrl,
@@ -151,7 +156,8 @@ const TABS = [
     { id: 'personal', label: 'Detailed Application (Form 2)', icon: 'ri-profile-line' },
     { id: 'medical', label: 'Medical & Fertility', icon: 'ri-heart-pulse-line' },
     { id: 'finances', label: 'Finances & Expenses', icon: 'ri-bank-card-line' },
-    { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' }
+    { id: 'documents', label: 'Documents', icon: 'ri-folder-open-line' },
+    { id: 'agency_documents', label: 'Documents (Agency/Internal)', icon: 'ri-folder-shield-2-line' }
 ] as const;
 
 export default function ParentProfileContent({ 
@@ -349,12 +355,26 @@ export default function ParentProfileContent({
     }
 
     try {
-      const { error } = await supabase
+      let { error } = await supabase
         .from('users')
         .update({ ...updatePayload, updated_at: new Date().toISOString() })
         .eq('id', id);
 
+      if (error && field === 'agency_documents' && (error.message.includes('column') || error.code === '42703')) {
+        console.warn('agency_documents column not found in users, storing inside form_data.agency_documents');
+        const fd = mergedFormData();
+        fd.agency_documents = value;
+        const fallback = await supabase
+          .from('users')
+          .update({ form_data: fd, updated_at: new Date().toISOString() })
+          .eq('id', id);
+        error = fallback.error;
+      }
+
       if (error) throw error;
+      if (field === 'status' && isAcceptedStatus(value as string)) {
+        void userService.notifyAcceptedToProgram(id);
+      }
       setToast({ message: 'Inquiry updated successfully', type: 'success' });
       fetchParent();
     } catch (err: any) {
@@ -649,7 +669,8 @@ export default function ParentProfileContent({
                     <div className="space-y-6">
                         <Card>
                             <FileUploadSection 
-                                title="Inquiry Document Vault" 
+                                title="Documents" 
+                                description="Client-facing documents uploaded here or submitted via mobile app. Visible to parents in their mobile app."
                                 userId={id} 
                                 bucket={STORAGE_BUCKETS.USERS} 
                                 folder={`${id}/documents`}
@@ -681,6 +702,62 @@ export default function ParentProfileContent({
                     </div>
                 );
             })()}
+
+            {activeTab === 'agency_documents' && (
+                <PasswordProtection
+                    menuName="agency_documents"
+                    variant="inline"
+                    title="Agency Documents Protected"
+                    description="This section contains confidential internal documents for authorized agency staff. Enter the access code to view, upload, or manage these files. Codes can be managed in Settings → Access Codes."
+                >
+                    <div className="space-y-6">
+                        <Card>
+                            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-200">
+                                <div className="flex items-start sm:items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0 text-amber-700 dark:text-amber-300">
+                                        <i className="ri-folder-shield-2-line text-2xl"></i>
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm font-bold">Agency Internal Only</p>
+                                            <span className="text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-500/30">
+                                                Encrypted & Confidential
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-amber-700/80 dark:text-amber-300/80 mt-0.5">
+                                            These documents are strictly for authorized agency staff. They are password protected and will <span className="font-semibold underline">never</span> be visible to parents or surrogates in the mobile app.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                        lockProtectedSection('agency_documents');
+                                        setToast({ message: 'Agency documents locked.', type: 'success' });
+                                    }}
+                                    className="self-start sm:self-auto text-amber-800 dark:text-amber-200 border-amber-500/30 hover:bg-amber-500/10"
+                                >
+                                    <i className="ri-lock-2-line mr-1.5"></i> Lock Section
+                                </Button>
+                            </div>
+                            <FileUploadSection 
+                                title="Documents (Agency/Internal)" 
+                                description="Upload internal agency agreements, background checks, clinic notes, invoices, and confidential administrative records."
+                                userId={id} 
+                                bucket={STORAGE_BUCKETS.USERS} 
+                                folder={`${id}/agency_documents`}
+                                categories={['Legal', 'Financial', 'Medical', 'Background Check', 'Contract', 'Internal Note', 'Other']}
+                                defaultCategory="Internal Note"
+                                isInternal={true}
+                                accentColor="amber"
+                                files={parent.agency_documents ?? []}
+                                onFilesChange={(f: any) => handleUpdateField('agency_documents', f)}
+                            />
+                        </Card>
+                    </div>
+                </PasswordProtection>
+            )}
       </div>
       </div>
       {toast && (

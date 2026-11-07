@@ -19,7 +19,9 @@ export type Permission =
   | 'manage_users'           // Edit user profiles/statuses
   | 'override_guardrails'    // Admin override of status guardrails
   | 'view_medical_records'   // Full medical record access
-  | 'view_audit_log';        // Audit trail
+  | 'view_audit_log'         // Audit trail
+  | 'manage_settings'        // Application settings & preferences
+  | 'manage_access_codes';   // Unlock access codes for protected sections
 
 const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   'Admin': [
@@ -34,6 +36,8 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     'override_guardrails',
     'view_medical_records',
     'view_audit_log',
+    'manage_settings',
+    'manage_access_codes',
   ],
   'Finance': [
     'view_financials',
@@ -48,7 +52,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     'manage_journeys',
     'manage_users',
     'view_medical_records',
-    // NO financials, NO fee amounts, NO revenue dashboard
+    // NO financials, NO fee amounts, NO revenue dashboard, NO settings
   ],
   'Agency Staff': [
     'manage_matches',
@@ -59,16 +63,53 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
 };
 
 /**
+ * Normalize raw role strings (case-insensitive, trims) to a recognized AdminRole
+ */
+export function normalizeAdminRole(role: string | undefined): AdminRole | null {
+  if (!role) return null;
+  const trimmed = role.trim();
+  if (trimmed in ROLE_PERMISSIONS) {
+    return trimmed as AdminRole;
+  }
+  const lower = trimmed.toLowerCase();
+  if (lower === 'admin' || lower === 'administrator') {
+    return 'Admin';
+  }
+  if (lower === 'finance' || lower === 'billing') {
+    return 'Finance';
+  }
+  if (
+    lower === 'case manager' ||
+    lower === 'case_manager' ||
+    lower === 'casemanager' ||
+    lower === 'coordinator' ||
+    lower === 'program coordinator'
+  ) {
+    return 'Case Manager';
+  }
+  if (
+    lower === 'agency staff' ||
+    lower === 'agency_staff' ||
+    lower === 'agencystaff' ||
+    lower === 'staff' ||
+    lower === 'agency' ||
+    lower === 'medical' ||
+    lower === 'legal'
+  ) {
+    return 'Agency Staff';
+  }
+  return null;
+}
+
+/**
  * Check if a role has a specific permission
  */
 export function hasPermission(role: string | undefined, permission: Permission): boolean {
   if (!role) return false;
-  const adminRole = role as AdminRole;
+  const adminRole = normalizeAdminRole(role);
+  if (!adminRole) return false;
   const permissions = ROLE_PERMISSIONS[adminRole];
-  if (!permissions) {
-    // Unknown role - default to Admin (backward compatible)
-    return true;
-  }
+  if (!permissions) return false;
   return permissions.includes(permission);
 }
 
@@ -77,8 +118,16 @@ export function hasPermission(role: string | undefined, permission: Permission):
  */
 export function getPermissions(role: string | undefined): Permission[] {
   if (!role) return [];
-  const adminRole = role as AdminRole;
-  return ROLE_PERMISSIONS[adminRole] || ROLE_PERMISSIONS['Admin'];
+  const adminRole = normalizeAdminRole(role);
+  if (!adminRole) return [];
+  return ROLE_PERMISSIONS[adminRole] || [];
+}
+
+/**
+ * Check if the user has the Admin role
+ */
+export function isAdmin(role: string | undefined): boolean {
+  return normalizeAdminRole(role) === 'Admin';
 }
 
 /**
@@ -107,4 +156,18 @@ export function canManageMatches(role: string | undefined): boolean {
  */
 export function canOverrideGuardrails(role: string | undefined): boolean {
   return hasPermission(role, 'override_guardrails');
+}
+
+/**
+ * Check if the current user can manage application settings
+ */
+export function canManageSettings(role: string | undefined): boolean {
+  return hasPermission(role, 'manage_settings');
+}
+
+/**
+ * Check if the current user can view or update access codes
+ */
+export function canManageAccessCodes(role: string | undefined): boolean {
+  return hasPermission(role, 'manage_access_codes');
 }

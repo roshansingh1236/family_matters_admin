@@ -39,7 +39,6 @@ export type StageChecklistItem = {
 
 export const STAGE_CHECKLISTS: Record<JourneyStage, StageChecklistItem[]> = {
   'Medical Screening': [
-    { id: 'ms_records_collected', label: 'Medical Reports approved by Clinic', isDate: true },
     { id: 'ms_screening_scheduled', label: 'Medical screening scheduled', isDate: true },
     { id: 'ms_cleared', label: 'Medically Cleared for Legal', isDate: true },
   ],
@@ -52,10 +51,11 @@ export const STAGE_CHECKLISTS: Record<JourneyStage, StageChecklistItem[]> = {
     { id: 'et_date', label: 'Embryo transfer date', isDate: true },
     { id: 'et_first_hcg', label: 'First HCG date', isDate: true },
     { id: 'et_second_hcg', label: 'Second HCG date', isDate: true },
+    { id: 'et_heartbeat_ultrasound', label: 'Heartbeat Detection Ultrasound', isDate: true },
   ],
   'Pregnancy': [
     { id: 'preg_first_ob_scheduled', label: '1st OB Appointment Scheduled', isDate: true },
-    { id: 'preg_heartbeat', label: 'Heartbeat detection date', isDate: true },
+    { id: 'preg_nipt_scheduled', label: 'NIPT Scheduled', isDate: true },
     { id: 'preg_first_trimester', label: 'First trimester completion date', isDate: true },
     { id: 'preg_anatomy_scan', label: 'Anatomy scan completion date', isDate: true },
     { id: 'preg_fetal_echo', label: 'Fetal echocardiogram completion date', isDate: true },
@@ -81,7 +81,16 @@ export function getStageChecklistState(
   stage: JourneyStage,
 ): Record<string, boolean | string> {
   const notes = (journey.journeyNotes as any) || {};
-  return (notes.stageChecklists?.[stage] as Record<string, boolean | string>) || {};
+  const rawState = (notes.stageChecklists?.[stage] as Record<string, boolean | string>) || {};
+  const state = { ...rawState };
+  // Backwards compatibility if previous journey records recorded Heartbeat Detection under Pregnancy
+  if (stage === 'Embryo Transfer' && state.et_heartbeat_ultrasound === undefined) {
+    const pregState = (notes.stageChecklists?.['Pregnancy'] as Record<string, boolean | string>) || {};
+    if (pregState.preg_heartbeat !== undefined) {
+      state.et_heartbeat_ultrasound = pregState.preg_heartbeat;
+    }
+  }
+  return state;
 }
 
 /** True when every checklist item for [stage] is checked. */
@@ -126,7 +135,7 @@ export const journeyService = {
         .from(TABLE_NAME)
         .select('*')
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return (data || []).map(mapJourneyFromDb);
     } catch (error) {
@@ -143,7 +152,7 @@ export const journeyService = {
         .select('*')
         .eq('id', id)
         .single();
-      
+
       if (error) throw error;
       return data ? mapJourneyFromDb(data) : null;
     } catch (error) {
@@ -160,7 +169,7 @@ export const journeyService = {
         .select('*')
         .eq('match_id', matchId)
         .maybeSingle();
-      
+
       if (error) throw error;
       return data ? mapJourneyFromDb(data) : null;
     } catch (error) {
@@ -186,7 +195,7 @@ export const journeyService = {
         })
         .select('id')
         .single();
-      
+
       if (error) throw error;
       return data.id;
     } catch (error) {
@@ -238,16 +247,16 @@ export const journeyService = {
         status: newStatus,
         updated_at: new Date().toISOString(),
       };
-      
+
       if (newStatus === 'Completed') {
         updateData.completed_at = new Date().toISOString();
       }
-      
+
       const { error } = await supabase
         .from(TABLE_NAME)
         .update(updateData)
         .eq('id', id);
-        
+
       if (error) throw error;
     } catch (error) {
       console.error('Error updating journey status:', error);
@@ -309,24 +318,24 @@ export const journeyService = {
     try {
       const journey = await journeyService.getJourneyById(journeyId) as any;
       if (!journey) throw new Error('Journey not found');
-      
+
       const journeyNotes = journey.journeyNotes || {};
       const milestones = journeyNotes.milestones || [];
       const index = milestones.findIndex((m: any) => m.id === milestone.id);
-      
+
       if (index !== -1) {
         milestones[index] = milestone;
       } else {
         milestones.push(milestone);
       }
-      
+
       journeyNotes.milestones = milestones;
-      
+
       const { error } = await supabase
         .from(TABLE_NAME)
         .update({ journey_notes: journeyNotes })
         .eq('id', journeyId);
-        
+
       if (error) throw error;
     } catch (error) {
       console.error('Error updating milestone:', error);
@@ -342,7 +351,7 @@ export const journeyService = {
         .select('*')
         .eq('status', status)
         .order('created_at', { ascending: false });
-        
+
       if (error) throw error;
       return (data || []).map(mapJourneyFromDb);
     } catch (error) {
@@ -515,7 +524,7 @@ export const journeyService = {
         .eq('stage', stage)
         .eq('status', 'Active')
         .order('created_at', { ascending: false });
-        
+
       if (error) throw error;
       return (data || []).map(mapJourneyFromDb);
     } catch (error) {

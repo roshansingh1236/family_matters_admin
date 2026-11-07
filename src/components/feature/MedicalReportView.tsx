@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { GC_MEDICAL_SCREENING_STATUSES } from '../../types';
@@ -355,14 +355,29 @@ export default function MedicalReportView({
 
   const overallClearanceStatus: ResultStatus = (() => {
     if (userType === 'surrogate') {
-      const s = screeningStatus ?? '';
-      if (s === 'Medically Cleared for Program') return 'cleared';
-      if (s.includes('Hold') || s.includes('Declined')) return 'abnormal';
-      if (s === 'In Progress' || s === 'Screening Scheduled') return 'pending';
+      const s = (screeningStatus ?? '').trim();
+      const sLower = s.toLowerCase();
+      if (sLower === 'medically cleared for program' || sLower === 'cleared') return 'cleared';
+      if (sLower.includes('declined') || sLower.includes('hold') || sLower.includes('not cleared') || sLower.includes('rejected')) return 'abnormal';
+      if (sLower === 'psych evaluation report received' || sLower === 'psych evaluation report recieved' || sLower === 'medical records reviewed' || sLower === 'medical records received') return 'normal';
+      if (sLower === 'not started') return 'not_done';
       return 'pending';
     }
     return 'pending';
   })();
+
+  const availableStatuses = useMemo(() => {
+    const current = (screeningStatus ?? '').trim();
+    if (!current) return GC_MEDICAL_SCREENING_STATUSES;
+    const exists = GC_MEDICAL_SCREENING_STATUSES.some(s => s.toLowerCase() === current.toLowerCase());
+    return exists ? GC_MEDICAL_SCREENING_STATUSES : [current, ...GC_MEDICAL_SCREENING_STATUSES];
+  }, [screeningStatus]);
+
+  const canonicalStatus = useMemo(() => {
+    const current = (screeningStatus ?? 'Not Started').trim();
+    const match = GC_MEDICAL_SCREENING_STATUSES.find(s => s.toLowerCase() === current.toLowerCase());
+    return match ?? current;
+  }, [screeningStatus]);
 
   const allRowsPending = (rows: LabRow[]) => rows.every(r => r.status === 'pending');
 
@@ -415,13 +430,13 @@ export default function MedicalReportView({
                       onChange={(e) => setNewStatus(e.target.value)}
                       className="text-xs rounded-lg border border-rose-200 dark:border-white/10 bg-white dark:bg-black px-2 py-1 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500/30"
                     >
-                      {GC_MEDICAL_SCREENING_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                      {availableStatuses.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <button onClick={handleStatusSave} className="px-2 py-1 text-xs font-semibold bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors">Save</button>
                     <button onClick={() => setEditingStatus(false)} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">Cancel</button>
                   </div>
                 ) : (
-                  <button onClick={() => { setNewStatus(screeningStatus ?? 'Not Started'); setEditingStatus(true); }} className="group flex items-center gap-2">
+                  <button onClick={() => { setNewStatus(canonicalStatus); setEditingStatus(true); }} className="group flex items-center gap-2">
                     <ResultBadge status={overallClearanceStatus} label={screeningStatus ?? 'Not Started'} />
                     <i className="ri-pencil-line text-xs text-gray-300 group-hover:text-rose-400 transition-colors"></i>
                   </button>

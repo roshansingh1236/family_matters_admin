@@ -11,6 +11,7 @@ import { IP_STATUSES } from '../../types';
 import AddUserDialog from '../../components/feature/AddUserDialog';
 import { formatMMDDYYYY } from '../../utils/dateFormat';
 import { approvalSyncFields } from '../../utils/approvalStatus';
+import { userService } from '../../services/userService';
 
 const ParentsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -75,8 +76,8 @@ const ParentsPage: React.FC = () => {
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      list = list.filter(p => 
-        getDisplayName(p).toLowerCase().includes(q) || 
+      list = list.filter(p =>
+        getDisplayName(p).toLowerCase().includes(q) ||
         (p.email && p.email.toLowerCase().includes(q))
       );
     }
@@ -98,12 +99,7 @@ const ParentsPage: React.FC = () => {
 
   const handleStatusUpdate = async (userId: string, newStatus: UserStatus) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ status: newStatus, ...approvalSyncFields(newStatus), updated_at: new Date().toISOString() })
-        .eq('id', userId);
-
-      if (error) throw error;
+      await userService.updateUserStatus(userId, newStatus);
       fetchParents();
     } catch (error) {
       console.error('Error updating status:', error);
@@ -153,48 +149,48 @@ const ParentsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3">
-               <button
-                 onClick={() => navigate(showArchived ? '/parents' : '/parents?archived=1')}
-                 className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border ${showArchived
-                   ? 'bg-rose-500 text-white border-rose-500 shadow-sm'
-                   : 'bg-white dark:bg-white/5 text-gray-700 dark:text-gray-200 border-rose-100/50 dark:border-white/10 hover:border-rose-200'}`}
-               >
-                 <i className={`${showArchived ? 'ri-arrow-go-back-line' : 'ri-archive-line'} mr-1`}></i>
-                 {showArchived ? 'Back to Active' : 'View Archived'}
-               </button>
-               <div className="flex bg-white dark:bg-white/5 p-1 rounded-xl border border-rose-100/50 dark:border-white/10">
-                 <button
-                   onClick={() => setViewStyle('table')}
-                   className={`p-2 rounded-lg transition-all ${viewStyle === 'table' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-                 >
-                   <i className="ri-table-line text-lg"></i>
-                 </button>
-                 <button
-                   onClick={() => setViewStyle('grid')}
-                   className={`p-2 rounded-lg transition-all ${viewStyle === 'grid' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-                 >
-                   <i className="ri-layout-grid-line text-lg"></i>
-                 </button>
-               </div>
-               <Button color="blue" onClick={() => setIsAddDialogOpen(true)}>
-                 <i className="ri-add-line mr-2"></i> Add Parent
-               </Button>
+              <button
+                onClick={() => navigate(showArchived ? '/parents' : '/parents?archived=1')}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border ${showArchived
+                  ? 'bg-rose-500 text-white border-rose-500 shadow-sm'
+                  : 'bg-white dark:bg-white/5 text-gray-700 dark:text-gray-200 border-rose-100/50 dark:border-white/10 hover:border-rose-200'}`}
+              >
+                <i className={`${showArchived ? 'ri-arrow-go-back-line' : 'ri-archive-line'} mr-1`}></i>
+                {showArchived ? 'Back to Active' : 'View Archived'}
+              </button>
+              <div className="flex bg-white dark:bg-white/5 p-1 rounded-xl border border-rose-100/50 dark:border-white/10">
+                <button
+                  onClick={() => setViewStyle('table')}
+                  className={`p-2 rounded-lg transition-all ${viewStyle === 'table' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  <i className="ri-table-line text-lg"></i>
+                </button>
+                <button
+                  onClick={() => setViewStyle('grid')}
+                  className={`p-2 rounded-lg transition-all ${viewStyle === 'grid' ? 'bg-rose-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  <i className="ri-layout-grid-line text-lg"></i>
+                </button>
+              </div>
+              <Button color="blue" onClick={() => setIsAddDialogOpen(true)}>
+                <i className="ri-add-line mr-2"></i> Add Parent
+              </Button>
             </div>
           </div>
 
           <div className="bg-white dark:bg-white/5 p-4 rounded-2xl border border-rose-100/50 dark:border-white/10 mb-6 flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-              <input 
-                type="text" 
-                placeholder="Search by name or email..." 
+              <input
+                type="text"
+                placeholder="Search by name or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none text-sm dark:text-white transition-all"
               />
             </div>
             <div className="flex gap-2">
-              <select 
+              <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="px-4 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none text-sm dark:text-white"
@@ -202,7 +198,7 @@ const ParentsPage: React.FC = () => {
                 <option value="all">All Statuses</option>
                 {IP_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              <select 
+              <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="px-4 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none text-sm dark:text-white"
@@ -211,7 +207,7 @@ const ParentsPage: React.FC = () => {
                 <option value="name">Sort by Name</option>
                 <option value="status">Sort by Status</option>
               </select>
-              <button 
+              <button
                 onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
                 className="px-3 py-2 bg-gray-50 dark:bg-[#0e0b1a] border border-gray-200 dark:border-white/10 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-600 dark:text-gray-300 flex items-center justify-center"
                 title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
@@ -260,16 +256,16 @@ const ParentsPage: React.FC = () => {
                   </div>
 
                   <div className="pt-4 border-t border-rose-50 dark:border-white/5 flex items-center justify-between" onClick={e => e.stopPropagation()}>
-                     <select 
-                       className="text-xs font-semibold bg-rose-50/50 dark:bg-white/5 border-none rounded-lg focus:ring-rose-500 dark:text-white px-3 py-2 cursor-pointer"
-                       value={user.status || 'Inquiry'}
-                       onChange={(e) => handleStatusUpdate(user.id, e.target.value as UserStatus)}
-                     >
-                        {IP_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                     </select>
-                     <Button size="sm" color="red" variant="outline" onClick={() => handeArchive(user.id)}>
-                       <i className="ri-archive-line"></i>
-                     </Button>
+                    <select
+                      className="text-xs font-semibold bg-rose-50/50 dark:bg-white/5 border-none rounded-lg focus:ring-rose-500 dark:text-white px-3 py-2 cursor-pointer"
+                      value={user.status || 'Inquiry'}
+                      onChange={(e) => handleStatusUpdate(user.id, e.target.value as UserStatus)}
+                    >
+                      {IP_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <Button size="sm" color="red" variant="outline" onClick={() => handeArchive(user.id)}>
+                      <i className="ri-archive-line"></i>
+                    </Button>
                   </div>
                 </Card>
               ))}
@@ -300,18 +296,18 @@ const ParentsPage: React.FC = () => {
                           {getStatusBadge(user.status as string)}
                         </td>
                         <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
-                           <div className="flex items-center justify-end gap-3">
-                             <select 
-                               className="text-xs font-semibold bg-rose-50/50 dark:bg-white/5 border-none rounded-lg focus:ring-rose-500 dark:text-white px-3 py-2 cursor-pointer"
-                               value={user.status || 'Inquiry'}
-                               onChange={(e) => handleStatusUpdate(user.id, e.target.value as UserStatus)}
-                             >
-                                {IP_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                             </select>
-                             <button className="p-2 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" onClick={() => handeArchive(user.id)}>
-                               <i className="ri-delete-bin-line text-base"></i>
-                             </button>
-                           </div>
+                          <div className="flex items-center justify-end gap-3">
+                            <select
+                              className="text-xs font-semibold bg-rose-50/50 dark:bg-white/5 border-none rounded-lg focus:ring-rose-500 dark:text-white px-3 py-2 cursor-pointer"
+                              value={user.status || 'Inquiry'}
+                              onChange={(e) => handleStatusUpdate(user.id, e.target.value as UserStatus)}
+                            >
+                              {IP_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                            <button className="p-2 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" onClick={() => handeArchive(user.id)}>
+                              <i className="ri-delete-bin-line text-base"></i>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

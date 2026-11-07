@@ -18,7 +18,15 @@ const prettify = (
   try {
     const hasValue = value && Object.keys(value).length > 0;
     const hasTemplate = template && Object.keys(template).length > 0;
-    const base = hasValue ? value : hasTemplate ? template : {};
+    // Show every template field in the editor, so a field the app never saved
+    // (e.g. Parent 2 gender) can still be filled in from the portal.
+    const base = hasValue
+      ? hasTemplate
+        ? { ...template, ...value }
+        : value
+      : hasTemplate
+        ? template
+        : {};
     return JSON.stringify(base ?? {}, null, 2);
   } catch (error) {
     return '{}';

@@ -1,6 +1,8 @@
-import { supabase } from '../lib/supabase';
+import { supabase, createAuthAccountForOther } from '../lib/supabase';
 import type { User } from '../types';
 import { approvalSyncFields } from '../utils/approvalStatus';
+import { emailService } from './emailService';
+import { generateRandomPassword } from '../utils/password';
 
 const TABLE_NAME = 'users';
 
@@ -136,35 +138,70 @@ export const inquiryService = {
   },
 
   // Convert a Surrogate Inquiry lead into a full User Profile
-  convertSurrogateToProfile: async (inquiry: any): Promise<void> => {
+  convertSurrogateToProfile: async (inquiry: any): Promise<{ tempPassword?: string; emailSent: boolean }> => {
     try {
-      // 1. Create the user row (Staff will need to manually trigger auth invite or we do it here)
-      const { data: newUser, error: userError } = await supabase
-        .from('users')
-        .insert({
-          email: inquiry.email,
-          first_name: inquiry.first_name,
-          last_name: inquiry.last_name,
-          role: 'Surrogate',
-          status: 'Inquiry',
-          phone: inquiry.phone,
-          form_data: {
-            initial_inquiry_id: inquiry.id,
-            state: inquiry.state,
-            previous_pregnancy: inquiry.previous_pregnancy,
-            message: inquiry.message
-          }
-        })
-        .select()
-        .single();
+      const email = (inquiry.email || '').trim();
+      const fullName = [inquiry.first_name, inquiry.last_name].filter(Boolean).join(' ').trim();
+      let newUserId: string | null = null;
+      let tempPassword: string | undefined;
+      let emailSent = false;
 
-      if (userError) throw userError;
+      if (email) {
+        tempPassword = generateRandomPassword(10);
+        newUserId = await createAuthAccountForOther(email, tempPassword, {
+          full_name: fullName,
+          role: 'Surrogate',
+        });
+      }
+
+      const userData: Record<string, unknown> = {
+        email: email || null,
+        first_name: inquiry.first_name || null,
+        last_name: inquiry.last_name || null,
+        full_name: fullName,
+        role: 'Surrogate',
+        status: 'New Application',
+        phone: inquiry.phone || null,
+        profile_completed: false,
+        form_data: {
+          initial_inquiry_id: inquiry.id,
+          state: inquiry.state,
+          previous_pregnancy: inquiry.previous_pregnancy,
+          message: inquiry.message,
+        },
+      };
+
+      if (newUserId) {
+        userData.id = newUserId;
+        const { error: upsertErr } = await supabase
+          .from('users')
+          .upsert(userData, { onConflict: 'id' });
+        if (upsertErr) throw upsertErr;
+
+        if (tempPassword) {
+          const emailRes = await emailService.sendCredentials({
+            userId: newUserId,
+            email,
+            name: fullName,
+            password: tempPassword,
+            role: 'Surrogate',
+          });
+          emailSent = emailRes.success;
+        }
+      } else {
+        const { error: userError } = await supabase
+          .from('users')
+          .insert(userData);
+        if (userError) throw userError;
+      }
 
       // 2. Update the inquiry status
       await inquiryService.updateSurrogateInquiryStatus(inquiry.id, 'converted');
+
+      return { tempPassword, emailSent };
     } catch (error) {
       console.error('Error converting surrogate inquiry:', error);
       throw error;
     }
-  }
+  },
 };

@@ -145,8 +145,17 @@ const InquiriesPage: React.FC = () => {
   const handleConvertToProfile = async (inquiry: any) => {
     if (!window.confirm(`Convert ${inquiry.first_name} ${inquiry.last_name} to a full profile?`)) return;
     try {
-      await inquiryService.convertSurrogateToProfile(inquiry);
+      const result = await inquiryService.convertSurrogateToProfile(inquiry);
       fetchInquiries();
+      if (result.tempPassword) {
+        if (result.emailSent) {
+          alert(`✅ Profile created for ${inquiry.first_name} ${inquiry.last_name}!\n\nAn email with login credentials and temporary password (${result.tempPassword}) has been sent to ${inquiry.email}.`);
+        } else {
+          alert(`✅ Profile created for ${inquiry.first_name} ${inquiry.last_name}!\n\nTemporary password: ${result.tempPassword}\n(Please share this password with the user directly if email delivery was not received).`);
+        }
+      } else {
+        alert(`✅ Profile created for ${inquiry.first_name} ${inquiry.last_name}!`);
+      }
     } catch (error) {
       console.error('Error converting:', error);
       alert('Failed to convert inquiry. The email might already be registered.');

@@ -6,9 +6,12 @@ import Card from '../../components/base/Card';
 import Button from '../../components/base/Button';
 import Toast from '../../components/base/Toast';
 import AccessCodesSection from '../../components/feature/AccessCodesSection';
+import PasswordProtection from '../../components/feature/PasswordProtection';
 import { useAuth } from '../../contexts/AuthContext';
 import DataSection from '../../components/data/DataSection';
 import { formatMMDDYYYY } from '../../utils/dateFormat';
+import { canManageSettings, canManageAccessCodes } from '../../utils/permissions';
+import { verifyAccessCodesMasterPassword } from '../../utils/accessCodes';
 
 const SettingsPage: React.FC = () => {
   const { user, profile, profileLoading } = useAuth();
@@ -345,7 +348,28 @@ const SettingsPage: React.FC = () => {
       case 'security':
         return renderSecuritySettings();
       case 'access':
-        return <AccessCodesSection onToast={setToast} />;
+        if (!canManageAccessCodes(profile?.role)) {
+          return (
+            <div className="p-8 text-center">
+              <i className="ri-lock-2-line text-4xl text-rose-500 mb-3 block"></i>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">Access Restricted</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Only users with the <strong>Admin</strong> role can view or modify access codes.
+              </p>
+            </div>
+          );
+        }
+        return (
+          <PasswordProtection
+            menuName="access_codes"
+            variant="inline"
+            title="Access Codes Protected"
+            description="This section contains sensitive agency access codes. Please enter the master security password to view or modify codes."
+            verifyFn={verifyAccessCodesMasterPassword}
+          >
+            <AccessCodesSection onToast={setToast} />
+          </PasswordProtection>
+        );
       case 'matching':
         return (
           <div className="space-y-6">
@@ -440,6 +464,47 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  if (profileLoading) {
+    return (
+      <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 flex items-center justify-center p-6">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-rose-500"></div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canManageSettings(profile?.role)) {
+    return (
+      <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <main className="flex-1 flex items-center justify-center p-6">
+            <div className="max-w-md w-full text-center">
+              <Card className="p-12 border-dashed border-2 border-rose-200 dark:border-rose-900/30">
+                <i className="ri-lock-2-line text-5xl text-rose-500 mb-4 block"></i>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Access Restricted</h2>
+                <p className="text-gray-500 dark:text-gray-400 mt-2">
+                  Only users with the <strong>Admin</strong> role can access and manage application settings.
+                </p>
+                <div className="mt-6">
+                  <Button variant="outline" onClick={() => window.history.back()}>
+                    <i className="ri-arrow-left-line mr-2"></i> Go Back
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-[#fdf4f6] dark:bg-[#0e0b1a]">
       <Sidebar />
@@ -526,18 +591,20 @@ const SettingsPage: React.FC = () => {
                   </h2>
                 </div>
                 {renderContent()}
-                <div className="mt-8 pt-6 border-t border-rose-100/60 dark:border-white/5">
-                  <div className="flex gap-3">
-                    <Button color="blue">
-                      <i className="ri-save-line mr-2"></i>
-                      Save Changes
-                    </Button>
-                    <Button variant="outline">
-                      <i className="ri-refresh-line mr-2"></i>
-                      Reset to Default
-                    </Button>
+                {activeTab !== 'access' && (
+                  <div className="mt-8 pt-6 border-t border-rose-100/60 dark:border-white/5">
+                    <div className="flex gap-3">
+                      <Button color="blue">
+                        <i className="ri-save-line mr-2"></i>
+                        Save Changes
+                      </Button>
+                      <Button variant="outline">
+                        <i className="ri-refresh-line mr-2"></i>
+                        Reset to Default
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </Card>
             </div>
           </div>

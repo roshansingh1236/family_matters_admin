@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { canManageSettings } from '../../utils/permissions';
 
 type MenuItem = {
   type?: never;
@@ -55,8 +56,18 @@ const menuItems: NavItem[] = [
 export const Sidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, profile } = useAuth();
+  const { logout, profile, profileLoading } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+
+  const visibleMenuItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      if (item.path === '/settings') {
+        if (profileLoading) return true;
+        return canManageSettings(profile?.role);
+      }
+      return true;
+    });
+  }, [profile?.role, profileLoading]);
 
   const displayName: string = (() => {
     if (profile && typeof profile === 'object') {
@@ -130,7 +141,7 @@ export const Sidebar: React.FC = () => {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 pb-3 custom-scrollbar">
-        {menuItems.map((item, index) => {
+        {visibleMenuItems.map((item, index) => {
           if (item.type === 'divider') {
             return (
               <div key={index} className={`pt-5 pb-1.5 ${collapsed ? 'hidden' : ''}`}>

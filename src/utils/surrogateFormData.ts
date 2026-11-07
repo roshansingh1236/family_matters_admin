@@ -144,8 +144,24 @@ export function resolveParent1Profile(
   if (isNonEmptyRecord(fromP1)) return fromP1;
   if (isNonEmptyRecord(fromIpP1)) return fromIpP1;
   if (isNonEmptyRecord(ipAdd)) return ipAdd;
+  let base: Record<string, unknown> | null = null;
+  if (isNonEmptyRecord(fromP1)) base = { ...fromP1 };
+  else if (isNonEmptyRecord(fromIpP1)) base = { ...fromIpP1 };
+  else if (isNonEmptyRecord(ipAdd)) base = { ...ipAdd };
 
   return null;
+  if (!base) return null;
+
+  // Fallback for Gender if missing or blank in parent1
+  const rawGender = base.gender;
+  if (!rawGender || String(rawGender).trim() === '' || String(rawGender).toLowerCase() === 'null') {
+    const fallbackGender = fd?.gender ?? fd?.parent1_gender;
+    if (fallbackGender && typeof fallbackGender === 'string' && fallbackGender.trim().length > 0) {
+      base.gender = fallbackGender.trim();
+    }
+  }
+
+  return base;
 }
 
 /**
@@ -169,6 +185,34 @@ export function resolveParent2Profile(
   if (isNonEmptyRecord(fromIpP2)) return fromIpP2;
   if (isNonEmptyRecord(fromColP2)) return fromColP2;
   if (isNonEmptyRecord(col)) return col;
+  let base: Record<string, unknown> | null = null;
+  if (isNonEmptyRecord(fromP2)) base = { ...fromP2 };
+  else if (isNonEmptyRecord(fromIpP2)) base = { ...fromIpP2 };
+  else if (isNonEmptyRecord(fromColP2)) base = { ...fromColP2 };
+  else if (isNonEmptyRecord(col)) base = { ...col };
 
   return null;
+  if (!base) return null;
+
+  // Fallback for Gender if missing or blank in parent2
+  const rawGender = base.gender;
+  if (!rawGender || String(rawGender).trim() === '' || String(rawGender).toLowerCase() === 'null') {
+    const fallbackGender = fd?.partnerGender ?? fd?.partner_gender;
+    if (fallbackGender && typeof fallbackGender === 'string' && fallbackGender.trim().length > 0) {
+      base.gender = fallbackGender.trim();
+    }
+  }
+
+  // Fallback for Name if missing or blank in parent2
+  const rawName = base.name;
+  if (!rawName || String(rawName).trim() === '' || String(rawName).toLowerCase() === 'null') {
+    const partnerFullName = [fd?.partnerFirstName, fd?.partnerLastName]
+      .filter((v) => typeof v === 'string' && v.trim().length > 0)
+      .join(' ');
+    if (partnerFullName.length > 0) {
+      base.name = partnerFullName;
+    }
+  }
+
+  return base;
 }

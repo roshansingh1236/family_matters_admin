@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import NotificationDropdown from './NotificationDropdown';
+import { canManageSettings } from '../../utils/permissions';
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -216,12 +217,14 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
 
                 {/* Actions */}
                 <div className="p-2">
-                  <button
-                    onClick={() => { setShowUserMenu(false); navigate('/settings'); }}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-rose-50 dark:hover:bg-white/5 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
-                  >
-                    <i className="ri-settings-4-line text-base"></i> Settings
-                  </button>
+                  {canManageSettings(profile?.role) && (
+                    <button
+                      onClick={() => { setShowUserMenu(false); navigate('/settings'); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-rose-50 dark:hover:bg-white/5 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                    >
+                      <i className="ri-settings-4-line text-base"></i> Settings
+                    </button>
+                  )}
                   <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}

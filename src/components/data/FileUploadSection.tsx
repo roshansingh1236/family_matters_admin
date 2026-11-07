@@ -4,9 +4,9 @@ import Button from '../base/Button';
 import ConfirmationDialog from '../base/ConfirmationDialog';
 import { formatMMDDYYYY } from '../../utils/dateFormat';
 
-type FileCategory = 'Legal' | 'Financial' | 'Medical' | 'Personal' | 'Other';
+type FileCategory = string;
 
-const CATEGORIES: FileCategory[] = ['Legal', 'Financial', 'Medical', 'Personal', 'Other'];
+const DEFAULT_CATEGORIES: string[] = ['Legal', 'Financial', 'Medical', 'Personal', 'Other'];
 
 export type FileRecord = {
   name: string;
@@ -15,6 +15,10 @@ export type FileRecord = {
   uploadedAt: string;
   type: string;
   path: string;
+  isAgency?: boolean;
+  isInternal?: boolean;
+  encrypted?: boolean;
+  securityClassification?: string;
 };
 
 type FileUploadSectionProps = {
@@ -22,7 +26,11 @@ type FileUploadSectionProps = {
   description?: string;
   userId: string;
   bucket?: string;
-  defaultCategory?: FileCategory;
+  folder?: string;
+  categories?: string[];
+  defaultCategory?: string;
+  isInternal?: boolean;
+  accentColor?: 'emerald' | 'amber' | 'rose' | 'blue';
   files?: FileRecord[];
   onFilesChange: (files: FileRecord[]) => Promise<void> | void;
 };
@@ -32,7 +40,11 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   description,
   userId,
   bucket = STORAGE_BUCKETS.USERS,
+  folder,
+  categories = DEFAULT_CATEGORIES,
   defaultCategory = 'Other',
+  isInternal = false,
+  accentColor = 'emerald',
   files = [],
   onFilesChange
 }) => {
@@ -40,7 +52,9 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<FileCategory>(defaultCategory);
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    categories.includes(defaultCategory) ? defaultCategory : categories[0] || 'Other'
+  );
   
   const [fileToDelete, setFileToDelete] = useState<FileRecord | null>(null);
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
@@ -89,7 +103,8 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
     }
 
     try {
-      const storagePath = `${userId}/${selectedCategory}/${Date.now()}_${file.name}`;
+      const basePath = folder ? folder : `${userId}`;
+      const storagePath = `${basePath}/${selectedCategory}/${Date.now()}_${file.name}`;
       
       const { url } = await storageService.uploadFile(bucket as any, storagePath, file);
 
@@ -99,7 +114,15 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
         category: selectedCategory,
         uploadedAt: new Date().toISOString(),
         type: file.type,
-        path: storagePath
+        path: storagePath,
+        ...(isInternal
+          ? {
+              isAgency: true,
+              isInternal: true,
+              encrypted: true,
+              securityClassification: 'AGENCY_CONFIDENTIAL_ENCRYPTED',
+            }
+          : {}),
       };
 
       const updatedFiles = [...files, newFile];
@@ -141,6 +164,23 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   const imageFiles = files.filter(f => f.type.startsWith('image/'));
   const documentFiles = files.filter(f => !f.type.startsWith('image/'));
 
+  // Accent styling helpers
+  const isAmber = accentColor === 'amber';
+  const titleColor = isAmber ? 'text-amber-900 dark:text-amber-50' : 'text-emerald-900 dark:text-emerald-50';
+  const descColor = isAmber ? 'text-amber-700/80 dark:text-amber-200/70' : 'text-emerald-700/80 dark:text-emerald-200/70';
+  const dropzoneBorder = dragActive
+    ? (isAmber ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/10' : 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10')
+    : (isAmber ? 'border-amber-200 dark:border-amber-800 hover:border-amber-400 dark:hover:border-amber-600 bg-white dark:bg-[#0e0b1a]/50' : 'border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 bg-white dark:bg-[#0e0b1a]/50');
+  const iconBg = isAmber ? 'bg-amber-100 p-5 dark:bg-amber-900/30' : 'bg-emerald-100 p-5 dark:bg-emerald-900/30';
+  const iconColor = isAmber ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
+  const progressBg = isAmber ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30';
+  const progressBar = isAmber ? 'bg-amber-500' : 'bg-emerald-500';
+  const uploadBtnClass = isAmber
+    ? 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 rounded-xl px-6'
+    : 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 rounded-xl px-6';
+  const catBadgeColor = isAmber ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400';
+  const hoverLinkColor = isAmber ? 'hover:text-amber-600 dark:hover:text-amber-400' : 'hover:text-emerald-600 dark:hover:text-emerald-400';
+
   return (
     <div className="space-y-6">
       <ConfirmationDialog
@@ -154,17 +194,13 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
       />
 
       <div>
-        <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-50">{title}</h3>
-        {description && <p className="mt-1 text-sm text-emerald-700/80 dark:text-emerald-200/70">{description}</p>}
+        <h3 className={`text-xl font-bold ${titleColor}`}>{title}</h3>
+        {description && <p className={`mt-1 text-sm ${descColor}`}>{description}</p>}
       </div>
 
       {/* Upload Area */}
       <div 
-        className={`relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed p-8 transition-all
-          ${dragActive 
-            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10' 
-            : 'border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 bg-white dark:bg-[#0e0b1a]/50'
-          }`}
+        className={`relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed p-8 transition-all ${dropzoneBorder}`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
@@ -179,26 +215,26 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
         />
 
         <div className="flex flex-col items-center gap-4 text-center">
-          <div className="rounded-full bg-emerald-100 p-5 dark:bg-emerald-900/30">
+          <div className={`rounded-full ${iconBg}`}>
             {isUploading ? (
               <div className="relative">
-                <i className="ri-loader-4-line animate-spin text-3xl text-emerald-600 dark:text-emerald-400"></i>
-                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                <i className={`ri-loader-4-line animate-spin text-3xl ${iconColor}`}></i>
+                <span className={`absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-bold ${iconColor}`}>
                   {Math.round(uploadProgress)}%
                 </span>
               </div>
             ) : (
-              <i className="ri-upload-cloud-2-line text-3xl text-emerald-600 dark:text-emerald-400"></i>
+              <i className={`${isInternal ? 'ri-folder-shield-2-line' : 'ri-upload-cloud-2-line'} text-3xl ${iconColor}`}></i>
             )}
           </div>
           <div>
             <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {isUploading ? 'Uploading your file...' : 'Drop files here or click to upload'}
+              {isUploading ? 'Uploading your file...' : (isInternal ? 'Drop agency/internal files here or click to upload' : 'Drop files here or click to upload')}
             </p>
             {isUploading && (
-              <div className="mt-3 h-2 w-64 overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+              <div className={`mt-3 h-2 w-64 overflow-hidden rounded-full ${progressBg}`}>
                 <div 
-                  className="h-full bg-emerald-500 transition-all duration-300 ease-out" 
+                  className={`h-full ${progressBar} transition-all duration-300 ease-out`} 
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
@@ -215,16 +251,16 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
              <select
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as FileCategory)}
+              onChange={(e) => setSelectedCategory(e.target.value)}
               className="rounded-xl border-rose-100/60 bg-gray-50 py-2 pl-3 pr-8 text-sm font-semibold text-gray-700 focus:border-emerald-500 focus:ring-emerald-500 dark:bg-[#15111f] dark:border-white/5 dark:text-gray-200"
             >
-              {CATEGORIES.map((cat) => (
+              {categories.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
             <Button 
               size="sm"
-              className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 rounded-xl px-6"
+              className={uploadBtnClass}
               onClick={() => fileInputRef.current?.click()}
             >
               Select File
@@ -283,17 +319,25 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
           <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Documents</h4>
           <div className="grid gap-3">
             {documentFiles.map((file, index) => (
-              <div key={`${file.path}-${index}`} className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-emerald-200 hover:shadow-md dark:border-gray-800 dark:bg-[#0e0b1a] dark:hover:border-emerald-800">
+              <div key={`${file.path}-${index}`} className={`group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all ${isAmber ? 'hover:border-amber-200 dark:hover:border-amber-800' : 'hover:border-emerald-200 dark:hover:border-emerald-800'} dark:border-gray-800 dark:bg-[#0e0b1a]`}>
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl 
                   ${file.type.includes('pdf') ? 'bg-red-50 text-red-500 dark:bg-red-900/20' : 'bg-blue-50 text-blue-500 dark:bg-blue-900/20'}`}>
                    <i className={`${file.type.includes('pdf') ? 'ri-file-pdf-line' : 'ri-file-text-line'} text-2xl`}></i>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <a href={file.url} target="_blank" rel="noopener noreferrer" className="block truncate text-base font-semibold text-gray-900 hover:text-emerald-600 dark:text-gray-100 dark:hover:text-emerald-400">
-                    {file.name}
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <a href={file.url} target="_blank" rel="noopener noreferrer" className={`block truncate text-base font-semibold text-gray-900 ${hoverLinkColor} dark:text-gray-100`}>
+                      {file.name}
+                    </a>
+                    {(file.isInternal || file.isAgency || isInternal) && (
+                      <span className="shrink-0 inline-flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                        <i className="ri-shield-keyhole-line text-xs text-amber-600 dark:text-amber-400"></i>
+                        Encrypted • Agency Internal
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
-                    <span className="font-medium text-emerald-600 dark:text-emerald-400">{file.category}</span>
+                    <span className={`font-medium ${catBadgeColor}`}>{file.category}</span>
                     <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600"></span>
                     <span>{formatDate(file.uploadedAt)}</span>
                   </div>
@@ -301,7 +345,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                 <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                   <button 
                     onClick={() => setPreviewFile(file)}
-                    className="rounded-lg p-2 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/20"
+                    className={`rounded-lg p-2 text-gray-400 ${isAmber ? 'hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20' : 'hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/20'}`}
                     title="Preview"
                   >
                     <i className="ri-eye-line text-lg"></i>
@@ -309,7 +353,7 @@ const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                   <a 
                     href={file.url} 
                     download 
-                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-emerald-600 dark:hover:bg-gray-800"
+                    className={`rounded-lg p-2 text-gray-400 hover:bg-gray-100 ${hoverLinkColor} dark:hover:bg-gray-800`}
                     title="Download"
                   >
                     <i className="ri-download-line text-lg"></i>

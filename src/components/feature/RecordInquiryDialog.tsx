@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, createAuthAccountForOther } from '../../lib/supabase';
+import { emailService } from '../../services/emailService';
+import { generateRandomPassword } from '../../utils/password';
 
 interface RecordInquiryDialogProps {
   isOpen: boolean;
@@ -70,48 +72,41 @@ const RecordInquiryDialog: React.FC<RecordInquiryDialogProps> = ({ isOpen, onClo
         data: extraData
       };
 
-      // If email is provided, try to create an Auth user
+      // If email is provided, create an Auth user with an auto-generated password
+      let tempPassword = '';
       if (formData.email) {
-        if (formData.phone.length < 6) {
-           alert("Phone number too short to be used as password (min 6 chars). Inquiry saved without account creation.");
-        }
-
+        tempPassword = generateRandomPassword(10);
         try {
-          // Use phone number as password
-          const { data: authData, error: authError } = await supabase.auth.signUp({
-            email: formData.email,
-            password: formData.phone,
-            options: {
-                data: {
-                    full_name: formData.name,
-                    role: data.role
-                }
-            }
+          const newUserId = await createAuthAccountForOther(formData.email.trim(), tempPassword, {
+            full_name: formData.name,
+            role: data.role,
           });
 
-          if (authError) {
-             if (authError.message.includes('User already registered')) {
-                alert("Email already in use. Saving inquiry without creating a new account.");
-             } else {
-                throw authError;
-             }
-          }
-          
-          if (authData.user) {
-             data.id = authData.user.id;
+          if (newUserId) {
+            data.id = newUserId;
           }
         } catch (authError: any) {
-             console.error("Auth creation failed:", authError);
-             throw authError;
+          console.warn("Auth creation skipped or failed:", authError);
         }
       }
 
       // Save to Supabase users table
-      const { error: dbError } = await supabase
-        .from('users')
-        .insert(data);
+      const { error: dbError } = data.id
+        ? await supabase.from('users').upsert(data, { onConflict: 'id' })
+        : await supabase.from('users').insert(data);
 
       if (dbError) throw dbError;
+
+      // Dispatch welcome credentials email if account was created
+      if (data.id && tempPassword && formData.email) {
+        void emailService.sendCredentials({
+          userId: data.id as string,
+          email: formData.email.trim(),
+          name: formData.name,
+          password: tempPassword,
+          role: data.role as string,
+        });
+      }
 
       setFormData({
         name: '', email: '', phone: '', message: '',

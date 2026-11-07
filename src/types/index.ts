@@ -1,6 +1,6 @@
 export type UserRole = 'surrogate' | 'parent' | 'agency' | 'admin';
 
-export type UserStatus = 
+export type UserStatus =
   | 'Inquiry'
   | 'Consultation Pending'
   | 'Consultation Scheduled'
@@ -35,7 +35,15 @@ export type UserStatus =
   | 'Psych Evaluation'
   | 'Psych Complete'
   | 'Accepted into Program'
-  | 'Rejected';
+  | 'Rejected'
+  // Medical Screening Statuses (internal)
+  | 'Not Started'
+  | 'Psych Evaluation Referral Sent'
+  | 'Psych Evaluation Report Received'
+  | 'PSYCH EVALUATION REFERRAL SENT'
+  | 'PSYCH EVALUATION REPORT RECEIVED'
+  | 'PSYCH EVALUATION REPORT RECIEVED'
+  | 'Declined for Program';
 
 export interface User {
   id: string;
@@ -53,6 +61,8 @@ export interface User {
   profile_completed?: boolean;
   form_2_completed?: boolean;
   profileCompleted?: boolean;
+  documents?: any[];
+  agency_documents?: any[];
 }
 
 export type MatchStatus =
@@ -118,8 +128,7 @@ export const GC_STATUSES: UserStatus[] = [
   'Medical Records Received',
   'Psych Evaluation',
   'Psych Complete',
-  'Accepted into Program',
-  'Ready to Match',
+  'Accepted to Program',
   'On Hold',
   'Rejected'
 ];
@@ -130,6 +139,8 @@ export const GC_MEDICAL_SCREENING_STATUSES: UserStatus[] = [
   'Medical Records Received',
   'Medical Records Reviewed',
   'Medical Screening Scheduled',
+  'Psych Evaluation Referral Sent',
+  'Psych Evaluation Report Received',
   'Medically Cleared for Program',
   'Declined for Program'
 ];
@@ -149,12 +160,12 @@ export interface Payment {
   date: string;
 }
 
-export type MedicalRecordRequestStatus = 
-  | 'Not Requested' 
-  | 'Requested' 
-  | 'Follow-Up Needed' 
-  | 'Received (Partial)' 
-  | 'Received (Complete)' 
+export type MedicalRecordRequestStatus =
+  | 'Not Requested'
+  | 'Requested'
+  | 'Follow-Up Needed'
+  | 'Received (Partial)'
+  | 'Received (Complete)'
   | 'Unable to Obtain';
 
 export type HipaaAuthStatus = 'Not Sent' | 'Sent' | 'Signed' | 'Expired';
@@ -196,4 +207,50 @@ export interface AuditLog {
   action: string;
   details: string;
   createdAt: string;
+}
+
+export type JourneyStatus = 'Active' | 'Completed' | 'Cancelled';
+
+export type JourneyStage =
+  | 'Medical Screening'
+  | 'Legal'
+  | 'Embryo Transfer'
+  | 'Pregnancy'
+  | 'Birth'
+  | 'Postpartum';
+
+export interface CaseMilestone {
+  id: string;
+  title: string;
+  date?: string;
+  targetDate?: string;
+  completedDate?: string;
+  type?: string;
+  category?: string;
+  status?: string;
+  notes?: string;
+  createdAt?: string;
+}
+
+export interface Journey {
+  id: string;
+  matchId: string;
+  caseNumber: string;
+  intendedParentId: string;
+  gestationalCarrierId: string;
+  caseManagerId?: string;
+  status: JourneyStatus;
+  stage: JourneyStage | string;
+  createdAt: string;
+  updatedAt?: string;
+  completedAt?: string;
+  estimatedDeliveryDate?: string;
+  deliveryDate?: string;
+  postpartumNotes?: string;
+  milestones?: CaseMilestone[];
+  documents?: any[];
+  payments?: any[];
+  medicalRecords?: Record<string, any>;
+  legalAgreements?: Record<string, any>;
+  journeyNotes?: Record<string, any>;
 }

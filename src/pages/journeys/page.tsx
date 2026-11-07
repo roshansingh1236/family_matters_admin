@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from "../../lib/supabase";
 import { Sidebar } from "../../components/feature/Sidebar";
 import Header from "../../components/feature/Header";
@@ -14,6 +14,7 @@ import { canViewFinancials } from "../../utils/permissions";
 import { formatMMDDYYYY } from "../../utils/dateFormat";
 import FileUploadSection, { type FileRecord } from "../../components/data/FileUploadSection";
 import { STORAGE_BUCKETS } from "../../services/storageService";
+import { auditService, type AuditLogEntry } from "../../services/auditService";
 
 // Helper type for user preview
 type UserPreview = {
@@ -22,6 +23,323 @@ type UserPreview = {
   email: string;
   role: string;
   location?: string;
+};
+
+export type JourneyDetailTab = 'overview' | 'medical' | 'legal' | 'trust' | 'milestones' | 'delivery';
+
+// Helper to determine the default active tab based on current journey stage
+export const getActiveTabForJourney = (
+  journey: Journey | null,
+  hasFinancialAccess = true
+): JourneyDetailTab => {
+  if (!journey) return 'overview';
+  if (journey.status === 'Completed') return 'overview';
+
+  switch (journey.stage) {
+    case 'Medical Screening':
+      return 'medical';
+    case 'Legal':
+      return 'legal';
+    case 'Embryo Transfer':
+      return 'milestones';
+    case 'Pregnancy':
+      return 'milestones';
+    case 'Birth':
+    case 'Postpartum':
+      return 'delivery';
+    default:
+      return 'overview';
+  }
+};
+
+// Helper to check if a tab is unlocked for a given journey stage (back tabs allowed, future tabs locked)
+export const isTabUnlocked = (
+  tabId: JourneyDetailTab,
+  stage?: string,
+  status?: string
+): boolean => {
+  // Completed journeys have all stage history unlocked
+  if (status === 'Completed') return true;
+
+  // Overview is always accessible as the root summary
+  if (tabId === 'overview') return true;
+
+  const stageOrder: JourneyStage[] = [
+    'Medical Screening',
+    'Legal',
+    'Embryo Transfer',
+    'Pregnancy',
+    'Birth',
+    'Postpartum',
+  ];
+
+  const currentStageIndex = stage ? stageOrder.indexOf(stage as JourneyStage) : 0;
+
+  // Define minimum stage index required to unlock each tab:
+  // Medical Screening = 0 -> medical (min 0)
+  // Legal = 1 -> legal (min 1), trust (min 1)
+  // Embryo Transfer = 2 -> milestones (min 2)
+  // Pregnancy = 3 -> milestones (min 2)
+  // Birth = 4 -> delivery (min 4)
+  // Postpartum = 5 -> delivery (min 4)
+  const tabMinStageIndex: Record<JourneyDetailTab, number> = {
+    overview: 0,
+    medical: 0,
+    legal: 1,
+    trust: 1,
+    milestones: 2,
+    delivery: 4,
+  };
+
+  const requiredIndex = tabMinStageIndex[tabId] ?? 0;
+  return currentStageIndex >= requiredIndex;
+};
+
+// Helper to get lock reason / tooltip for disabled future tabs
+export const getTabLockReason = (tabId: JourneyDetailTab): string => {
+  switch (tabId) {
+    case 'legal':
+      return 'Locked: Unlocks in Legal stage';
+    case 'trust':
+      return 'Locked: Unlocks in Legal & Trust stage';
+    case 'milestones':
+      return 'Locked: Unlocks in Embryo Transfer & Pregnancy stage';
+    case 'delivery':
+      return 'Locked: Unlocks in Birth & Delivery stage';
+    default:
+      return 'Locked for future stages';
+  }
+};
+
+export interface JourneyHistoryItem {
+  id: string;
+  stage: string;
+  action: string;
+  timestamp: string;
+  description?: string;
+  type: 'stage_progression' | 'checklist' | 'milestone' | 'delivery' | 'status_change' | 'system';
+  actorEmail?: string;
+}
+
+export const buildUnifiedJourneyHistory = (
+  journey: Journey | null,
+  auditLogs: AuditLogEntry[]
+): JourneyHistoryItem[] => {
+  if (!journey) return [];
+
+  const items: JourneyHistoryItem[] = [];
+  const seenKeys = new Set<string>();
+
+  const pushItem = (item: JourneyHistoryItem) => {
+    if (!item.action || !item.timestamp) return;
+    const dateKey = (item.timestamp || '').slice(0, 10);
+    const dedupeKey = `${item.stage}_${item.action.toLowerCase()}_${dateKey}`;
+    if (!seenKeys.has(dedupeKey)) {
+      seenKeys.add(dedupeKey);
+      items.push(item);
+    }
+  };
+
+  // 1. Explicit stageHistory stored in journeyNotes
+  const notes = (journey.journeyNotes as any) || {};
+  if (Array.isArray(notes.stageHistory)) {
+    notes.stageHistory.forEach((h: any) => {
+      if (h && h.action && h.timestamp) {
+        pushItem({
+          id: h.id || `hist_${Math.random().toString(36).slice(2, 6)}`,
+          stage: h.stage || 'General',
+          action: h.action,
+          timestamp: h.timestamp,
+          description: h.description || h.details,
+          type: h.type || 'checklist',
+          actorEmail: h.actorEmail,
+        });
+      }
+    });
+  }
+
+  // 2. Audit logs from Supabase audit_log table
+  (auditLogs || []).forEach((log) => {
+    let stage = (log.afterData?.stage as string) || (log.beforeData?.stage as string) || 'General';
+    let type: JourneyHistoryItem['type'] = 'system';
+    const action = log.action;
+
+    if (action.includes('stage changed') || action.includes('Progressed')) {
+      type = 'stage_progression';
+      if (log.afterData?.stage) stage = log.afterData.stage as string;
+    } else if (action.includes('checklist')) {
+      type = 'checklist';
+      if (log.afterData?.stage) stage = log.afterData.stage as string;
+    } else if (action.includes('Milestone') || action.includes('milestone')) {
+      type = 'milestone';
+    } else if (action.includes('deliver') || action.includes('Delivery') || action.includes('Birth')) {
+      type = 'delivery';
+      stage = 'Birth';
+    } else if (action.includes('Completed') || action.includes('Escrow')) {
+      type = 'status_change';
+      stage = 'Postpartum';
+    } else if (action.includes('Journey created')) {
+      type = 'system';
+      stage = 'Medical Screening';
+    }
+
+    pushItem({
+      id: `audit_${log.id}`,
+      stage,
+      action,
+      timestamp: log.createdAt,
+      type,
+      actorEmail: log.actorEmail,
+      description: log.afterData?.details
+        ? String(log.afterData.details)
+        : log.afterData?.value
+        ? `Value: ${log.afterData.value}`
+        : undefined,
+    });
+  });
+
+  // 3. Completed checklist items recorded in journeyNotes.stageChecklists
+  JOURNEY_STAGES.forEach((stageName) => {
+    const checklistState = getStageChecklistState(journey, stageName);
+    const definitions = STAGE_CHECKLISTS[stageName] || [];
+    definitions.forEach((def) => {
+      const val = checklistState[def.id];
+      if (val !== undefined && val !== false && val !== '') {
+        let timestamp = journey.createdAt;
+        let desc = 'Step completed';
+
+        if (typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          timestamp = `${val}T12:00:00.000Z`;
+          desc = `Recorded date: ${formatMMDDYYYY(val)}`;
+        } else if (def.options || def.isNumber) {
+          desc = `Recorded: ${val}${def.unit ? ' ' + def.unit : ''}`;
+        }
+
+        pushItem({
+          id: `chk_${stageName}_${def.id}`,
+          stage: stageName,
+          action: `${def.label}`,
+          timestamp,
+          description: desc,
+          type: 'checklist',
+        });
+      }
+    });
+  });
+
+  // 4. Milestones array in journeyNotes.milestones
+  if (Array.isArray(notes.milestones)) {
+    notes.milestones.forEach((m: any) => {
+      if (m && m.title) {
+        pushItem({
+          id: `mile_${m.id || Math.random().toString(36).slice(2, 6)}`,
+          stage: m.type === 'legal' ? 'Legal' : m.type === 'transfer' ? 'Embryo Transfer' : 'Medical Screening',
+          action: `Milestone: ${m.title}`,
+          timestamp: m.completedDate || m.date || m.createdAt || journey.createdAt,
+          description: m.notes ? `${m.status || 'Scheduled'} • ${m.notes}` : (m.status || 'Scheduled'),
+          type: 'milestone',
+        });
+      }
+    });
+  }
+
+  // 5. EDD (Estimated Delivery Date)
+  if (journey.estimatedDeliveryDate) {
+    pushItem({
+      id: `edd_${journey.id}`,
+      stage: 'Pregnancy',
+      action: 'Estimated Delivery Date (EDD) Set',
+      timestamp: `${journey.estimatedDeliveryDate}T12:00:00.000Z`,
+      description: `Target delivery date: ${formatMMDDYYYY(journey.estimatedDeliveryDate)}`,
+      type: 'milestone',
+    });
+  }
+
+  // 6. Delivery Date
+  if (journey.deliveryDate) {
+    pushItem({
+      id: `deliv_${journey.id}`,
+      stage: 'Birth',
+      action: 'Baby Delivered',
+      timestamp: `${journey.deliveryDate}T12:00:00.000Z`,
+      description: `Delivery recorded on ${formatMMDDYYYY(journey.deliveryDate)}`,
+      type: 'delivery',
+    });
+  }
+
+  // 7. Journey Completed
+  if (journey.completedAt) {
+    pushItem({
+      id: `comp_${journey.id}`,
+      stage: 'Postpartum',
+      action: 'Journey Completed',
+      timestamp: journey.completedAt,
+      description: 'Journey marked as fully completed. Escrow and final postpartum checks concluded.',
+      type: 'status_change',
+    });
+  }
+
+  // 8. Journey Created (root starting event)
+  if (journey.createdAt) {
+    pushItem({
+      id: `created_${journey.id}`,
+      stage: 'Medical Screening',
+      action: 'Journey Started & Match Activated',
+      timestamp: journey.createdAt,
+      description: `Case #${journey.caseNumber} initiated. Started in Medical Screening stage.`,
+      type: 'system',
+    });
+  }
+
+  return items;
+};
+
+export const getHistoryTypeIcon = (type: JourneyHistoryItem['type']) => {
+  switch (type) {
+    case 'stage_progression':
+      return {
+        icon: 'ri-arrow-right-circle-line',
+        bg: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+      };
+    case 'checklist':
+      return {
+        icon: 'ri-checkbox-circle-line',
+        bg: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      };
+    case 'milestone':
+      return {
+        icon: 'ri-flag-line',
+        bg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      };
+    case 'delivery':
+      return {
+        icon: 'ri-heart-pulse-line',
+        bg: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+      };
+    case 'status_change':
+      return {
+        icon: 'ri-shield-check-line',
+        bg: 'bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-300 border-teal-200 dark:border-teal-800',
+      };
+    case 'system':
+    default:
+      return {
+        icon: 'ri-rocket-line',
+        bg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+      };
+  }
+};
+
+export const getStageBadgeColor = (stage: string): 'blue' | 'yellow' | 'teal' | 'green' | 'orange' | 'purple' => {
+  switch (stage) {
+    case 'Medical Screening': return 'blue';
+    case 'Legal': return 'purple';
+    case 'Embryo Transfer': return 'teal';
+    case 'Pregnancy': return 'green';
+    case 'Birth': return 'orange';
+    case 'Postpartum': return 'yellow';
+    default: return 'blue';
+  }
 };
 
 const JourneysPage: React.FC = () => {
@@ -40,7 +358,13 @@ const JourneysPage: React.FC = () => {
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
 
   // Tab state
-  const [detailTab, setDetailTab] = useState<'overview' | 'medical' | 'legal' | 'trust' | 'milestones' | 'delivery'>('overview');
+  const [detailTab, setDetailTab] = useState<JourneyDetailTab>('overview');
+  const selectedJourneyIdRef = useRef<string | null>(null);
+
+  // Step History state
+  const [journeyAuditLogs, setJourneyAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [historyFilterStage, setHistoryFilterStage] = useState<string>('All');
+  const [historySortAsc, setHistorySortAsc] = useState<boolean>(false);
 
   // Medical tab form state
   const [medicalClinic, setMedicalClinic] = useState('');
@@ -132,13 +456,33 @@ const JourneysPage: React.FC = () => {
     }
   };
 
+  const fetchJourneyAuditLogs = async (journeyId: string) => {
+    try {
+      const logs = await auditService.getByEntity('journey', journeyId);
+      setJourneyAuditLogs(Array.isArray(logs) ? logs : []);
+    } catch (err) {
+      console.error('Failed to load journey audit logs', err);
+      setJourneyAuditLogs([]);
+    }
+  };
+
   useEffect(() => {
     if (selectedJourney) {
-      setDetailSurrogate(null);
-      setDetailParent(null);
-      setDetailTab('overview');
-      fetchUserPreview(selectedJourney.gestationalCarrierId, 'Surrogate');
-      fetchUserPreview(selectedJourney.intendedParentId, 'Intended Parent');
+      const isNewJourney = selectedJourneyIdRef.current !== selectedJourney.id;
+      selectedJourneyIdRef.current = selectedJourney.id;
+
+      if (isNewJourney) {
+        setDetailSurrogate(null);
+        setDetailParent(null);
+        setDetailTab('overview');
+        fetchUserPreview(selectedJourney.gestationalCarrierId, 'Surrogate');
+        fetchUserPreview(selectedJourney.intendedParentId, 'Intended Parent');
+        fetchJourneyAuditLogs(selectedJourney.id);
+      } else {
+        if (detailTab !== 'overview') {
+          setDetailTab('overview');
+        }
+      }
 
       // Load saved data into form fields
       const med = (selectedJourney.medicalRecords as any) || {};
@@ -201,9 +545,24 @@ const JourneysPage: React.FC = () => {
         const existing = typeof notes.client_notes === 'string' ? (notes.client_notes as string) : '';
         const line = `[${formatMMDDYYYY(new Date())}] ${trimmed}`;
         notes.client_notes = existing ? `${existing}\n\n${line}` : line;
-        await journeyService.updateJourneyNotes(selectedJourney.id, notes);
       }
 
+      // Record in stageHistory
+      const prevHistory = Array.isArray(notes.stageHistory) ? (notes.stageHistory as any[]) : [];
+      notes.stageHistory = [
+        {
+          id: `stage_${Date.now()}`,
+          stage: nextStage,
+          action: `Stage Progressed: ${selectedJourney.stage} → ${nextStage}`,
+          description: trimmed ? `Notes: ${trimmed}` : `Advanced to ${nextStage}. Stage checklist was completed.`,
+          timestamp: new Date().toISOString(),
+          type: 'stage_progression',
+          actorEmail: user?.email || 'Admin',
+        },
+        ...prevHistory,
+      ];
+
+      await journeyService.updateJourneyNotes(selectedJourney.id, notes);
       await journeyService.updateJourneyStage(selectedJourney.id, nextStage);
       await fetchJourneys();
       setShowProgressModal(false);
@@ -225,16 +584,53 @@ const JourneysPage: React.FC = () => {
 
     // Optimistic update
     const prevNotes = (selectedJourney.journeyNotes as any) || {};
+    const prevHistory = Array.isArray(prevNotes.stageHistory) ? (prevNotes.stageHistory as any[]) : [];
+
+    const checklistItems = STAGE_CHECKLISTS[stage] || [];
+    const itemDef = checklistItems.find(i => i.id === itemId);
+    const itemLabel = itemDef ? itemDef.label : itemId;
+
+    let updatedHistory = [...prevHistory];
+    if (value) {
+      const dateStr = typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}$/)
+        ? formatMMDDYYYY(value)
+        : typeof value === 'string' ? value : '';
+      
+      const desc = dateStr ? `Recorded date: ${dateStr}` : `Marked as completed`;
+
+      updatedHistory = [
+        {
+          id: `chk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          stage,
+          action: `Completed: ${itemLabel}`,
+          description: desc,
+          timestamp: new Date().toISOString(),
+          type: 'checklist',
+          actorEmail: user?.email || 'Admin',
+        },
+        ...prevHistory,
+      ];
+    }
+
     const newNotes = {
       ...prevNotes,
       stageChecklists: { ...(prevNotes.stageChecklists || {}), [stage]: updated },
+      stageHistory: updatedHistory,
     };
     const newSelected = { ...selectedJourney, journeyNotes: newNotes } as typeof selectedJourney;
     setSelectedJourney(newSelected);
     setJourneys(prev => prev.map(j => j.id === selectedJourney.id ? newSelected : j));
 
     try {
-      await journeyService.updateStageChecklist(selectedJourney.id, stage, updated);
+      await journeyService.updateJourneyNotes(selectedJourney.id, newNotes);
+      if (value) {
+        void auditService.log(
+          `Journey checklist [${stage}]: ${itemLabel}`,
+          'journey',
+          selectedJourney.id,
+          { after: { stage, item: itemId, value } }
+        );
+      }
     } catch (err) {
       console.error(err);
       setToast({ message: 'Failed to update checklist', type: 'error' });
@@ -273,7 +669,6 @@ const JourneysPage: React.FC = () => {
     if (!selectedJourney || !deliveryDateInput) return;
 
     try {
-      await journeyService.updateDeliveryDate(selectedJourney.id, deliveryDateInput);
       const currentBirthChecklist = getStageChecklistState(selectedJourney, 'Birth');
       const updatedBirthChecklist: Record<string, boolean | string> = {
         ...currentBirthChecklist,
@@ -282,6 +677,30 @@ const JourneysPage: React.FC = () => {
         ...(deliveryBabyWeight ? { birth_baby_weight: deliveryBabyWeight } : {}),
         ...(deliveryMode ? { birth_delivery_mode: deliveryMode } : {}),
       };
+
+      const prevNotes = (selectedJourney.journeyNotes as any) || {};
+      const prevHistory = Array.isArray(prevNotes.stageHistory) ? (prevNotes.stageHistory as any[]) : [];
+      const updatedHistory = [
+        {
+          id: `deliv_${Date.now()}`,
+          stage: 'Birth',
+          action: 'Baby Delivered',
+          description: `Delivery recorded on ${formatMMDDYYYY(deliveryDateInput)}${deliveryBabyGender ? ` • Gender: ${deliveryBabyGender}` : ''}${deliveryBabyWeight ? ` • Weight: ${deliveryBabyWeight} lbs` : ''}${deliveryMode ? ` • Mode: ${deliveryMode}` : ''}`,
+          timestamp: new Date().toISOString(),
+          type: 'delivery',
+          actorEmail: user?.email || 'Admin',
+        },
+        ...prevHistory,
+      ];
+
+      const newNotes = {
+        ...prevNotes,
+        stageChecklists: { ...(prevNotes.stageChecklists || {}), Birth: updatedBirthChecklist },
+        stageHistory: updatedHistory,
+      };
+
+      await journeyService.updateJourneyNotes(selectedJourney.id, newNotes);
+      await journeyService.updateDeliveryDate(selectedJourney.id, deliveryDateInput);
       await journeyService.updateStageChecklist(selectedJourney.id, 'Birth', updatedBirthChecklist);
       await fetchJourneys();
       setShowDeliveryModal(false);
@@ -297,6 +716,25 @@ const JourneysPage: React.FC = () => {
   const handleCompleteJourney = async () => {
     if (!selectedJourney) return;
     try {
+      const prevNotes = (selectedJourney.journeyNotes as any) || {};
+      const prevHistory = Array.isArray(prevNotes.stageHistory) ? (prevNotes.stageHistory as any[]) : [];
+      const updatedHistory = [
+        {
+          id: `comp_${Date.now()}`,
+          stage: 'Postpartum',
+          action: 'Journey Completed',
+          description: 'All stages, postpartum checkups, and escrow completed.',
+          timestamp: new Date().toISOString(),
+          type: 'status_change',
+          actorEmail: user?.email || 'Admin',
+        },
+        ...prevHistory,
+      ];
+      await journeyService.updateJourneyNotes(selectedJourney.id, {
+        ...prevNotes,
+        stageHistory: updatedHistory,
+      });
+
       await journeyService.updateJourneyStatus(selectedJourney.id, 'Completed');
       await fetchJourneys();
       setSelectedJourney(null);
@@ -448,6 +886,26 @@ const JourneysPage: React.FC = () => {
         createdAt: new Date().toISOString(),
       };
       await journeyService.updateMilestone(selectedJourney.id, milestone as any);
+
+      const prevNotes = (selectedJourney.journeyNotes as any) || {};
+      const prevHistory = Array.isArray(prevNotes.stageHistory) ? (prevNotes.stageHistory as any[]) : [];
+      const updatedHistory = [
+        {
+          id: `mile_${Date.now()}`,
+          stage: newMilestoneType === 'legal' ? 'Legal' : newMilestoneType === 'transfer' ? 'Embryo Transfer' : 'Medical Screening',
+          action: `Milestone Added: ${newMilestoneTitle}`,
+          description: `Scheduled for ${formatMMDDYYYY(newMilestoneDate)} (${newMilestoneType})`,
+          timestamp: new Date().toISOString(),
+          type: 'milestone',
+          actorEmail: user?.email || 'Admin',
+        },
+        ...prevHistory,
+      ];
+      await journeyService.updateJourneyNotes(selectedJourney.id, {
+        ...prevNotes,
+        stageHistory: updatedHistory,
+      });
+
       await fetchJourneys();
       setNewMilestoneTitle('');
       setNewMilestoneDate('');
@@ -524,6 +982,46 @@ const JourneysPage: React.FC = () => {
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'N/A';
     return formatMMDDYYYY(dateStr);
+  };
+
+  const formatDateTime = (timestampStr?: string) => {
+    if (!timestampStr) return 'N/A';
+    try {
+      const d = new Date(timestampStr);
+      if (isNaN(d.getTime())) return timestampStr;
+      if (timestampStr.length === 10 && timestampStr.includes('-')) {
+        return formatMMDDYYYY(timestampStr);
+      }
+      const datePart = formatMMDDYYYY(d);
+      const timePart = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      return `${datePart} at ${timePart}`;
+    } catch {
+      return timestampStr;
+    }
+  };
+
+  const getRelativeTime = (timestampStr?: string) => {
+    if (!timestampStr) return '';
+    try {
+      const d = new Date(timestampStr);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      if (isNaN(diffMs) || diffMs < 0) return '';
+      const diffSecs = Math.floor(diffMs / 1000);
+      if (diffSecs < 60) return 'Just now';
+      const diffMins = Math.floor(diffSecs / 60);
+      if (diffMins < 60) return `${diffMins}m ago`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return 'Yesterday';
+      if (diffDays < 30) return `${diffDays}d ago`;
+      const diffMonths = Math.floor(diffDays / 30);
+      if (diffMonths < 12) return `${diffMonths}mo ago`;
+      return `${Math.floor(diffMonths / 12)}y ago`;
+    } catch {
+      return '';
+    }
   };
 
   const filteredJourneys = (() => {
@@ -750,37 +1248,109 @@ const JourneysPage: React.FC = () => {
                       )}
                     </div>
                     <button
-                      onClick={() => setSelectedJourney(null)}
+                      onClick={() => {
+                        selectedJourneyIdRef.current = null;
+                        setSelectedJourney(null);
+                      }}
                       className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                     >
                       <i className="ri-close-line text-xl text-gray-600 dark:text-gray-400"></i>
                     </button>
                   </div>
 
-                  {/* Tab Navigation */}
-                  <div className="flex border-b border-rose-100/60 dark:border-white/5 mb-6 overflow-x-auto">
-                    {[
+                  {/* Tab Navigation with Back-Tab Access & Future Tab Disabling */}
+                  {(() => {
+                    const currentActiveTab = getActiveTabForJourney(selectedJourney, canViewFinancials(profile?.role as string));
+                    const rawTabs: Array<{ id: JourneyDetailTab; label: string; icon: string; restricted?: boolean }> = [
                       { id: 'overview', label: 'Overview', icon: 'ri-dashboard-line', restricted: false },
-                      { id: 'medical', label: 'Medical', icon: 'ri-heart-pulse-line', restricted: false },
-                      { id: 'legal', label: 'Legal', icon: 'ri-file-text-line', restricted: false },
-                      ...(canViewFinancials(profile?.role as string) ? [{ id: 'trust', label: 'Trust & Funds', icon: 'ri-safe-line', restricted: true }] : []),
-                      { id: 'milestones', label: 'Milestones', icon: 'ri-flag-line', restricted: false },
-                      { id: 'delivery', label: 'Delivery', icon: 'ri-heart-3-line', restricted: false },
-                    ].map(tab => (
+                      // Temporarily hidden per request - only Overview is visible for now:
+                      // { id: 'medical', label: 'Medical', icon: 'ri-heart-pulse-line', restricted: false },
+                      // { id: 'legal', label: 'Legal', icon: 'ri-file-text-line', restricted: false },
+                      // ...(canViewFinancials(profile?.role as string) ? [{ id: 'trust' as const, label: 'Trust & Funds', icon: 'ri-safe-line', restricted: true }] : []),
+                      // { id: 'milestones', label: 'Milestones', icon: 'ri-flag-line', restricted: false },
+                      // { id: 'delivery', label: 'Delivery', icon: 'ri-heart-3-line', restricted: false },
+                    ];
+
+                    const tabsWithState = rawTabs.map(tab => {
+                      const unlocked = isTabUnlocked(tab.id, selectedJourney.stage, selectedJourney.status);
+                      const isLocked = !unlocked;
+                      const isCurrent = tab.id === currentActiveTab;
+                      const lockReason = getTabLockReason(tab.id);
+
+                      return {
+                        ...tab,
+                        disabled: isLocked,
+                        isCurrent,
+                        lockReason
+                      };
+                    });
+
+                    return (
+                      <div className="flex border-b border-rose-100/60 dark:border-white/5 mb-6 overflow-x-auto scrollbar-thin">
+                        {tabsWithState.map(tab => {
+                          const isSelected = detailTab === tab.id;
+                          const isLocked = tab.disabled;
+                          const isCurrent = tab.isCurrent;
+
+                          return (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              disabled={isLocked}
+                              onClick={() => {
+                                if (!isLocked) {
+                                  setDetailTab(tab.id);
+                                }
+                              }}
+                              title={isLocked ? tab.lockReason : (isCurrent ? 'Current active stage tab' : undefined)}
+                              className={`relative px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                                isLocked
+                                  ? 'border-transparent text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-45 select-none'
+                                  : isSelected
+                                  ? 'border-rose-500 text-rose-600 dark:text-rose-400 font-bold'
+                                  : 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 hover:border-gray-200 dark:hover:border-white/10'
+                              }`}
+                            >
+                              <i className={`${tab.icon} ${isSelected ? 'text-rose-500' : isLocked ? 'text-gray-300 dark:text-gray-600' : 'text-gray-500'}`}></i>
+                              <span>{tab.label}</span>
+
+                              {/* Lock Icon for future disabled tabs */}
+                              {isLocked && (
+                                <span className="ml-0.5 inline-flex items-center text-xs text-gray-400 dark:text-gray-600" title={tab.lockReason}>
+                                  <i className="ri-lock-2-line text-xs"></i>
+                                </span>
+                              )}
+
+                              {/* Indicator dot for current active stage tab */}
+                              {isCurrent && !isSelected && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse ml-0.5" title="Current Active Stage"></span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Current Active Stage Notice when browsing non-overview tabs */}
+                  {selectedJourney.status === 'Active' && detailTab !== 'overview' && (
+                    <div className="mb-6 flex items-center justify-between p-3 rounded-xl bg-rose-50/50 dark:bg-white/5 border border-rose-100/60 dark:border-white/5 text-xs">
+                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                        <span>
+                          Current Journey Stage: <strong className="text-gray-900 dark:text-white font-bold">{selectedJourney.stage}</strong>
+                        </span>
+                      </div>
                       <button
-                        key={tab.id}
-                        onClick={() => setDetailTab(tab.id as any)}
-                        className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-                          detailTab === tab.id
-                            ? 'border-rose-500 text-rose-500 dark:text-blue-400'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                        }`}
+                        type="button"
+                        onClick={() => setDetailTab('overview')}
+                        className="font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400 flex items-center gap-1 transition-colors"
                       >
-                        <i className={`${tab.icon} mr-1.5`}></i>
-                        {tab.label}
+                        <span>View Stage Checklist on Overview</span>
+                        <i className="ri-arrow-right-s-line"></i>
                       </button>
-                    ))}
-                  </div>
+                    </div>
+                  )}
 
                   {/* ── OVERVIEW TAB ─────────────────────────────────────────── */}
                   {detailTab === 'overview' && (
@@ -1015,6 +1585,144 @@ const JourneysPage: React.FC = () => {
                           <i className="ri-checkbox-circle-line mr-2"></i>Complete Journey
                         </Button>
                       )}
+
+                      {/* ── STEP & STAGE HISTORY TIMELINE ──────────────────────── */}
+                      {(() => {
+                        const timelineItems = buildUnifiedJourneyHistory(selectedJourney, journeyAuditLogs);
+                        const sortedTimeline = [...timelineItems].sort((a, b) => {
+                          const timeA = new Date(a.timestamp).getTime() || 0;
+                          const timeB = new Date(b.timestamp).getTime() || 0;
+                          return historySortAsc ? timeA - timeB : timeB - timeA;
+                        });
+                        const filteredTimeline = sortedTimeline.filter((item) => {
+                          if (historyFilterStage === 'All') return true;
+                          return item.stage === historyFilterStage;
+                        });
+
+                        return (
+                          <div className="p-5 md:p-6 rounded-2xl border border-rose-100/70 dark:border-white/10 bg-white dark:bg-[#15111f] shadow-sm space-y-5">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-rose-100/60 dark:border-white/5">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20">
+                                  <i className="ri-history-line text-xl"></i>
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-base font-bold text-gray-900 dark:text-white">
+                                      Journey Step History
+                                    </h4>
+                                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 font-bold">
+                                      {filteredTimeline.length} {filteredTimeline.length === 1 ? 'Step' : 'Steps'}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Detailed record of what happened at each step with timestamps
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Controls: Filter by stage & Sort */}
+                              <div className="flex items-center gap-2 self-start sm:self-auto">
+                                <select
+                                  value={historyFilterStage}
+                                  onChange={(e) => setHistoryFilterStage(e.target.value)}
+                                  aria-label="Filter history by stage"
+                                  className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-200 font-medium focus:outline-none focus:ring-1 focus:ring-rose-500"
+                                >
+                                  <option value="All">All Stages ({timelineItems.length})</option>
+                                  {JOURNEY_STAGES.map((s) => {
+                                    const count = timelineItems.filter((item) => item.stage === s).length;
+                                    return (
+                                      <option key={s} value={s}>
+                                        {s} ({count})
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setHistorySortAsc(!historySortAsc)}
+                                  className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors flex items-center gap-1.5 font-medium"
+                                  title={historySortAsc ? 'Switch to Newest First' : 'Switch to Oldest First'}
+                                >
+                                  <i className={`ri-sort-${historySortAsc ? 'asc' : 'desc'} text-rose-500`}></i>
+                                  <span>{historySortAsc ? 'Oldest first' : 'Newest first'}</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Timeline List */}
+                            {filteredTimeline.length === 0 ? (
+                              <div className="text-center py-8 bg-gray-50/50 dark:bg-white/5 rounded-xl border border-dashed border-gray-200 dark:border-white/10">
+                                <i className="ri-time-line text-3xl text-gray-400 mb-1"></i>
+                                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                                  No history events found for this filter
+                                </p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  Steps and updates will appear here as they are completed.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="relative pl-6 space-y-4 before:absolute before:left-3.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-rose-100 dark:before:bg-white/10">
+                                {filteredTimeline.map((item) => {
+                                  const typeStyle = getHistoryTypeIcon(item.type);
+                                  const stageColor = getStageBadgeColor(item.stage);
+
+                                  return (
+                                    <div key={item.id} className="relative group">
+                                      {/* Timeline node */}
+                                      <div
+                                        className={`absolute -left-6 top-1 w-7 h-7 rounded-full flex items-center justify-center border-2 border-white dark:border-[#15111f] shadow-sm text-sm transition-transform group-hover:scale-110 ${typeStyle.bg}`}
+                                      >
+                                        <i className={typeStyle.icon}></i>
+                                      </div>
+
+                                      {/* Event Content Box */}
+                                      <div className="bg-gray-50/70 dark:bg-white/5 hover:bg-rose-50/40 dark:hover:bg-white/8 rounded-xl p-3.5 border border-gray-100 dark:border-white/5 transition-all">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <Badge color={stageColor as any}>{item.stage}</Badge>
+                                            <span className="text-sm font-bold text-gray-900 dark:text-white">
+                                              {item.action}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                            <i className="ri-time-line text-rose-500"></i>
+                                            <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                              {formatDateTime(item.timestamp)}
+                                            </span>
+                                            {getRelativeTime(item.timestamp) && (
+                                              <span className="px-1.5 py-0.5 rounded bg-gray-200/70 dark:bg-white/10 text-[10px] text-gray-600 dark:text-gray-300 font-medium">
+                                                {getRelativeTime(item.timestamp)}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {item.description && (
+                                          <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 pl-0.5 leading-relaxed">
+                                            {item.description}
+                                          </p>
+                                        )}
+
+                                        {item.actorEmail && (
+                                          <div className="mt-2 pt-2 border-t border-gray-200/50 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-400">
+                                            <span className="flex items-center gap-1">
+                                              <i className="ri-user-line text-gray-400"></i>
+                                              Updated by: <strong className="text-gray-600 dark:text-gray-300 font-medium">{item.actorEmail}</strong>
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       <div className="pt-4 border-t border-rose-100/60 dark:border-white/5">
                         <Button

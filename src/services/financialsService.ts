@@ -35,7 +35,7 @@ export const financialsService = {
   async getUsers() {
     const { data, error } = await supabase
       .from('users')
-      .select('id, first_name, last_name, role');
+      .select('id, first_name, last_name, role, parent1, formData, email');
     if (error) {
       console.error('getUsers error:', error);
       throw error;

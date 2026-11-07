@@ -18,9 +18,9 @@ const MATCH_STATUSES: MatchStatus[] = [
   "Completed",
 ];
 
-// Per client review: surrogates must be "Ready to Match"; IPs must be "Match Pending"
+// Surrogates must be "Accepted to Program"; IPs must be "Match Pending"
 const ELIGIBLE_STATUS_FOR_ROLE: Record<UserRole, string> = {
-  Surrogate: "Ready to Match",
+  Surrogate: "Accepted to Program",
   "Intended Parent": "Match Pending",
 } as Record<UserRole, string>;
 
@@ -214,9 +214,13 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
   const inputCls =
     "w-full px-3 py-2 text-sm rounded-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-transparent bg-white dark:bg-black border border-rose-100/60 dark:border-white/10";
 
-  // Per client review: surrogate must be "Ready to Match"; IP must be "Match Pending"
-  const requiredStatusForUser = isIntendedParent ? "Match Pending" : "Ready to Match";
-  const isDisabled = user.status !== requiredStatusForUser;
+  // Surrogates must be "Accepted to Program"; IPs must be "Match Pending"
+  const isSurrogateEligible =
+    user.status === "Accepted to Program" ||
+    user.status === "Accepted into Program" ||
+    user.status === "Ready to Match";
+  const requiredStatusForUser = isIntendedParent ? "Match Pending" : "Accepted to Program";
+  const isDisabled = isIntendedParent ? user.status !== "Match Pending" : !isSurrogateEligible;
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -312,7 +316,7 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                 </label>
                 <p className="text-xs text-gray-500 dark:text-white/50 mb-2">
                   {isIntendedParent
-                    ? <>Showing surrogates with status <span className="font-medium text-gray-700 dark:text-white/80">"Ready to Match"</span>.</>
+                    ? <>Showing surrogates with status <span className="font-medium text-gray-700 dark:text-white/80">"Accepted to Program"</span>.</>
                     : <>Showing intended parents with status <span className="font-medium text-gray-700 dark:text-white/80">"Match Pending"</span>.</>
                   }
                 </p>
@@ -359,9 +363,8 @@ export default function CreateMatchDialog({ user }: CreateMatchDialogProps) {
                         <div
                           key={u.id}
                           onClick={() => setSelectedId(u.id)}
-                          className={`flex items-center justify-between px-4 py-3 transition-colors cursor-pointer hover:bg-gray-100 dark:hover:bg-white/5 ${
-                            isSelected ? "bg-blue-50 dark:bg-white/10 border-l-4 border-l-blue-600 dark:border-l-white/60" : ""
-                          }`}
+                          className={`flex items-center justify-between px-4 py-3 transition-colors cursor-pointer hover:bg-gray-100 dark:hover:bg-white/5 ${isSelected ? "bg-blue-50 dark:bg-white/10 border-l-4 border-l-blue-600 dark:border-l-white/60" : ""
+                            }`}
                         >
                           {/* Avatar + name + email */}
                           <div className="flex items-center gap-3">

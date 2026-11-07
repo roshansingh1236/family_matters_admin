@@ -52,15 +52,15 @@ const mapMatchFromDb = (dbMatch: any): Match => ({
 // ─── Status Transition Guardrails ──────────────────────────────────────────────
 // Defines which statuses can transition to which other statuses
 const VALID_TRANSITIONS: Record<string, MatchStatus[]> = {
-  'Proposed':       ['Presented', 'Cancelled'],
-  'Presented':      ['MR Review', 'Accepted', 'Cancelled'],
-  'MR Review':      ['Accepted', 'Cancelled'],
-  'Accepted':       ['Active', 'Cancelled'],
-  'Active':         ['Delivered', 'Cancelled'],
-  'Delivered':      ['Escrow Closure', 'Cancelled'],
+  'Proposed': ['Presented', 'Cancelled'],
+  'Presented': ['MR Review', 'Accepted', 'Cancelled'],
+  'MR Review': ['Accepted', 'Cancelled'],
+  'Accepted': ['Active', 'Cancelled'],
+  'Active': ['Delivered', 'Cancelled'],
+  'Delivered': ['Escrow Closure', 'Cancelled'],
   'Escrow Closure': ['Completed'],
-  'Completed':      [],  // Terminal state
-  'Cancelled':      [],  // Terminal state
+  'Completed': [],  // Terminal state
+  'Cancelled': [],  // Terminal state
 };
 
 export const matchService = {
@@ -75,7 +75,7 @@ export const matchService = {
         gestationalCarrierData:users!matches_gestational_carrier_id_fkey(*)
       `)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return (data || []).map(mapMatchFromDb);
     } catch (error) {
@@ -96,7 +96,7 @@ export const matchService = {
         `)
         .eq('id', id)
         .single();
-      
+
       if (error) throw error;
       return data ? mapMatchFromDb(data) : null;
     } catch (error) {
@@ -105,15 +105,15 @@ export const matchService = {
     }
   },
 
-  // ─── Get eligible surrogates ("Ready to Match" per client review) ─────────
+  // ─── Get eligible surrogates ("Accepted to Program") ─────────────────────────
   getEligibleSurrogates: async (): Promise<User[]> => {
     try {
-      // Per client review: surrogates eligible to match must be "Ready to Match"
+      // Surrogates eligible to match must be "Accepted to Program"
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .in('role', ['Surrogate', 'gestationalCarrier'])
-        .eq('status', 'Ready to Match')
+        .in('status', ['Accepted to Program', 'Accepted into Program', 'Ready to Match'])
         .order('first_name', { ascending: true });
 
       if (error) throw error;
@@ -163,7 +163,7 @@ export const matchService = {
         throw new Error('Intended Parent is not eligible for matching. Status must be "Match Pending".');
       }
 
-      // Validate GC eligibility (must be Ready to Match per client review)
+      // Validate GC eligibility (must be Accepted to Program)
       const { data: gcData, error: gcError } = await supabase
         .from('users')
         .select('status, role, medical_screening_status, form_data')
@@ -171,8 +171,9 @@ export const matchService = {
         .single();
 
       if (gcError) throw new Error('Could not verify GC eligibility');
-      if (!['Surrogate', 'gestationalCarrier'].includes(gcData.role) || gcData.status !== 'Ready to Match') {
-        throw new Error('Gestational Carrier is not eligible for matching. Status must be "Ready to Match".');
+      const isEligibleGc = ['Accepted to Program', 'Accepted into Program', 'Ready to Match'].includes(gcData.status);
+      if (!['Surrogate', 'gestationalCarrier'].includes(gcData.role) || !isEligibleGc) {
+        throw new Error('Gestational Carrier is not eligible for matching. Status must be "Accepted to Program".');
       }
 
       // Per spec: prevent an IP or GC from being in two concurrent active matches
@@ -200,7 +201,7 @@ export const matchService = {
         })
         .select('id')
         .single();
-      
+
       if (error) throw error;
 
       // Push: notify both parties that a match has been presented.
@@ -297,7 +298,7 @@ export const matchService = {
       if (additionalData?.cancellationReason) {
         updateData.cancellation_reason = additionalData.cancellationReason;
       }
-      
+
       const { data: before } = await supabase
         .from(TABLE_NAME)
         .select('status, intended_parent_id, gestational_carrier_id')
@@ -480,7 +481,7 @@ export const matchService = {
   updateMatch: async (id: string, updateData: Partial<Match>): Promise<void> => {
     try {
       const dbUpdate: any = {};
-      
+
       if (updateData.status) dbUpdate.status = updateData.status;
       if (updateData.parentAccepted !== undefined) dbUpdate.parent_accepted = updateData.parentAccepted;
       if (updateData.surrogateAccepted !== undefined) dbUpdate.surrogate_accepted = updateData.surrogateAccepted;
@@ -497,7 +498,7 @@ export const matchService = {
       // Auto-cancellation: if anyone declines, cancel the match
       if (updateData.parentDeclined === true || updateData.surrogateDeclined === true) {
         dbUpdate.status = 'Cancelled';
-        dbUpdate.cancellation_reason = dbUpdate.cancellation_reason || 
+        dbUpdate.cancellation_reason = dbUpdate.cancellation_reason ||
           (updateData.parentDeclined ? 'IP declined' : 'GC declined');
       }
 
@@ -547,7 +548,7 @@ export const matchService = {
         `)
         .eq('status', status)
         .order('created_at', { ascending: false });
-        
+
       if (error) throw error;
       return (data || []).map(mapMatchFromDb);
     } catch (error) {
